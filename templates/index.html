@@ -1,0 +1,315 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>The Stream Den</title>
+
+    <style>
+      body { font-family: "Times New Roman", serif; padding: 24px; }
+      .container { max-width: 900px; margin: 0 auto; }
+
+      .topbar { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+
+      .crumbs { margin: 6px 0 14px 0; font-size: 14px; }
+      .sep { padding: 0 6px; }
+
+      details { border: 2px solid #000; padding: 10px 12px; margin: 10px 0; background: #fff; }
+
+      summary {
+        cursor: pointer;
+        list-style: none;
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 12px;
+        user-select: none;
+      }
+      summary::-webkit-details-marker { display: none; }
+
+      .marker { display: inline-block; width: 22px; font-weight: bold; }
+      details[open] .marker::before { content: "[-]"; }
+      details:not([open]) .marker::before { content: "[+]"; }
+
+      .left { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+      .name { font-weight: 700; font-size: 18px; white-space: nowrap; }
+      .count { font-size: 14px; white-space: nowrap; }
+      .desc { margin: 10px 0 0 0; line-height: 1.35; }
+      .actions { margin-top: 10px; }
+
+      a.btn, button.btn {
+        color: #00f;
+        text-decoration: underline;
+        font-size: 14px;
+        background: transparent;
+        border: none;
+        padding: 0;
+        cursor: pointer;
+        font-family: inherit;
+      }
+      a.btn:visited { color: #551A8B; }
+
+      .inner-details { border: 1px solid #000; margin: 8px 0; padding: 8px 10px; background: #fff; }
+      .inner-details summary { padding: 0; }
+      .inner-name { font-weight: 700; font-size: 16px; white-space: nowrap; }
+      .inner-desc { margin: 8px 0 0 0; line-height: 1.35; font-size: 14px; }
+
+      .controls { display: flex; align-items: baseline; gap: 10px; white-space: nowrap; }
+
+      .form-row { margin-top: 10px; }
+      label { font-size: 14px; }
+      input[type="text"], textarea, select {
+        font-family: inherit;
+        font-size: 14px;
+        border: 1px solid #000;
+        padding: 4px;
+        width: 100%;
+        max-width: 520px;
+        box-sizing: border-box;
+      }
+      textarea { resize: vertical; }
+
+      input[type="submit"] {
+        font-family: inherit;
+        font-size: 14px;
+        border: 1px solid #000;
+        background: #fff;
+        padding: 4px 10px;
+        cursor: pointer;
+      }
+
+      .hint { font-size: 12px; margin-left: 8px; }
+
+      table.thread-table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+      table.thread-table th, table.thread-table td { border: 1px solid #000; padding: 6px; }
+      table.thread-table th { text-align: left; }
+      table.thread-table td.num, table.thread-table th.num { width: 110px; text-align: center; }
+      table.thread-table td.time, table.thread-table th.time { width: 220px; text-align: center; }
+      table.thread-table td.open, table.thread-table th.open { width: 90px; text-align: center; }
+    </style>
+
+    <script>
+      function toggleBox(listId, formId, btnId, mode) {
+        var list = document.getElementById(listId);
+        var form = document.getElementById(formId);
+        var btn = document.getElementById(btnId);
+        if (mode === "form") {
+          if (list) list.style.display = "none";
+          if (form) form.style.display = "block";
+          if (btn) btn.style.display = "none";
+        } else {
+          if (form) form.style.display = "none";
+          if (list) list.style.display = "block";
+          if (btn) btn.style.display = "inline";
+        }
+      }
+
+      function openForm(e, detailsId, listId, formId, btnId) {
+        if (e) { e.preventDefault(); e.stopPropagation(); }
+        var box = document.getElementById(detailsId);
+        if (box) box.open = true;
+        toggleBox(listId, formId, btnId, "form");
+      }
+
+      // auto-open add-thread form when redirected back from choose_stream
+      function autoOpenThreadForm() {
+        var shouldOpen = "{{ '1' if open_thread_form else '0' }}";
+        if (shouldOpen === "1") {
+          openForm(null, "threads-box", "thread-list", "thread-form", "add-thread-btn");
+        }
+      }
+
+      window.addEventListener("DOMContentLoaded", autoOpenThreadForm);
+    </script>
+  </head>
+
+  <body>
+    <div class="container">
+      <div class="topbar">
+        <h1 style="text-align:left;">The Stream Den</h1>
+        {% if parent_path %}
+          <a class="btn" href="/forum/{{ parent_path }}">← Back</a>
+        {% else %}
+          <a class="btn" href="/forum">← Back</a>
+        {% endif %}
+      </div>
+
+      <div class="crumbs">
+        {% for crumb in breadcrumbs %}
+          {% if not loop.first %}<span class="sep">&raquo;</span>{% endif %}
+          <a class="btn" href="{{ crumb.url }}">{{ crumb.name }}</a>
+        {% endfor %}
+      </div>
+
+      <!-- Subcategories -->
+      <details id="subcategories-box" open>
+        <summary>
+          <div class="left">
+            <span class="marker"></span>
+            <span class="name">Subcategories</span>
+          </div>
+          <div class="controls">
+            <span class="count">{{ categories|length }}</span>
+            <button id="add-cat-btn" class="btn" type="button"
+                    onclick="openForm(event,'subcategories-box','subcat-list','subcat-form','add-cat-btn')">[add category]</button>
+          </div>
+        </summary>
+
+        <div id="subcat-list">
+          {% if categories|length == 0 %}
+            <p class="desc">(none)</p>
+          {% else %}
+            {% for cat in categories %}
+              <details class="inner-details">
+                <summary>
+                  <div class="left">
+                    <span class="marker"></span>
+                    <span class="inner-name">{{ cat.name }}</span>
+                    <span class="count">({{ cat.count }})</span>
+                  </div>
+                  <span class="count">expand</span>
+                </summary>
+
+                <p class="inner-desc">{{ cat.desc }}</p>
+                <div class="actions">
+                  <a class="btn" href="/forum{% if current_path %}/{{ current_path }}{% endif %}/{{ cat.slug }}">Go to {{ cat.name }}</a>
+                </div>
+              </details>
+            {% endfor %}
+          {% endif %}
+        </div>
+
+        <div id="subcat-form" style="display:none;">
+          <div class="actions">
+            <button class="btn" type="button"
+                    onclick="toggleBox('subcat-list','subcat-form','add-cat-btn','list'); document.getElementById('subcategories-box').open = true;">
+              [back to categories]
+            </button>
+          </div>
+
+          <form action="/add_category" method="POST">
+            <input type="hidden" name="parent_path" value="{{ current_path }}">
+
+            <div class="form-row">
+              <label for="category-name">Name</label><br>
+              <input type="text" id="category-name" name="category-name" maxlength="12" required>
+            </div>
+
+            <div class="form-row">
+              <label for="category-desc">Description</label><br>
+              <textarea id="category-desc" name="category-desc" rows="4" required></textarea>
+            </div>
+
+            <div class="form-row">
+              <input type="submit" value="Submit">
+            </div>
+          </form>
+        </div>
+      </details>
+
+      <!-- Threads -->
+      <details id="threads-box" open>
+        <summary>
+          <div class="left">
+            <span class="marker"></span>
+            <span class="name">Streams</span>
+          </div>
+
+          <div class="controls">
+            {% if current_path %}
+              <button id="add-thread-btn" class="btn" type="button"
+                      onclick="openForm(event,'threads-box','thread-list','thread-form','add-thread-btn')">[add stream]</button>
+            {% else %}
+              <span class="count">(pick a category to post)</span>
+            {% endif %}
+          </div>
+        </summary>
+
+        <div id="thread-list">
+          {% if not current_path %}
+            <p class="desc">(threads live inside categories)</p>
+          {% else %}
+            {% for bucket in exp_choices %}
+              <details class="inner-details">
+                <summary>
+                  <div class="left">
+                    <span class="marker"></span>
+                    <span class="inner-name">Expires: {{ bucket }}</span>
+                    <span class="count">({{ threads_grouped[bucket]|length }})</span>
+                  </div>
+                  <span class="count">expand</span>
+                </summary>
+
+                {% if threads_grouped[bucket]|length == 0 %}
+                  <p class="inner-desc">(none)</p>
+                {% else %}
+                  <table class="thread-table">
+                    <tr>
+                      <th>Stream</th>
+                      <th class="time">Created (UTC)</th>
+                      <th class="num">Replies</th>
+                      <th class="open">Open</th>
+                    </tr>
+                    {% for t in threads_grouped[bucket] %}
+                      <tr>
+                        <td>{{ t.title }}</td>
+                        <td class="time">{{ t.created_at }}</td>
+                        <td class="num">{{ t.reply_count }}</td>
+                        <td class="open">
+                          <a class="btn" href="/thread/{{ t.id }}">[open]</a>
+                        </td>
+                      </tr>
+                    {% endfor %}
+                  </table>
+                {% endif %}
+              </details>
+            {% endfor %}
+          {% endif %}
+        </div>
+
+        <div id="thread-form" style="display:none;">
+          <div class="actions">
+            <button class="btn" type="button"
+                    onclick="toggleBox('thread-list','thread-form','add-thread-btn','list'); document.getElementById('threads-box').open = true;">
+              [back to threads]
+            </button>
+          </div>
+
+          <form action="/add_thread" method="POST">
+            <input type="hidden" name="category_path" value="{{ current_path }}">
+
+            <div class="form-row">
+              <label for="thread-title">Stream name</label><br>
+              <input type="text" id="thread-title" name="thread-title" maxlength="80" required>
+            </div>
+
+            <div class="form-row">
+              <label for="thread-stream-link">Stream link</label>
+              <span class="hint">(only manually input if you know what you’re doing — prefer “embed stream”)</span><br>
+
+              <input type="text" id="thread-stream-link" name="thread-stream-link"
+                     value="{{ prefill_stream }}" maxlength="500" required>
+
+              <div class="actions">
+                <a class="btn"
+                   href="/embed_stream?return_to=/forum/{{ current_path }}&category_path={{ current_path }}">[embed stream]</a>
+              </div>
+            </div>
+
+            <div class="form-row">
+              <label for="thread-expiration">Expiration</label><br>
+              <select id="thread-expiration" name="thread-expiration" required>
+                {% for opt in exp_choices %}
+                  <option value="{{ opt }}">{{ opt }}</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <div class="form-row">
+              <input type="submit" value="Submit">
+            </div>
+          </form>
+        </div>
+      </details>
+    </div>
+  </body>
+</html>

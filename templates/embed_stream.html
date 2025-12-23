@@ -1,0 +1,238 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Embed Stream - The Stream Den</title>
+
+    <style>
+      body { font-family: "Times New Roman", serif; padding: 24px; }
+      .container { max-width: 900px; margin: 0 auto; }
+
+      .topbar { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+
+      details { border: 2px solid #000; padding: 10px 12px; margin: 10px 0; background: #fff; }
+
+      summary {
+        cursor: pointer;
+        list-style: none;
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        user-select: none;
+      }
+      summary::-webkit-details-marker { display: none; }
+
+      .marker { display: inline-block; width: 22px; font-weight: bold; }
+      details[open] .marker::before { content: "[-]"; }
+      details:not([open]) .marker::before { content: "[+]"; }
+
+      .left { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+      .name { font-weight: 700; font-size: 18px; white-space: nowrap; }
+      .count { font-size: 14px; white-space: nowrap; }
+
+      a.btn, button.btn {
+        color: #00f;
+        text-decoration: underline;
+        font-size: 14px;
+        background: transparent;
+        border: none;
+        padding: 0;
+        cursor: pointer;
+        font-family: inherit;
+      }
+      a.btn:visited { color: #551A8B; }
+
+      button.btn[disabled] {
+        color: #777;
+        text-decoration: none;
+        cursor: not-allowed;
+      }
+
+      label { font-size: 14px; }
+      input[type="text"], select {
+        font-family: inherit;
+        font-size: 14px;
+        border: 1px solid #000;
+        padding: 4px;
+        width: 100%;
+        max-width: 560px;
+        box-sizing: border-box;
+      }
+      input[type="submit"] {
+        font-family: inherit;
+        font-size: 14px;
+        border: 1px solid #000;
+        background: #fff;
+        padding: 4px 10px;
+        cursor: pointer;
+      }
+
+      .candidate { border: 1px solid #000; padding: 10px; margin: 10px 0; background: #fff; }
+      .label { font-weight: bold; margin-bottom: 8px; }
+      .preview { margin: 8px 0; }
+      .note { font-size: 12px; margin-top: 6px; line-height: 1.3; }
+
+      .err {
+        border: 1px solid #000;
+        padding: 8px 10px;
+        margin: 10px 0;
+        background: #fff;
+        font-size: 14px;
+      }
+
+      /* carousel controls */
+      .navrow {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 10px;
+        margin-top: 8px;
+        margin-bottom: 6px;
+      }
+      .status {
+        font-size: 14px;
+        white-space: nowrap;
+      }
+
+      .candidate-item { display: none; }
+      .candidate-item.active { display: block; }
+    </style>
+
+    <script>
+      let candIdx = 0;
+
+      function updateCandidateView() {
+        const items = document.querySelectorAll(".candidate-item");
+        const total = items.length;
+
+        const status = document.getElementById("cand-status");
+        const chosenInput = document.getElementById("chosen_value");
+        const chooseBtn = document.getElementById("choose_btn");
+        const chooseLabel = document.getElementById("choose_label");
+
+        if (!status || !chosenInput || !chooseBtn || !chooseLabel) return;
+
+        if (total === 0) {
+          status.textContent = "0 / 0";
+          chosenInput.value = "";
+          chooseBtn.disabled = true;
+          chooseLabel.textContent = "[choose stream]";
+          return;
+        }
+
+        // wrap
+        if (candIdx < 0) candIdx = total - 1;
+        if (candIdx >= total) candIdx = 0;
+
+        items.forEach((el, i) => el.classList.toggle("active", i === candIdx));
+        status.textContent = (candIdx + 1) + " / " + total;
+
+        const active = items[candIdx];
+        const chosen = active.getAttribute("data-chosen") || "";
+        chosenInput.value = chosen;
+
+        // disable choose when no chosen_value
+        if (!chosen) {
+          chooseBtn.disabled = true;
+          chooseLabel.textContent = "[choose stream (no selectable link)]";
+        } else {
+          chooseBtn.disabled = false;
+          chooseLabel.textContent = "[choose stream]";
+        }
+      }
+
+      function prevCandidate(e) { if (e) e.preventDefault(); candIdx--; updateCandidateView(); }
+      function nextCandidate(e) { if (e) e.preventDefault(); candIdx++; updateCandidateView(); }
+
+      window.addEventListener("DOMContentLoaded", () => updateCandidateView());
+    </script>
+  </head>
+
+  <body>
+    <div class="container">
+      <div class="topbar">
+        <h1 style="margin:0;">Embed Stream</h1>
+        <a class="btn" href="{{ return_to }}">← Back</a>
+      </div>
+
+      {% if error_msg %}
+        <div class="err">{{ error_msg }}</div>
+      {% endif %}
+
+      <details open>
+        <summary>
+          <div class="left">
+            <span class="marker"></span>
+            <span class="name">Source + Input</span>
+          </div>
+          <span class="count">expand</span>
+        </summary>
+
+        <form method="POST" action="/embed_stream?return_to={{ return_to }}&category_path={{ category_path }}">
+          <p>
+            <label for="source">Source</label><br>
+            <select id="source" name="source">
+              <option value="other" {% if source=='other' %}selected{% endif %}>Other (scan page for iframes/videos)</option>
+              <option value="twitch" {% if source=='twitch' %}selected{% endif %}>Twitch</option>
+              <option value="youtube" {% if source=='youtube' %}selected{% endif %}>YouTube</option>
+              <option value="x" {% if source=='x' %}selected{% endif %}>X.com</option>
+            </select>
+          </p>
+
+          <p>
+            <label for="user_input">URL / Channel / Video</label><br>
+            <input type="text" id="user_input" name="user_input" value="{{ user_input }}" required>
+          </p>
+
+          <p><input type="submit" value="Find embeds"></p>
+        </form>
+      </details>
+
+      <details open>
+        <summary>
+          <div class="left">
+            <span class="marker"></span>
+            <span class="name">Results</span>
+          </div>
+          <span class="count">{{ candidates|length }}</span>
+        </summary>
+
+        {% if candidates|length == 0 %}
+          <p>(No results yet — submit above.)</p>
+        {% else %}
+
+          <div class="navrow">
+            <button class="btn" type="button" onclick="prevCandidate(event)">[&larr; back]</button>
+            <span class="status" id="cand-status">1 / {{ candidates|length }}</span>
+            <button class="btn" type="button" onclick="nextCandidate(event)">[next &rarr;]</button>
+          </div>
+
+          {% for c in candidates %}
+            <div class="candidate candidate-item {% if loop.first %}active{% endif %}"
+                 data-chosen="{{ (c.chosen_value or '')|e }}">
+              <div class="label">{{ c.label }}</div>
+
+              <div class="preview">
+                {{ c.preview_html | safe }}
+              </div>
+
+              {% if c.kind == 'x' %}
+                <div class="note">
+                  X posts can’t usually be embedded as raw iframes (browser/security headers).
+                  This preview uses the official X widget, but you can still choose it and store the post URL.
+                </div>
+              {% endif %}
+            </div>
+          {% endfor %}
+
+          <form method="POST" action="/choose_stream">
+            <input type="hidden" name="return_to" value="{{ return_to }}">
+            <input type="hidden" name="chosen_value" id="chosen_value" value="">
+            <button class="btn" id="choose_btn" type="submit"><span id="choose_label">[choose stream]</span></button>
+          </form>
+
+        {% endif %}
+      </details>
+    </div>
+  </body>
+</html>

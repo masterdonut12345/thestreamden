@@ -1,0 +1,36 @@
+{
+  "categories": [
+    {
+      "id": 0,
+      "name": "Sports",
+      "slug": "sports",
+      "desc": "All sports",
+      "count": 2,
+      "parent_id": null
+    },
+    {
+      "id": 1,
+      "name": "Basketball",
+      "slug": "basketball",
+      "desc": "A game with a ball, included NBA, NCAA, ect",
+      "count": 0,
+      "parent_id": 0
+    },
+    {
+      "id": 2,
+      "name": "Movies",
+      "slug": "movies",
+      "desc": "Main movie category.",
+      "count": 0,
+      "parent_id": null
+    },
+    {
+      "id": 3,
+      "name": "Soccer",
+      "slug": "soccer",
+      "desc": "A game where you kick a ball.",
+      "count": 0,
+      "parent_id": 0
+    }
+  ]
+}
