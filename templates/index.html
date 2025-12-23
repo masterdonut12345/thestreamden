@@ -44,6 +44,7 @@
         margin: 0 auto;
         padding: 0 16px 24px 16px;
       }
+      .top-bars { display: flex; gap: 14px; align-items: flex-start; }
       .page { display: flex; gap: 18px; align-items: flex-start; justify-content: center; }
       .sidebar { width: 320px; flex-shrink: 0; }
       .main-wrap { flex: 1; min-width: 0; }
@@ -91,6 +92,10 @@
       .search-clear { background: linear-gradient(180deg, #f9fbff, #edf2ff); }
       .search-btn:hover, .search-clear:hover { background: linear-gradient(180deg, #e9efff, #dfe7ff); }
       .search-meta { font-size: 12px; color: var(--muted); }
+
+      .auth-panel { width: 260px; flex-shrink: 0; }
+      .auth-panel .search-input { padding: 8px; }
+      .auth-panel .search-btn, .auth-panel .search-clear { padding: 6px 10px; }
 
       .forum-banner {
         padding: 18px 22px;
@@ -302,103 +307,99 @@
 
   <body>
     <div class="page-wrap">
-      <div class="page" style="margin-bottom:16px;">
+      <div class="top-bars">
         <aside class="sidebar">
           <div class="panel search-panel">
             <h3>Search</h3>
             <form action="" method="GET">
               <input class="search-input" type="text" name="search" value="{{ search_query }}" placeholder="Search threads or categories">
-            <div class="search-actions">
-              <button class="search-btn" type="submit">Search</button>
-              <a class="search-clear" href="{{ request.path }}">Clear</a>
-            </div>
+              <div class="search-actions">
+                <button class="search-btn" type="submit">Search</button>
+                <a class="search-clear" href="{{ request.path }}">Clear</a>
+              </div>
             </form>
-          {% if search_query %}
-            <div class="board-subtext" style="margin-top:10px;">Results for “{{ search_query }}”</div>
-            <h4 style="margin:10px 0 6px 0;">Threads</h4>
-            {% if search_results.threads|length == 0 %}
-              <div class="empty-row">No thread matches.</div>
-            {% else %}
-              <table class="forum-table" style="font-size:12px;">
-                <thead>
-                  <tr>
-                    <th>Title</th>
-                    <th class="col-click">Clicks</th>
-                    <th class="col-action">Open</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {% for t in search_results.threads %}
+            {% if search_query %}
+              <div class="board-subtext" style="margin-top:10px;">Results for “{{ search_query }}”</div>
+              <h4 style="margin:10px 0 6px 0;">Threads</h4>
+              {% if search_results.threads|length == 0 %}
+                <div class="empty-row">No thread matches.</div>
+              {% else %}
+                <table class="forum-table" style="font-size:12px;">
+                  <thead>
                     <tr>
-                      <td>
-                        <div class="thread-title">{{ t.title }}</div>
-                        <div class="search-meta"><a class="btn" href="{{ t.category_url }}">{{ t.category_name }}</a></div>
-                      </td>
-                      <td class="col-click">{{ t.clicks }}</td>
-                      <td class="col-action"><a class="link-btn" href="{{ t.thread_url }}">Open</a></td>
+                      <th>Title</th>
+                      <th class="col-click">Clicks</th>
+                      <th class="col-action">Open</th>
                     </tr>
-                  {% endfor %}
-                </tbody>
-              </table>
-            {% endif %}
-            <h4 style="margin:12px 0 6px 0;">Categories</h4>
-            {% if search_results.categories|length == 0 %}
-              <div class="empty-row">No category matches.</div>
-            {% else %}
-              <table class="forum-table" style="font-size:12px;">
-                <thead>
-                  <tr>
-                    <th>Category</th>
-                    <th class="col-count">Threads</th>
-                    <th class="col-action">Open</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {% for c in search_results.categories %}
+                  </thead>
+                  <tbody>
+                    {% for t in search_results.threads %}
+                      <tr>
+                        <td>
+                          <div class="thread-title">{{ t.title }}</div>
+                          <div class="search-meta"><a class="btn" href="{{ t.category_url }}">{{ t.category_name }}</a></div>
+                        </td>
+                        <td class="col-click">{{ t.clicks }}</td>
+                        <td class="col-action"><a class="link-btn" href="{{ t.thread_url }}">Open</a></td>
+                      </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              {% endif %}
+              <h4 style="margin:12px 0 6px 0;">Categories</h4>
+              {% if search_results.categories|length == 0 %}
+                <div class="empty-row">No category matches.</div>
+              {% else %}
+                <table class="forum-table" style="font-size:12px;">
+                  <thead>
                     <tr>
-                      <td>
-                        <div class="cat-name">{{ c.name }}</div>
-                        <div class="search-meta">{{ c.desc }}</div>
-                      </td>
-                      <td class="col-count">{{ c.threads }}</td>
-                      <td class="col-action"><a class="link-btn" href="{{ c.url }}">Open</a></td>
+                      <th>Category</th>
+                      <th class="col-count">Threads</th>
+                      <th class="col-action">Open</th>
                     </tr>
-                  {% endfor %}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {% for c in search_results.categories %}
+                      <tr>
+                        <td>
+                          <div class="cat-name">{{ c.name }}</div>
+                          <div class="search-meta">{{ c.desc }}</div>
+                        </td>
+                        <td class="col-count">{{ c.threads }}</td>
+                        <td class="col-action"><a class="link-btn" href="{{ c.url }}">Open</a></td>
+                      </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              {% endif %}
             {% endif %}
-          {% endif %}
-        </div>
-      </aside>
-      <div class="main-wrap">
-        <div class="panel" style="border:1px solid var(--border); padding:12px; box-shadow:0 6px 18px rgba(18,31,59,0.08); background:#fff;">
+          </div>
+        </aside>
+
+        <div class="auth-panel panel search-panel">
+          <h3>Account</h3>
           {% if current_user %}
-            <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
-              <div>Logged in as <strong>{{ current_user }}</strong></div>
-              <a class="search-btn" style="text-decoration:none; padding:6px 10px;" href="/logout">Logout</a>
-            </div>
+            <div style="font-size:14px; margin-bottom:6px;">Logged in as <strong>{{ current_user }}</strong></div>
+            <a class="search-btn" style="text-decoration:none;" href="/logout">Logout</a>
           {% else %}
-            <form action="/login" method="POST" style="display:flex; gap:8px; align-items:flex-end; flex-wrap:wrap;">
-              <div style="flex:1; min-width:140px;">
-                <label style="font-size:12px; color:var(--muted);">Username</label>
-                <input class="search-input" type="text" name="username" required>
-              </div>
-              <div style="flex:1; min-width:140px;">
-                <label style="font-size:12px; color:var(--muted);">Password</label>
-                <input class="search-input" type="password" name="password" required>
-                <input type="hidden" name="next" value="{{ request.path }}">
-              </div>
-              <div style="display:flex; gap:6px; align-items:flex-end;">
-                <button class="search-btn" type="submit" style="padding:8px 12px;">Login</button>
-                <a class="search-clear" href="/signup" style="padding:8px 12px; text-decoration:none;">Sign up</a>
+            <form action="/login" method="POST">
+              <input type="hidden" name="next" value="{{ request.path }}">
+              <label style="font-size:12px; color:var(--muted);">Username</label>
+              <input class="search-input" type="text" name="username" required>
+              <label style="font-size:12px; color:var(--muted);">Password</label>
+              <input class="search-input" type="password" name="password" required>
+              <div class="search-actions" style="margin-top:6px;">
+                <button class="search-btn" type="submit">Login</button>
+                <a class="search-clear" href="/signup">Sign up</a>
               </div>
             </form>
           {% endif %}
         </div>
-      </div>
       </div>
 
-      <div class="forum-shell">
+      <div class="page" style="margin-top:14px;">
+        <div class="main-wrap">
+          <div class="forum-shell">
           <div class="forum-banner">
             <div>
               <h1>The Stream Den</h1>
