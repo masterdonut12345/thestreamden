@@ -44,10 +44,10 @@
         margin: 0 auto;
         padding: 0 16px 24px 16px;
       }
-      .page { display: flex; gap: 18px; align-items: flex-start; }
-      .sidebar { width: 320px; flex-shrink: 0; }
-      .auth-panel { width: 260px; flex-shrink: 0; }
-      .main-wrap { flex: 1; min-width: 0; }
+      .page { display: grid; grid-template-columns: 320px 1fr 260px; gap: 18px; align-items: flex-start; }
+      .sidebar { width: 100%; }
+      .auth-panel { width: 100%; }
+      .main-wrap { min-width: 0; }
       .panel {
         border: 1px solid var(--border);
         background: #fff;
