@@ -27,14 +27,15 @@
       a:hover { color: var(--accent-strong); }
 
       .page-wrap {
-        max-width: 1080px;
+        max-width: 1200px;
         margin: 0 auto;
       }
       .header {
         display: flex;
-        align-items: center;
-        gap: 14px;
-        margin-bottom: 14px;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 18px;
+        margin-bottom: 16px;
       }
       .title {
         margin: 0;
@@ -50,25 +51,25 @@
       .panel {
         border: 1px solid var(--border);
         background: #fff;
-        padding: 12px;
+        padding: 14px;
         box-shadow: 0 6px 18px rgba(18, 31, 59, 0.08);
       }
       .panel h3 {
         margin: 0 0 8px 0;
-        font-size: 15px;
+        font-size: 16px;
         color: var(--accent-strong);
       }
       .small-text { font-size: 12px; color: var(--muted); }
 
       .auth-panel {
-        width: 260px;
+        width: 280px;
       }
       .auth-input {
         width: 100%;
-        padding: 8px;
+        padding: 10px;
         border: 1px solid var(--border);
         border-radius: 4px;
-        font-size: 13px;
+        font-size: 14px;
       }
       .auth-actions {
         display: flex;
@@ -100,23 +101,23 @@
         align-items: center;
         border: 1px solid var(--border);
         background: #fff;
-        padding: 10px 12px;
+        padding: 12px 14px;
         box-shadow: 0 6px 18px rgba(18, 31, 59, 0.08);
         width: 100%;
       }
       .search-input {
         flex: 1;
         min-width: 0;
-        padding: 8px;
+        padding: 10px;
         border: 1px solid var(--border);
         border-radius: 4px;
-        font-size: 13px;
+        font-size: 14px;
       }
 
       .grid {
         display: grid;
         grid-template-columns: 1fr 1fr;
-        gap: 14px;
+        gap: 16px;
         align-items: start;
       }
       .stack {
@@ -126,12 +127,14 @@
       }
       @media (max-width: 900px) {
         .grid { grid-template-columns: 1fr; }
+        .header { flex-direction: column; }
+        .auth-panel { width: 100%; }
       }
 
       .table {
         width: 100%;
         border-collapse: collapse;
-        font-size: 13px;
+        font-size: 14px;
         margin-top: 6px;
       }
       .table th, .table td {
@@ -145,7 +148,7 @@
         text-transform: uppercase;
         letter-spacing: 0.04em;
         color: var(--muted);
-        font-size: 12px;
+        font-size: 13px;
       }
       .table tr:nth-child(even) td { background: var(--panel-soft); }
       .meta { font-size: 12px; color: var(--muted); }
@@ -160,21 +163,18 @@
     </style>
   </head>
   <body>
-    <div class="page-wrap">
-      <div class="header">
-        <div>
-          <h1 class="title">The Stream Den</h1>
-          <p class="tagline">Jump into the forum or find something fast.</p>
-        </div>
-      </div>
-
-      <div style="display:flex; justify-content:flex-end; margin-bottom:12px;">
-        <div class="panel auth-panel">
-          <h3>Account</h3>
-          {% if current_user %}
-            <div class="small-text" style="margin-bottom:6px;">Signed in as <strong>{{ current_user }}</strong></div>
-            <div class="auth-actions">
-              <a class="btn" href="/forum">Forum</a>
+      <div class="page-wrap">
+        <div class="header">
+          <div>
+            <h1 class="title">The Stream Den</h1>
+            <p class="tagline">Jump into the forum or find something fast.</p>
+          </div>
+          <div class="panel auth-panel">
+            <h3>Account</h3>
+            {% if current_user %}
+              <div class="small-text" style="margin-bottom:6px;">Signed in as <strong>{{ current_user }}</strong></div>
+              <div class="auth-actions">
+                <a class="btn" href="/forum">Forum</a>
               <a class="btn ghost" href="/account">Account</a>
               <a class="btn ghost" href="/logout">Logout</a>
             </div>
@@ -187,12 +187,13 @@
                 <button class="btn" type="submit">Login</button>
                 <a class="btn ghost" href="/signup">Sign up</a>
               </div>
-            </form>
-          {% endif %}
+              </form>
+            {% endif %}
+          </div>
         </div>
-      </div>
+        <div style="height:6px;"></div>
 
-      <div class="grid">
+        <div class="grid">
         <div class="stack">
           <div class="search-area">
             <form class="search-form" action="/" method="GET">
