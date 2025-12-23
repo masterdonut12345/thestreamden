@@ -282,7 +282,7 @@ def build_post_tree(thread_id: int) -> list[dict]:
     by_parent = POSTS_DATA.get("posts_by_parent", {})
 
     def recurse(parent_id):
-        children = by_parent.get(parent_id, [])
+        children = [c for c in by_parent.get(parent_id, []) if c.get("thread_id") == thread_id]
         result = []
         for child in sorted(children, key=lambda p: p.get("created_at", "")):
             node = dict(child)
