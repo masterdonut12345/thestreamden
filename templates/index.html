@@ -44,9 +44,9 @@
         margin: 0 auto;
         padding: 0 16px 24px 16px;
       }
-      .top-bars { display: flex; gap: 14px; align-items: flex-start; }
-      .page { display: flex; gap: 18px; align-items: flex-start; justify-content: center; }
+      .page { display: flex; gap: 18px; align-items: flex-start; }
       .sidebar { width: 320px; flex-shrink: 0; }
+      .auth-panel { width: 260px; flex-shrink: 0; }
       .main-wrap { flex: 1; min-width: 0; }
       .panel {
         border: 1px solid var(--border);
@@ -93,7 +93,6 @@
       .search-btn:hover, .search-clear:hover { background: linear-gradient(180deg, #e9efff, #dfe7ff); }
       .search-meta { font-size: 12px; color: var(--muted); }
 
-      .auth-panel { width: 260px; flex-shrink: 0; }
       .auth-panel .search-input { padding: 8px; }
       .auth-panel .search-btn, .auth-panel .search-clear { padding: 6px 10px; }
 
@@ -200,6 +199,7 @@
       .col-action { width: 120px; text-align: center; }
       .col-time { width: 210px; text-align: center; }
       .col-click { width: 100px; text-align: center; }
+      .col-user { width: 140px; text-align: center; }
 
       .link-btn {
         display: inline-block;
@@ -307,7 +307,7 @@
 
   <body>
     <div class="page-wrap">
-      <div class="top-bars">
+      <div class="page">
         <aside class="sidebar">
           <div class="panel search-panel">
             <h3>Search</h3>
@@ -376,30 +376,28 @@
           </div>
         </aside>
 
-        <div class="auth-panel panel search-panel">
-          <h3>Account</h3>
-          {% if current_user %}
-            <div style="font-size:14px; margin-bottom:6px;">Logged in as <strong>{{ current_user }}</strong></div>
-            <a class="search-btn" style="text-decoration:none;" href="/logout">Logout</a>
-          {% else %}
-            <form action="/login" method="POST">
-              <input type="hidden" name="next" value="{{ request.path }}">
-              <label style="font-size:12px; color:var(--muted);">Username</label>
-              <input class="search-input" type="text" name="username" required>
-              <label style="font-size:12px; color:var(--muted);">Password</label>
-              <input class="search-input" type="password" name="password" required>
-              <div class="search-actions" style="margin-top:6px;">
-                <button class="search-btn" type="submit">Login</button>
-                <a class="search-clear" href="/signup">Sign up</a>
-              </div>
-            </form>
-          {% endif %}
-        </div>
+        <div class="main-wrap">
+      <div class="auth-panel panel search-panel">
+        <h3>Account</h3>
+        {% if current_user %}
+          <div style="font-size:14px; margin-bottom:6px;">Logged in as <strong>{{ current_user }}</strong></div>
+          <a class="search-btn" style="text-decoration:none;" href="/logout">Logout</a>
+        {% else %}
+          <form action="/login" method="POST">
+            <input type="hidden" name="next" value="{{ request.path }}">
+            <label style="font-size:12px; color:var(--muted);">Username</label>
+            <input class="search-input" type="text" name="username" required>
+            <label style="font-size:12px; color:var(--muted);">Password</label>
+            <input class="search-input" type="password" name="password" required>
+            <div class="search-actions" style="margin-top:6px;">
+              <button class="search-btn" type="submit">Login</button>
+              <a class="search-clear" href="/signup">Sign up</a>
+            </div>
+          </form>
+        {% endif %}
       </div>
 
-      <div class="page" style="margin-top:14px;">
-        <div class="main-wrap">
-          <div class="forum-shell">
+        <div class="forum-shell">
           <div class="forum-banner">
             <div>
               <h1>The Stream Den</h1>
@@ -493,12 +491,11 @@
                     <thead>
                     <tr>
                       <th>Stream Thread</th>
-                      <th class="col-action">User</th>
-                        <th class="col-action">User</th>
-                        <th class="col-time">Added (UTC)</th>
-                        <th class="col-count">Replies</th>
-                        <th class="col-click">Clicks</th>
-                        <th class="col-action">Link</th>
+                      <th class="col-user">User</th>
+                      <th class="col-time">Added (UTC)</th>
+                      <th class="col-count">Replies</th>
+                      <th class="col-click">Clicks</th>
+                      <th class="col-action">Link</th>
                     </tr>
                     </thead>
                     <tbody>
@@ -511,7 +508,7 @@
                               {% if cat %}In {{ cat.name }}{% endif %}
                             </div>
                           </td>
-                          <td class="col-action">{{ t.user or 'Anonymous' }}</td>
+                          <td class="col-user">{{ t.user or 'Anonymous' }}</td>
                           <td class="col-time"><span class="mono">{{ t.created_at }}</span></td>
                           <td class="col-count">{{ t.reply_count }}</td>
                           <td class="col-click">{{ t.clicks or 0 }}</td>
@@ -538,6 +535,7 @@
                         <thead>
                           <tr>
                             <th>Stream Thread</th>
+                            <th class="col-user">User</th>
                             <th class="col-time">Added (UTC)</th>
                             <th class="col-count">Replies</th>
                             <th class="col-click">Clicks</th>
@@ -557,6 +555,7 @@
                                   {% endif %}
                                 </div>
                               </td>
+                              <td class="col-user">{{ t.user or 'Anonymous' }}</td>
                               <td class="col-time"><span class="mono">{{ t.created_at }}</span></td>
                               <td class="col-count">{{ t.reply_count }}</td>
                               <td class="col-click">{{ t.clicks or 0 }}</td>
