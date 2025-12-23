@@ -5,86 +5,267 @@
     <title>The Stream Den</title>
 
     <style>
-      body { font-family: "Times New Roman", serif; padding: 24px; }
-      .container { max-width: 900px; margin: 0 auto; }
+      :root {
+        --ink: #1b2432;
+        --muted: #4f5b73;
+        --paper: #f2f4fb;
+        --panel: #ffffff;
+        --panel-soft: #f8f9fc;
+        --border: #c8d0dd;
+        --stripe: #e6ebf5;
+        --accent: #2f4f9c;
+        --accent-strong: #1f3d80;
+        --highlight: #f5f7ff;
+      }
 
-      .topbar { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+      * { box-sizing: border-box; }
 
-      .crumbs { margin: 6px 0 14px 0; font-size: 14px; }
-      .sep { padding: 0 6px; }
+      body {
+        font-family: "Georgia", "Times New Roman", serif;
+        color: var(--ink);
+        background: var(--paper);
+        padding: 26px 16px 40px;
+        margin: 0;
+      }
 
-      details { border: 2px solid #000; padding: 10px 12px; margin: 10px 0; background: #fff; }
+      a { color: var(--accent); }
+      a:visited { color: var(--accent-strong); }
 
-      summary {
-        cursor: pointer;
-        list-style: none;
+      .forum-shell {
+        max-width: 1080px;
+        margin: 0 auto;
+        background: var(--panel);
+        border: 1px solid var(--border);
+        box-shadow: 0 12px 30px rgba(26, 44, 92, 0.18);
+      }
+
+      .page-wrap {
+        max-width: 1440px;
+        margin: 0 auto;
+        padding: 0 16px 24px 16px;
+      }
+      .page { display: flex; gap: 18px; align-items: flex-start; }
+      .sidebar { width: 320px; flex-shrink: 0; }
+      .auth-panel { width: 260px; flex-shrink: 0; }
+      .main-wrap { flex: 1; min-width: 0; }
+      .panel {
+        border: 1px solid var(--border);
+        background: #fff;
+        padding: 12px;
+        box-shadow: 0 6px 18px rgba(18, 31, 59, 0.08);
+      }
+      .panel h3 {
+        margin: 0 0 8px 0;
+        font-size: 15px;
+      }
+      .search-panel {
+        background: linear-gradient(180deg, #f7f9ff, #eef3ff);
+        border: 1px solid #c8d0dd;
+        box-shadow: inset 0 0 0 1px #ffffffcc, 0 8px 18px rgba(26, 44, 92, 0.12);
+      }
+      .search-input {
+        width: 100%;
+        padding: 10px;
+        border: 1px solid #c8d0dd;
+        border-radius: 4px;
+        font-size: 13px;
+        background: linear-gradient(180deg, #ffffff, #f4f7ff);
+      }
+      .search-actions {
         display: flex;
-        align-items: baseline;
+        gap: 8px;
+        margin-top: 8px;
+      }
+      .search-btn, .search-clear {
+        flex: 1;
+        text-align: center;
+        padding: 8px;
+        border: 1px solid #c8d0dd;
+        background: linear-gradient(180deg, #f0f4fb, #e6ecf9);
+        color: #1f3d80;
+        font-size: 13px;
+        cursor: pointer;
+        border-radius: 4px;
+        text-decoration: none;
+        display: inline-block;
+      }
+      .search-clear { background: linear-gradient(180deg, #f9fbff, #edf2ff); }
+      .search-btn:hover, .search-clear:hover { background: linear-gradient(180deg, #e9efff, #dfe7ff); }
+      .search-meta { font-size: 12px; color: var(--muted); }
+
+      .auth-panel .search-input { padding: 8px; }
+      .auth-panel .search-btn, .auth-panel .search-clear { padding: 6px 10px; }
+
+      .forum-banner {
+        padding: 18px 22px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 14px;
+        border-bottom: 1px solid var(--border);
+        background: linear-gradient(180deg, #3c5586, #2d416f);
+        color: #f4f6ff;
+      }
+
+      .forum-banner h1 { margin: 0 0 4px 0; font-size: 26px; letter-spacing: -0.01em; }
+      .tagline { margin: 0; font-size: 13px; color: #d8e1f7; }
+
+      .nav-actions { display: flex; gap: 10px; align-items: center; }
+      .nav-btn {
+        display: inline-block;
+        padding: 8px 12px;
+        font-size: 13px;
+        border: 1px solid #1d2740;
+        color: #111827;
+        text-decoration: none;
+        background: linear-gradient(180deg, #ffffff, #f2f4fb);
+        border-radius: 3px;
+        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.45), 0 2px 6px rgba(0,0,0,0.15);
+      }
+      .nav-btn:hover { background: linear-gradient(180deg, #f7f9ff, #e7ecf6); }
+
+      .crumbs {
+        padding: 11px 16px 10px 16px;
+        font-size: 12px;
+        border-bottom: 1px solid var(--border);
+        background: #eef2fa;
+      }
+      .crumbs a { text-decoration: none; font-weight: 600; }
+      .crumbs .sep { padding: 0 6px; color: var(--muted); }
+
+      .board-card + .board-card { border-top: 1px solid var(--border); }
+      .board-head {
+        padding: 14px 16px 12px 16px;
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        align-items: center;
         justify-content: space-between;
         gap: 12px;
-        user-select: none;
+        background: linear-gradient(180deg, #f5f7ff, #eef2fa);
       }
-      summary::-webkit-details-marker { display: none; }
+      .board-title { font-size: 18px; font-weight: 700; letter-spacing: -0.01em; }
+      .board-subtext { margin-top: 4px; font-size: 13px; color: var(--muted); }
+      .board-actions { display: flex; align-items: center; gap: 8px; }
 
-      .marker { display: inline-block; width: 22px; font-weight: bold; }
-      details[open] .marker::before { content: "[-]"; }
-      details:not([open]) .marker::before { content: "[+]"; }
+      .chip {
+        display: inline-block;
+        padding: 5px 10px;
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        font-size: 12px;
+        color: var(--muted);
+        background: var(--panel-soft);
+      }
 
-      .left { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
-      .name { font-weight: 700; font-size: 18px; white-space: nowrap; }
-      .count { font-size: 14px; white-space: nowrap; }
-      .desc { margin: 10px 0 0 0; line-height: 1.35; }
-      .actions { margin-top: 10px; }
-
-      a.btn, button.btn {
-        color: #00f;
-        text-decoration: underline;
-        font-size: 14px;
-        background: transparent;
-        border: none;
-        padding: 0;
+      .ghost-btn {
+        font-family: inherit;
+        font-size: 13px;
+        padding: 7px 11px;
+        border: 1px solid var(--border);
+        background: #f5f7ff;
+        color: var(--ink);
         cursor: pointer;
-        font-family: inherit;
+        border-radius: 3px;
       }
-      a.btn:visited { color: #551A8B; }
+      .ghost-btn:hover { background: var(--highlight); }
 
-      .inner-details { border: 1px solid #000; margin: 8px 0; padding: 8px 10px; background: #fff; }
-      .inner-details summary { padding: 0; }
-      .inner-name { font-weight: 700; font-size: 16px; white-space: nowrap; }
-      .inner-desc { margin: 8px 0 0 0; line-height: 1.35; font-size: 14px; }
+      .board-body { padding: 14px 16px 18px 16px; background: #ffffff; }
+      .form-body { background: var(--panel-soft); border-top: 1px solid var(--border); }
 
-      .controls { display: flex; align-items: baseline; gap: 10px; white-space: nowrap; }
+      .forum-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+      .forum-table th, .forum-table td {
+        border: 1px solid var(--border);
+        padding: 10px;
+        background: #fff;
+      }
+      .forum-table th {
+        background: linear-gradient(180deg, #f6f8ff, #ecf0f8);
+        text-align: left;
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--muted);
+      }
+      .forum-table tr:nth-child(even) td { background: var(--panel-soft); }
 
-      .form-row { margin-top: 10px; }
-      label { font-size: 14px; }
-      input[type="text"], textarea, select {
-        font-family: inherit;
-        font-size: 14px;
-        border: 1px solid #000;
-        padding: 4px;
+      .cat-name { font-size: 15px; font-weight: 700; color: var(--accent-strong); }
+      .cat-desc { font-size: 12px; margin-top: 4px; color: var(--muted); }
+
+      .thread-title { font-weight: 700; font-size: 14px; color: var(--accent-strong); }
+      .thread-meta { font-size: 12px; color: var(--muted); margin-top: 4px; }
+      .mono { font-family: "SFMono-Regular", "Consolas", monospace; font-size: 12px; color: #45516a; }
+
+      .col-count { width: 90px; text-align: center; }
+      .col-action { width: 120px; text-align: center; }
+      .col-time { width: 210px; text-align: center; }
+      .col-click { width: 100px; text-align: center; }
+      .col-user { width: 140px; text-align: center; }
+
+      .link-btn {
+        display: inline-block;
+        padding: 7px 10px;
+        background: #f0f3fb;
+        border: 1px solid var(--border);
+        color: var(--accent-strong);
+        text-decoration: none;
+        font-weight: 700;
+        font-size: 12px;
+        border-radius: 3px;
+        box-shadow: inset 0 0 0 1px #ffffffb0;
+      }
+      .link-btn:hover { background: #e5ebf7; }
+
+      .bucket { margin-bottom: 14px; border: 1px solid var(--border); background: #ffffff; }
+      .bucket-head {
+        padding: 10px 12px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        background: linear-gradient(180deg, #f3f6ff, #e9eef7);
+        border-bottom: 1px solid var(--border);
+      }
+      .bucket-name { font-weight: 700; letter-spacing: 0.02em; text-transform: uppercase; font-size: 12px; color: var(--muted); }
+
+      .empty-row {
+        padding: 12px;
+        border: 1px dashed var(--border);
+        background: var(--panel-soft);
+        font-size: 13px;
+        color: var(--muted);
+      }
+
+      .forum-form label { font-weight: 700; font-size: 13px; color: var(--ink); }
+      .forum-form input[type="text"],
+      .forum-form textarea,
+      .forum-form select {
         width: 100%;
         max-width: 520px;
-        box-sizing: border-box;
-      }
-      textarea { resize: vertical; }
-
-      input[type="submit"] {
-        font-family: inherit;
-        font-size: 14px;
-        border: 1px solid #000;
+        padding: 8px;
+        border: 1px solid var(--border);
+        font-size: 13px;
         background: #fff;
-        padding: 4px 10px;
-        cursor: pointer;
+        color: var(--ink);
+        border-radius: 3px;
       }
+      .forum-form textarea { resize: vertical; min-height: 110px; }
+      .forum-form .form-row { margin-top: 12px; }
+      .forum-form input[type="submit"] {
+        margin-top: 6px;
+        padding: 8px 14px;
+        font-size: 13px;
+        border: 1px solid var(--border);
+        background: #f0f3fb;
+        color: var(--accent-strong);
+        cursor: pointer;
+        border-radius: 3px;
+        box-shadow: inset 0 0 0 1px #ffffffb0;
+      }
+      .forum-form input[type="submit"]:hover { background: #e5ebf7; }
 
-      .hint { font-size: 12px; margin-left: 8px; }
+      .form-actions { margin-bottom: 10px; }
+      .hint { font-size: 11px; color: var(--muted); margin-left: 6px; }
 
-      table.thread-table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-      table.thread-table th, table.thread-table td { border: 1px solid #000; padding: 6px; }
-      table.thread-table th { text-align: left; }
-      table.thread-table td.num, table.thread-table th.num { width: 110px; text-align: center; }
-      table.thread-table td.time, table.thread-table th.time { width: 220px; text-align: center; }
-      table.thread-table td.open, table.thread-table th.open { width: 90px; text-align: center; }
+      .tip-line { font-size: 12px; margin-top: 6px; color: var(--muted); }
     </style>
 
     <script>
@@ -99,19 +280,21 @@
         } else {
           if (form) form.style.display = "none";
           if (list) list.style.display = "block";
-          if (btn) btn.style.display = "inline";
+          if (btn) btn.style.display = "inline-block";
         }
       }
 
-      function openForm(e, detailsId, listId, formId, btnId) {
+      function openForm(e, containerId, listId, formId, btnId) {
         if (e) { e.preventDefault(); e.stopPropagation(); }
-        var box = document.getElementById(detailsId);
-        if (box) box.open = true;
+        var box = document.getElementById(containerId);
+        if (box) box.classList.add("expanded");
         toggleBox(listId, formId, btnId, "form");
       }
 
       // auto-open add-thread form when redirected back from choose_stream
       function autoOpenThreadForm() {
+        var canPost = "{{ '1' if allow_posting else '0' }}";
+        if (canPost !== "1") { return; }
         var shouldOpen = "{{ '1' if open_thread_form else '0' }}";
         if (shouldOpen === "1") {
           openForm(null, "threads-box", "thread-list", "thread-form", "add-thread-btn");
@@ -123,193 +306,319 @@
   </head>
 
   <body>
-    <div class="container">
-      <div class="topbar">
-        <h1 style="text-align:left;">The Stream Den</h1>
-        {% if parent_path %}
-          <a class="btn" href="/forum/{{ parent_path }}">← Back</a>
+    <div class="page-wrap">
+      <div class="page">
+        <aside class="sidebar">
+          <div class="panel search-panel">
+            <h3>Search</h3>
+            <form action="" method="GET">
+              <input class="search-input" type="text" name="search" value="{{ search_query }}" placeholder="Search threads or categories">
+              <div class="search-actions">
+                <button class="search-btn" type="submit">Search</button>
+                <a class="search-clear" href="{{ request.path }}">Clear</a>
+              </div>
+            </form>
+            {% if search_query %}
+              <div class="board-subtext" style="margin-top:10px;">Results for “{{ search_query }}”</div>
+              <h4 style="margin:10px 0 6px 0;">Threads</h4>
+              {% if search_results.threads|length == 0 %}
+                <div class="empty-row">No thread matches.</div>
+              {% else %}
+                <table class="forum-table" style="font-size:12px;">
+                  <thead>
+                    <tr>
+                      <th>Title</th>
+                      <th class="col-click">Clicks</th>
+                      <th class="col-action">Open</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for t in search_results.threads %}
+                      <tr>
+                        <td>
+                          <div class="thread-title">{{ t.title }}</div>
+                          <div class="search-meta"><a class="btn" href="{{ t.category_url }}">{{ t.category_name }}</a></div>
+                        </td>
+                        <td class="col-click">{{ t.clicks }}</td>
+                        <td class="col-action"><a class="link-btn" href="{{ t.thread_url }}">Open</a></td>
+                      </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              {% endif %}
+              <h4 style="margin:12px 0 6px 0;">Categories</h4>
+              {% if search_results.categories|length == 0 %}
+                <div class="empty-row">No category matches.</div>
+              {% else %}
+                <table class="forum-table" style="font-size:12px;">
+                  <thead>
+                    <tr>
+                      <th>Category</th>
+                      <th class="col-count">Threads</th>
+                      <th class="col-action">Open</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for c in search_results.categories %}
+                      <tr>
+                        <td>
+                          <div class="cat-name">{{ c.name }}</div>
+                          <div class="search-meta">{{ c.desc }}</div>
+                        </td>
+                        <td class="col-count">{{ c.threads }}</td>
+                        <td class="col-action"><a class="link-btn" href="{{ c.url }}">Open</a></td>
+                      </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              {% endif %}
+            {% endif %}
+          </div>
+        </aside>
+
+        <div class="main-wrap">
+      <div class="auth-panel panel search-panel">
+        <h3>Account</h3>
+        {% if current_user %}
+          <div style="font-size:14px; margin-bottom:6px;">Logged in as <strong>{{ current_user }}</strong></div>
+          <a class="search-btn" style="text-decoration:none;" href="/logout">Logout</a>
         {% else %}
-          <a class="btn" href="/forum">← Back</a>
+          <form action="/login" method="POST">
+            <input type="hidden" name="next" value="{{ request.path }}">
+            <label style="font-size:12px; color:var(--muted);">Username</label>
+            <input class="search-input" type="text" name="username" required>
+            <label style="font-size:12px; color:var(--muted);">Password</label>
+            <input class="search-input" type="password" name="password" required>
+            <div class="search-actions" style="margin-top:6px;">
+              <button class="search-btn" type="submit">Login</button>
+              <a class="search-clear" href="/signup">Sign up</a>
+            </div>
+          </form>
         {% endif %}
       </div>
 
-      <div class="crumbs">
-        {% for crumb in breadcrumbs %}
-          {% if not loop.first %}<span class="sep">&raquo;</span>{% endif %}
-          <a class="btn" href="{{ crumb.url }}">{{ crumb.name }}</a>
-        {% endfor %}
-      </div>
-
-      <!-- Subcategories -->
-      <details id="subcategories-box" open>
-        <summary>
-          <div class="left">
-            <span class="marker"></span>
-            <span class="name">Subcategories</span>
+        <div class="forum-shell">
+          <div class="forum-banner">
+            <div>
+              <h1>The Stream Den</h1>
+              <p class="tagline">Share streams and links in a clean, classic forum layout.</p>
+            </div>
+            <div class="nav-actions">
+              {% if parent_path %}
+                <a class="nav-btn" href="/forum/{{ parent_path }}">← Back</a>
+              {% else %}
+                <a class="nav-btn" href="/forum">← Forum home</a>
+              {% endif %}
+            </div>
           </div>
-          <div class="controls">
-            <span class="count">{{ categories|length }}</span>
-            <button id="add-cat-btn" class="btn" type="button"
-                    onclick="openForm(event,'subcategories-box','subcat-list','subcat-form','add-cat-btn')">[add category]</button>
-          </div>
-        </summary>
 
-        <div id="subcat-list">
-          {% if categories|length == 0 %}
-            <p class="desc">(none)</p>
-          {% else %}
-            {% for cat in categories %}
-              <details class="inner-details">
-                <summary>
-                  <div class="left">
-                    <span class="marker"></span>
-                    <span class="inner-name">{{ cat.name }}</span>
-                    <span class="count">({{ cat.count }})</span>
-                  </div>
-                  <span class="count">expand</span>
-                </summary>
-
-                <p class="inner-desc">{{ cat.desc }}</p>
-                <div class="actions">
-                  <a class="btn" href="/forum{% if current_path %}/{{ current_path }}{% endif %}/{{ cat.slug }}">Go to {{ cat.name }}</a>
-                </div>
-              </details>
+          <div class="crumbs">
+            {% for crumb in breadcrumbs %}
+              {% if not loop.first %}<span class="sep">&raquo;</span>{% endif %}
+              <a href="{{ crumb.url }}">{{ crumb.name }}</a>
             {% endfor %}
-          {% endif %}
-        </div>
-
-        <div id="subcat-form" style="display:none;">
-          <div class="actions">
-            <button class="btn" type="button"
-                    onclick="toggleBox('subcat-list','subcat-form','add-cat-btn','list'); document.getElementById('subcategories-box').open = true;">
-              [back to categories]
-            </button>
           </div>
 
-          <form action="/add_category" method="POST">
-            <input type="hidden" name="parent_path" value="{{ current_path }}">
+          {% if show_categories_section %}
+            <section id="subcategories-box" class="board-card">
+              <div class="board-head">
+                <div>
+                  <div class="board-title">{% if current_path %}Subcategories{% else %}Categories{% endif %}</div>
+                  <div class="board-subtext">Pick a room to browse threads.</div>
+                </div>
+                <div class="board-actions">
+                  <span class="chip">{{ categories|length }} total</span>
+                </div>
+              </div>
 
-            <div class="form-row">
-              <label for="category-name">Name</label><br>
-              <input type="text" id="category-name" name="category-name" maxlength="12" required>
-            </div>
-
-            <div class="form-row">
-              <label for="category-desc">Description</label><br>
-              <textarea id="category-desc" name="category-desc" rows="4" required></textarea>
-            </div>
-
-            <div class="form-row">
-              <input type="submit" value="Submit">
-            </div>
-          </form>
-        </div>
-      </details>
-
-      <!-- Threads -->
-      <details id="threads-box" open>
-        <summary>
-          <div class="left">
-            <span class="marker"></span>
-            <span class="name">Streams</span>
-          </div>
-
-          <div class="controls">
-            {% if current_path %}
-              <button id="add-thread-btn" class="btn" type="button"
-                      onclick="openForm(event,'threads-box','thread-list','thread-form','add-thread-btn')">[add stream]</button>
-            {% else %}
-              <span class="count">(pick a category to post)</span>
-            {% endif %}
-          </div>
-        </summary>
-
-        <div id="thread-list">
-          {% if not current_path %}
-            <p class="desc">(threads live inside categories)</p>
-          {% else %}
-            {% for bucket in exp_choices %}
-              <details class="inner-details">
-                <summary>
-                  <div class="left">
-                    <span class="marker"></span>
-                    <span class="inner-name">Expires: {{ bucket }}</span>
-                    <span class="count">({{ threads_grouped[bucket]|length }})</span>
-                  </div>
-                  <span class="count">expand</span>
-                </summary>
-
-                {% if threads_grouped[bucket]|length == 0 %}
-                  <p class="inner-desc">(none)</p>
+              <div id="subcat-list" class="board-body">
+                {% if categories|length == 0 %}
+                  <div class="empty-row">No rooms yet.</div>
                 {% else %}
-                  <table class="thread-table">
-                    <tr>
-                      <th>Stream</th>
-                      <th class="time">Created (UTC)</th>
-                      <th class="num">Replies</th>
-                      <th class="open">Open</th>
-                    </tr>
-                    {% for t in threads_grouped[bucket] %}
+                  <table class="forum-table">
+                    <thead>
                       <tr>
-                        <td>{{ t.title }}</td>
-                        <td class="time">{{ t.created_at }}</td>
-                        <td class="num">{{ t.reply_count }}</td>
-                        <td class="open">
-                          <a class="btn" href="/thread/{{ t.id }}">[open]</a>
-                        </td>
+                        <th>{% if current_path %}Subcategory{% else %}Category{% endif %}</th>
+                        <th class="col-count">Threads</th>
+                        <th class="col-action">Action</th>
                       </tr>
-                    {% endfor %}
+                    </thead>
+                    <tbody>
+                      {% for cat in categories %}
+                      <tr>
+                        <td>
+                          <div class="cat-name">
+                            <a class="btn" href="/forum{% if current_path %}/{{ current_path }}{% endif %}/{{ cat.slug }}">{{ cat.name }}</a>
+                          </div>
+                          <div class="cat-desc">{{ cat.desc }}</div>
+                        </td>
+                          <td class="col-count">{{ thread_counts.get(cat.id, 0) }}</td>
+                          <td class="col-action">
+                            <a class="link-btn" href="/forum{% if current_path %}/{{ current_path }}{% endif %}/{{ cat.slug }}">Enter »</a>
+                          </td>
+                        </tr>
+                      {% endfor %}
+                    </tbody>
                   </table>
                 {% endif %}
-              </details>
-            {% endfor %}
+              </div>
+
+            </section>
           {% endif %}
-        </div>
 
-        <div id="thread-form" style="display:none;">
-          <div class="actions">
-            <button class="btn" type="button"
-                    onclick="toggleBox('thread-list','thread-form','add-thread-btn','list'); document.getElementById('threads-box').open = true;">
-              [back to threads]
-            </button>
-          </div>
+          <!-- Threads -->
+          <section id="threads-box" class="board-card">
+            <div class="board-head">
+              <div>
+                <div class="board-title">{{ thread_title }}</div>
+                <div class="board-subtext">{{ thread_subtext }}</div>
+              </div>
 
-          <form action="/add_thread" method="POST">
-            <input type="hidden" name="category_path" value="{{ current_path }}">
-
-            <div class="form-row">
-              <label for="thread-title">Stream name</label><br>
-              <input type="text" id="thread-title" name="thread-title" maxlength="80" required>
-            </div>
-
-            <div class="form-row">
-              <label for="thread-stream-link">Stream link</label>
-              <span class="hint">(only manually input if you know what you’re doing — prefer “embed stream”)</span><br>
-
-              <input type="text" id="thread-stream-link" name="thread-stream-link"
-                     value="{{ prefill_stream }}" maxlength="500" required>
-
-              <div class="actions">
-                <a class="btn"
-                   href="/embed_stream?return_to=/forum/{{ current_path }}&category_path={{ current_path }}">[embed stream]</a>
+              <div class="board-actions">
+                {% if allow_posting %}
+                  <button id="add-thread-btn" class="ghost-btn" type="button"
+                          onclick="openForm(event,'threads-box','thread-list','thread-form','add-thread-btn')">+ Post a stream</button>
+                {% endif %}
               </div>
             </div>
 
-            <div class="form-row">
-              <label for="thread-expiration">Expiration</label><br>
-              <select id="thread-expiration" name="thread-expiration" required>
-                {% for opt in exp_choices %}
-                  <option value="{{ opt }}">{{ opt }}</option>
+            <div id="thread-list" class="board-body">
+              {% if show_top_threads %}
+                {% if threads_flat|length == 0 %}
+                  <div class="empty-row">No streams yet.</div>
+                {% else %}
+                  <table class="forum-table thread-table">
+                    <thead>
+                    <tr>
+                      <th>Stream Thread</th>
+                      <th class="col-user">User</th>
+                      <th class="col-time">Added (UTC)</th>
+                      <th class="col-count">Replies</th>
+                      <th class="col-click">Clicks</th>
+                      <th class="col-action">Link</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                      {% for t in threads_flat %}
+                        <tr>
+                          <td>
+                            <div class="thread-title">{{ t.title }}</div>
+                            <div class="thread-meta">
+                              {% set cat = cat_lookup.get(t.category_id) %}
+                              {% if cat %}In {{ cat.name }}{% endif %}
+                            </div>
+                          </td>
+                          <td class="col-user">{{ t.user or 'Anonymous' }}</td>
+                          <td class="col-time"><span class="mono">{{ t.created_at }}</span></td>
+                          <td class="col-count">{{ t.reply_count }}</td>
+                          <td class="col-click">{{ t.clicks or 0 }}</td>
+                          <td class="col-action">
+                            <a class="link-btn" href="/thread/{{ t.id }}">Open</a>
+                          </td>
+                        </tr>
+                      {% endfor %}
+                    </tbody>
+                  </table>
+                {% endif %}
+              {% else %}
+                {% for bucket in exp_choices %}
+                  <div class="bucket">
+                    <div class="bucket-head">
+                      <div class="bucket-name">Expires: {{ bucket }}</div>
+                      <span class="chip">{{ threads_grouped[bucket]|length }} listed</span>
+                    </div>
+
+                    {% if threads_grouped[bucket]|length == 0 %}
+                      <div class="empty-row">No streams in this window.</div>
+                    {% else %}
+                      <table class="forum-table thread-table">
+                        <thead>
+                          <tr>
+                            <th>Stream Thread</th>
+                            <th class="col-user">User</th>
+                            <th class="col-time">Added (UTC)</th>
+                            <th class="col-count">Replies</th>
+                            <th class="col-click">Clicks</th>
+                            <th class="col-action">Link</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {% for t in threads_grouped[bucket] %}
+                            <tr>
+                              <td>
+                                <div class="thread-title">{{ t.title }}</div>
+                                <div class="thread-meta">
+                                  Expires in {{ bucket }}
+                                  {% if show_top_threads %}
+                                    {% set cat = cat_lookup.get(t.category_id) %}
+                                    {% if cat %}&mdash; in {{ cat.name }}{% endif %}
+                                  {% endif %}
+                                </div>
+                              </td>
+                              <td class="col-user">{{ t.user or 'Anonymous' }}</td>
+                              <td class="col-time"><span class="mono">{{ t.created_at }}</span></td>
+                              <td class="col-count">{{ t.reply_count }}</td>
+                              <td class="col-click">{{ t.clicks or 0 }}</td>
+                              <td class="col-action">
+                                <a class="link-btn" href="/thread/{{ t.id }}">Open</a>
+                              </td>
+                            </tr>
+                          {% endfor %}
+                        </tbody>
+                      </table>
+                    {% endif %}
+                  </div>
                 {% endfor %}
-              </select>
+              {% endif %}
             </div>
 
-            <div class="form-row">
-              <input type="submit" value="Submit">
-            </div>
-          </form>
+            {% if allow_posting %}
+              <div id="thread-form" class="board-body form-body" style="display:none;">
+                <div class="form-actions">
+                  <button class="ghost-btn" type="button"
+                          onclick="toggleBox('thread-list','thread-form','add-thread-btn','list');">
+                    « Back to threads
+                  </button>
+                </div>
+
+                <form action="/add_thread" method="POST" class="forum-form">
+                  <input type="hidden" name="category_path" value="{{ current_path }}">
+
+                  <div class="form-row">
+                    <label for="thread-title">Stream title</label><br>
+                    <input type="text" id="thread-title" name="thread-title" maxlength="80" required>
+                  </div>
+
+                  <div class="form-row">
+                    <label for="thread-stream-link">Stream link</label>
+                    <span class="hint">Prefer “embed stream” to auto-fill.</span><br>
+
+                    <input type="text" id="thread-stream-link" name="thread-stream-link"
+                           value="{{ prefill_stream }}" maxlength="500" required>
+
+                    <div class="tip-line">
+                      <a class="link-btn" href="/embed_stream?return_to=/forum/{{ current_path }}&category_path={{ current_path }}">Embed stream</a>
+                    </div>
+                  </div>
+
+                  <div class="form-row">
+                    <label for="thread-expiration">Expiration</label><br>
+                    <select id="thread-expiration" name="thread-expiration" required>
+                      {% for opt in exp_choices %}
+                        <option value="{{ opt }}">{{ opt }}</option>
+                      {% endfor %}
+                    </select>
+                  </div>
+
+                  <div class="form-row">
+                    <input type="submit" value="Post stream">
+                  </div>
+                </form>
+              </div>
+            {% endif %}
+          </section>
         </div>
-      </details>
+      </div>
     </div>
   </body>
 </html>
