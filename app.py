@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from flask import Flask, render_template, request, redirect, url_for, abort
+import os
+
+from flask import Flask, render_template, request, redirect, url_for, abort, jsonify
 import re
 import json
 from collections import defaultdict
@@ -14,8 +16,10 @@ app = Flask(__name__)
 
 CATEGORIES_PATH = Path("data/categories.json")
 THREADS_PATH = Path("data/threads.json")
+POSTS_PATH = Path("data/posts.json")
 
 EXP_CHOICES = ["1 day", "3 days", "1 week", "1 month"]
+ADMIN_TOKEN = os.environ.get("ADMIN_TOKEN")
 
 
 # -----------------------------
@@ -100,6 +104,43 @@ CATEGORY_DATA = load_categories()
 THREAD_DATA = load_threads()
 
 
+def load_posts():
+    try:
+        with open(POSTS_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+
+        posts = data.get("posts", [])
+        posts_by_thread = defaultdict(list)
+        posts_by_parent = defaultdict(list)
+        max_id = max((p.get("id", -1) for p in posts), default=-1)
+
+        for p in posts:
+            posts_by_thread[p.get("thread_id")].append(p)
+            posts_by_parent[p.get("parent_id")].append(p)
+
+        return {
+            "raw": data,
+            "posts": posts,
+            "posts_by_thread": posts_by_thread,
+            "posts_by_parent": posts_by_parent,
+            "max_id": max_id,
+        }
+    except FileNotFoundError:
+        return {
+            "raw": {"posts": []},
+            "posts": [],
+            "posts_by_thread": defaultdict(list),
+            "posts_by_parent": defaultdict(list),
+            "max_id": -1,
+        }
+    except json.JSONDecodeError as e:
+        print(f"error decoding posts.json: {e}")
+        return {}
+
+
+POSTS_DATA = load_posts()
+
+
 # -----------------------------
 # Helpers
 # -----------------------------
@@ -121,6 +162,232 @@ def save_threads_json(data):
     THREADS_PATH.parent.mkdir(parents=True, exist_ok=True)
     with open(THREADS_PATH, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2)
+
+
+def save_posts_json(data):
+    POSTS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with open(POSTS_PATH, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2)
+
+
+def ensure_thread_defaults():
+    """Backfill missing thread fields for older JSON."""
+    changed = False
+    for t in THREAD_DATA.get("threads", []):
+        if "clicks" not in t:
+            t["clicks"] = 0
+            changed = True
+
+    if changed:
+        THREAD_DATA["raw"]["threads"] = THREAD_DATA["threads"]
+        save_threads_json(THREAD_DATA["raw"])
+
+
+ensure_thread_defaults()
+
+
+def build_thread_counts(include_descendants: bool = False) -> dict[int, int]:
+    """Return a mapping of category_id -> thread count.
+
+    When include_descendants is True, counts include threads in all child categories.
+    """
+    base_counts = {
+        cat_id: len(items)
+        for cat_id, items in THREAD_DATA.get("threads_by_category", {}).items()
+    }
+
+    if not include_descendants:
+        return base_counts
+
+    children = CATEGORY_DATA["children_by_parent"]
+    memo: dict[int, int] = {}
+
+    def total(cat_id: int) -> int:
+        if cat_id in memo:
+            return memo[cat_id]
+        subtotal = base_counts.get(cat_id, 0)
+        for child in children.get(cat_id, []):
+            subtotal += total(child["id"])
+        memo[cat_id] = subtotal
+        return subtotal
+
+    for cid in CATEGORY_DATA.get("cat_by_id", {}):
+        total(cid)
+
+    return memo
+
+
+def build_category_path(cat: dict, cat_by_id: dict[int, dict]) -> str:
+    slugs = []
+    current = cat
+    while current:
+        slug = current.get("slug")
+        if slug:
+            slugs.append(slug)
+        parent_id = current.get("parent_id")
+        current = cat_by_id.get(parent_id)
+    return "/".join(reversed(slugs))
+
+
+def search_items(query: str, thread_counts: dict[int, int]) -> dict[str, list[dict]]:
+    q = (query or "").strip().lower()
+    if not q:
+        return {"categories": [], "threads": []}
+
+    cat_by_id = CATEGORY_DATA.get("cat_by_id", {})
+    cat_results = []
+    for c in CATEGORY_DATA.get("categories", []):
+        blob = f"{c.get('name','')} {c.get('desc','')}".lower()
+        if q in blob:
+            path = build_category_path(c, cat_by_id)
+            url = "/forum" + (f"/{path}" if path else "")
+            cat_results.append({
+                "name": c.get("name", ""),
+                "desc": c.get("desc", ""),
+                "url": url,
+                "threads": thread_counts.get(c.get("id"), 0),
+            })
+
+    def thread_sort(t):
+        try:
+            clicks = int(t.get("clicks", 0))
+        except Exception:
+            clicks = 0
+        created = t.get("created_at", "")
+        return (-clicks, created)
+
+    thread_results = []
+    for t in THREAD_DATA.get("threads", []):
+        text = f"{t.get('title','')} {t.get('stream_link','')}".lower()
+        if q in text:
+            cat = cat_by_id.get(t.get("category_id"))
+            path = build_category_path(cat, cat_by_id) if cat else ""
+            thread_results.append({
+                "title": t.get("title", ""),
+                "clicks": t.get("clicks", 0),
+                "created_at": t.get("created_at", ""),
+                "thread_url": f"/thread/{t.get('id')}",
+                "category_url": "/forum" + (f"/{path}" if path else ""),
+                "category_name": cat.get("name") if cat else "Unknown",
+            })
+
+    thread_results = sorted(thread_results, key=thread_sort)[:8]
+    cat_results = sorted(cat_results, key=lambda c: (-c.get("threads", 0), c.get("name", "").lower()))[:8]
+
+    return {"categories": cat_results, "threads": thread_results}
+
+
+def build_post_tree(thread_id: int) -> list[dict]:
+    posts = POSTS_DATA.get("posts_by_thread", {}).get(thread_id, [])
+    by_parent = POSTS_DATA.get("posts_by_parent", {})
+
+    def recurse(parent_id):
+        children = by_parent.get(parent_id, [])
+        result = []
+        for child in sorted(children, key=lambda p: p.get("created_at", "")):
+            node = dict(child)
+            node["replies"] = recurse(child.get("id"))
+            result.append(node)
+        return result
+
+    return recurse(None)
+
+
+def append_post(thread_id: int, body: str, parent_id: int | None):
+    if thread_id not in THREAD_DATA.get("thread_by_id", {}):
+        abort(404)
+
+    if parent_id is not None:
+        parent_post = next((p for p in POSTS_DATA.get("posts", []) if p.get("id") == parent_id), None)
+        if parent_post is None or parent_post.get("thread_id") != thread_id:
+            abort(400)
+
+    now = datetime.now(timezone.utc).isoformat()
+    next_id = POSTS_DATA["max_id"] + 1
+
+    new_post = {
+        "id": next_id,
+        "thread_id": thread_id,
+        "parent_id": parent_id,
+        "body": body,
+        "created_at": now,
+    }
+
+    POSTS_DATA["max_id"] += 1
+    POSTS_DATA["posts"].append(new_post)
+    POSTS_DATA["posts_by_thread"][thread_id].append(new_post)
+    POSTS_DATA["posts_by_parent"][parent_id].append(new_post)
+
+    POSTS_DATA["raw"]["posts"] = POSTS_DATA["posts"]
+    save_posts_json(POSTS_DATA["raw"])
+    return new_post
+
+
+def detect_stream_embed(url: str) -> dict:
+    """
+    Return a dict describing how to embed a stream.
+    Keys: type (iframe|video|m3u8|link), src, title
+    """
+    from urllib.parse import urlparse, parse_qs
+
+    if not url:
+        return {"type": "link", "src": url}
+
+    u = urlparse(url)
+    host = (u.netloc or "").lower()
+    path = (u.path or "").lower()
+
+    if path.endswith(".m3u8"):
+        return {"type": "m3u8", "src": url}
+    if path.endswith((".mp4", ".webm", ".ogg")):
+        return {"type": "video", "src": url}
+
+    if "youtube.com" in host or "youtu.be" in host:
+        video_id = None
+        if "youtu.be" in host:
+            video_id = u.path.strip("/")
+        else:
+            qs = parse_qs(u.query)
+            video_id = qs.get("v", [None])[0]
+        if video_id:
+            return {"type": "iframe", "src": f"https://www.youtube.com/embed/{video_id}", "title": "YouTube"}
+
+    if "twitch.tv" in host:
+        slug = u.path.strip("/")
+        if slug:
+            return {"type": "iframe", "src": f"https://player.twitch.tv/?channel={slug}&parent=localhost&parent=127.0.0.1", "title": "Twitch"}
+
+    return {"type": "iframe", "src": url, "title": "Stream"}
+
+
+def get_top_threads(limit: int = 10) -> list[dict]:
+    """Return the top threads across all categories by clicks (desc), then recent."""
+    threads = THREAD_DATA.get("threads", [])
+
+    def sort_key(t):
+        try:
+            clicks = int(t.get("clicks", 0))
+        except Exception:
+            clicks = 0
+        created = t.get("created_at", "")
+        return (-clicks, created)
+
+    return sorted(threads, key=sort_key)[:limit]
+
+
+def get_top_threads_for_ids(cat_ids: list[int], limit: int = 10) -> list[dict]:
+    threads = THREAD_DATA.get("threads", [])
+    filtered = [t for t in threads if t.get("category_id") in cat_ids]
+
+    def sort_key(t):
+        try:
+            clicks = int(t.get("clicks", 0))
+        except Exception:
+            clicks = 0
+        created = t.get("created_at", "")
+        return (-clicks, created)
+
+    return sorted(filtered, key=sort_key)[:limit]
 
 
 def get_category_by_path(path: str):
@@ -147,6 +414,16 @@ def get_category_children(cat):
     if cat is None:
         return children.get(None, [])
     return children.get(cat["id"], [])
+
+
+def get_descendant_ids(cat_id):
+    """Return all descendant category IDs beneath cat_id (None for root)."""
+    ids = []
+    children = CATEGORY_DATA["children_by_parent"].get(cat_id, [])
+    for c in children:
+        ids.append(c["id"])
+        ids.extend(get_descendant_ids(c["id"]))
+    return ids
 
 
 def build_breadcrumbs(current_path: str):
@@ -268,6 +545,7 @@ def append_category(parent_path_str, name, desc):
     CATEGORY_DATA["cat_sp_id"][(parent_id, slug)] = new_category_data
     CATEGORY_DATA["data"]["categories"] = CATEGORY_DATA["categories"]
     save_categories_json(CATEGORY_DATA["data"])
+    return new_category_data
 
 
 def append_thread(category_path_str: str, title: str, stream_link: str, expires_choice: str):
@@ -297,7 +575,8 @@ def append_thread(category_path_str: str, title: str, stream_link: str, expires_
         "created_at": created_at,
         "expires_at": expires_at,
         "expires_choice": expires_choice,
-        "reply_count": 0
+        "reply_count": 0,
+        "clicks": 0,
     }
 
     THREAD_DATA["max_id"] += 1
@@ -314,8 +593,21 @@ def append_thread(category_path_str: str, title: str, stream_link: str, expires_
 # Routes
 # -----------------------------
 
-def render_forum_page(category_path: str, categories: list, threads: list, parent_path: str):
-    grouped = group_threads_by_choice(threads)
+def render_forum_page(
+    category_path: str,
+    categories: list,
+    threads: list,
+    parent_path: str,
+    depth: int,
+    allow_posting: bool,
+    show_categories_section: bool,
+    thread_title: str,
+    thread_subtext: str,
+    thread_counts: dict[int, int],
+    search_query: str,
+    search_results: dict[str, list[dict]],
+):
+    grouped = group_threads_by_choice(threads) if allow_posting else {}
 
     prefill_stream = request.args.get("prefill_stream", "")
     open_thread_form = request.args.get("open_thread_form", "") == "1"
@@ -329,14 +621,42 @@ def render_forum_page(category_path: str, categories: list, threads: list, paren
         threads_grouped=grouped,
         exp_choices=EXP_CHOICES,
         prefill_stream=prefill_stream,
-        open_thread_form=open_thread_form,
+        open_thread_form=open_thread_form and allow_posting,
+        show_top_threads=not allow_posting,
+        allow_posting=allow_posting,
+        show_categories_section=show_categories_section,
+        thread_title=thread_title,
+        thread_subtext=thread_subtext,
+        threads_flat=threads if not allow_posting else [],
+        thread_counts=thread_counts,
+        search_query=search_query,
+        search_results=search_results,
+        cat_lookup=CATEGORY_DATA.get("cat_by_id", {}),
     )
 
 
 @app.route("/forum")
 def index():
     categories = get_category_children(None)
-    return render_forum_page("", categories, [], "")
+    top_ids = get_descendant_ids(None)
+    top_threads = get_top_threads_for_ids(top_ids, 10)
+    thread_counts = build_thread_counts(include_descendants=True)
+    search_query = request.args.get("search", "")
+    search_results = search_items(search_query, thread_counts) if search_query else {"categories": [], "threads": []}
+    return render_forum_page(
+        category_path="",
+        categories=categories,
+        threads=top_threads,
+        parent_path="",
+        depth=0,
+        allow_posting=False,
+        show_categories_section=True,
+        thread_title="Top Threads",
+        thread_subtext="Most-clicked streams across all categories.",
+        thread_counts=thread_counts,
+        search_query=search_query,
+        search_results=search_results,
+    )
 
 
 @app.route("/forum/<path:category_path>")
@@ -344,34 +664,50 @@ def forum(category_path):
     category_path = (category_path or "").strip("/")
     parts = [p for p in category_path.split("/") if p]
     parent_path = "/".join(parts[:-1])
+    depth = len(parts)
 
     temp_cat = get_category_by_path(category_path)
     if temp_cat is None:
         abort(404)
 
     categories = get_category_children(temp_cat)
-    threads = get_threads_for_category(temp_cat)
+    thread_counts = build_thread_counts(include_descendants=True)
+    search_query = request.args.get("search", "")
+    search_results = search_items(search_query, thread_counts) if search_query else {"categories": [], "threads": []}
 
-    return render_forum_page(category_path, categories, threads, parent_path)
+    if depth == 1:
+        ids = get_descendant_ids(temp_cat["id"])
+        threads = get_top_threads_for_ids(ids, 10)
+        allow_posting = False
+        show_categories_section = True
+        thread_title = "Top Threads"
+        thread_subtext = f"Most-clicked streams inside {temp_cat.get('name', 'this category')}."
+    else:
+        threads = get_threads_for_category(temp_cat)
+        allow_posting = True
+        show_categories_section = False
+        thread_title = "Threads"
+        thread_subtext = "Streams in this category."
+
+    return render_forum_page(
+        category_path=category_path,
+        categories=categories,
+        threads=threads,
+        parent_path=parent_path,
+        depth=depth,
+        allow_posting=allow_posting,
+        show_categories_section=show_categories_section,
+        thread_title=thread_title,
+        thread_subtext=thread_subtext,
+        thread_counts=thread_counts,
+        search_query=search_query,
+        search_results=search_results,
+    )
 
 
 @app.route("/add_category", methods=["POST"])
 def add_category():
-    parent_path = request.form.get("parent_path", "")
-    name = (request.form.get("category-name") or "").strip()
-    desc = (request.form.get("category-desc") or "").strip()
-
-    if not name or len(name) > 12:
-        abort(400)
-    if not desc:
-        abort(400)
-
-    append_category(parent_path, name, desc)
-
-    parent_path = (parent_path or "").strip("/")
-    if parent_path:
-        return redirect(f"/forum/{parent_path}")
-    return redirect(url_for("index"))
+    abort(404)
 
 
 @app.route("/add_thread", methods=["POST"])
@@ -392,6 +728,26 @@ def add_thread():
 
     append_thread(category_path, title, stream_link, expires_choice)
     return redirect(f"/forum/{category_path}")
+
+
+@app.route("/api/admin/categories", methods=["POST"])
+def api_add_category():
+    token = request.headers.get("X-Admin-Token") or request.args.get("token")
+    if not token or (ADMIN_TOKEN and token != ADMIN_TOKEN):
+        abort(403)
+
+    data = request.get_json(silent=True) or {}
+    parent_path = (data.get("parent_path") or "").strip("/")
+    name = (data.get("name") or "").strip()
+    desc = (data.get("desc") or "").strip()
+
+    if not name or len(name) > 12:
+        abort(400)
+    if not desc:
+        abort(400)
+
+    new_cat = append_category(parent_path, name, desc)
+    return jsonify({"category": new_cat}), 201
 
 
 @app.route("/embed_stream", methods=["GET", "POST"])
@@ -439,7 +795,42 @@ def thread_page(thread_id):
     t = THREAD_DATA.get("thread_by_id", {}).get(thread_id)
     if t is None:
         abort(404)
-    return f"Thread page placeholder: {t.get('title')} (id={thread_id})"
+    # Track click counts when thread is viewed
+    try:
+        t["clicks"] = int(t.get("clicks", 0)) + 1
+    except Exception:
+        t["clicks"] = 1
+
+    THREAD_DATA["raw"]["threads"] = THREAD_DATA["threads"]
+    save_threads_json(THREAD_DATA["raw"])
+
+    posts_tree = build_post_tree(thread_id)
+    embed_info = detect_stream_embed(t.get("stream_link", ""))
+    return render_template(
+        "thread.html",
+        thread=t,
+        posts_tree=posts_tree,
+        cat_lookup=CATEGORY_DATA.get("cat_by_id", {}),
+        build_category_path=build_category_path,
+        embed_info=embed_info,
+    )
+
+
+@app.route("/thread/<int:thread_id>/reply", methods=["POST"])
+def reply_thread(thread_id):
+    t = THREAD_DATA.get("thread_by_id", {}).get(thread_id)
+    if t is None:
+        abort(404)
+
+    body = (request.form.get("body") or "").strip()
+    if not body or len(body) > 2000:
+        abort(400)
+
+    parent_raw = request.form.get("parent_id")
+    parent_id = int(parent_raw) if parent_raw not in (None, "", "None") else None
+
+    new_post = append_post(thread_id, body, parent_id)
+    return redirect(f"/thread/{thread_id}#post-{new_post['id']}")
 
 
 if __name__ == "__main__":
