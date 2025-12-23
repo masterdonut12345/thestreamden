@@ -352,101 +352,103 @@
             {% if current_path %}
               <button id="add-thread-btn" class="ghost-btn" type="button"
                       onclick="openForm(event,'threads-box','thread-list','thread-form','add-thread-btn')">+ Post a stream</button>
-            {% else %}
-              <span class="chip">Pick a category to post</span>
             {% endif %}
           </div>
         </div>
 
         <div id="thread-list" class="board-body">
-          {% if not current_path %}
-            <div class="empty-row">Choose a subcategory to see and post threads.</div>
-          {% else %}
-            {% for bucket in exp_choices %}
-              <div class="bucket">
-                <div class="bucket-head">
-                  <div class="bucket-name">Expires: {{ bucket }}</div>
-                  <span class="chip">{{ threads_grouped[bucket]|length }} listed</span>
-                </div>
+          {% for bucket in exp_choices %}
+            <div class="bucket">
+              <div class="bucket-head">
+                <div class="bucket-name">Expires: {{ bucket }}</div>
+                <span class="chip">{{ threads_grouped[bucket]|length }} listed</span>
+              </div>
 
-                {% if threads_grouped[bucket]|length == 0 %}
-                  <div class="empty-row">No streams in this window.</div>
-                {% else %}
-                  <table class="forum-table thread-table">
-                    <thead>
+              {% if threads_grouped[bucket]|length == 0 %}
+                <div class="empty-row">No streams in this window.</div>
+              {% else %}
+                <table class="forum-table thread-table">
+                  <thead>
+                    <tr>
+                      <th>Stream Thread</th>
+                      <th class="col-time">Added (UTC)</th>
+                      <th class="col-count">Replies</th>
+                      <th class="col-click">Clicks</th>
+                      <th class="col-action">Link</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for t in threads_grouped[bucket] %}
                       <tr>
-                        <th>Stream Thread</th>
-                        <th class="col-time">Added (UTC)</th>
-                        <th class="col-count">Replies</th>
-                        <th class="col-click">Clicks</th>
-                        <th class="col-action">Link</th>
+                        <td>
+                          <div class="thread-title">{{ t.title }}</div>
+                          <div class="thread-meta">
+                            Expires in {{ bucket }}
+                            {% if show_top_threads %}
+                              {% set cat = cat_lookup.get(t.category_id) %}
+                              {% if cat %}&mdash; in {{ cat.name }}{% endif %}
+                            {% endif %}
+                          </div>
+                        </td>
+                        <td class="col-time"><span class="mono">{{ t.created_at }}</span></td>
+                        <td class="col-count">{{ t.reply_count }}</td>
+                        <td class="col-click">{{ t.clicks or 0 }}</td>
+                        <td class="col-action">
+                          <a class="link-btn" href="/thread/{{ t.id }}">Open</a>
+                        </td>
                       </tr>
-                    </thead>
-                    <tbody>
-                      {% for t in threads_grouped[bucket] %}
-                        <tr>
-                          <td>
-                            <div class="thread-title">{{ t.title }}</div>
-                            <div class="thread-meta">Expires in {{ bucket }}</div>
-                          </td>
-                          <td class="col-time"><span class="mono">{{ t.created_at }}</span></td>
-                          <td class="col-count">{{ t.reply_count }}</td>
-                          <td class="col-click">{{ t.clicks or 0 }}</td>
-                          <td class="col-action">
-                            <a class="link-btn" href="/thread/{{ t.id }}">Open</a>
-                          </td>
-                        </tr>
-                      {% endfor %}
-                    </tbody>
-                  </table>
-                {% endif %}
-              </div>
-            {% endfor %}
-          {% endif %}
+                    {% endfor %}
+                  </tbody>
+                </table>
+              {% endif %}
+            </div>
+          {% endfor %}
         </div>
 
-        <div id="thread-form" class="board-body form-body" style="display:none;">
-          <div class="form-actions">
-            <button class="ghost-btn" type="button"
-                    onclick="toggleBox('thread-list','thread-form','add-thread-btn','list');">
-              « Back to threads
-            </button>
+        {% if current_path %}
+          <div id="thread-form" class="board-body form-body" style="display:none;">
+            <div class="form-actions">
+              <button class="ghost-btn" type="button"
+                      onclick="toggleBox('thread-list','thread-form','add-thread-btn','list');">
+                « Back to threads
+              </button>
+            </div>
+
+            <form action="/add_thread" method="POST" class="forum-form">
+              <input type="hidden" name="category_path" value="{{ current_path }}">
+
+              <div class="form-row">
+                <label for="thread-title">Stream title</label><br>
+                <input type="text" id="thread-title" name="thread-title" maxlength="80" required>
+              </div>
+
+              <div class="form-row">
+                <label for="thread-stream-link">Stream link</label>
+                <span class="hint">Prefer “embed stream” to auto-fill.</span><br>
+
+                <input type="text" id="thread-stream-link" name="thread-stream-link"
+                       value="{{ prefill_stream }}" maxlength="500" required>
+
+                <div class="tip-line">
+                  <a class="link-btn" href="/embed_stream?return_to=/forum/{{ current_path }}&category_path={{ current_path }}">Embed stream</a>
+                </div>
+              </div>
+
+              <div class="form-row">
+                <label for="thread-expiration">Expiration</label><br>
+                <select id="thread-expiration" name="thread-expiration" required>
+                  {% for opt in exp_choices %}
+                    <option value="{{ opt }}">{{ opt }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+
+              <div class="form-row">
+                <input type="submit" value="Post stream">
+              </div>
+            </form>
           </div>
-
-          <form action="/add_thread" method="POST" class="forum-form">
-            <input type="hidden" name="category_path" value="{{ current_path }}">
-
-            <div class="form-row">
-              <label for="thread-title">Stream title</label><br>
-              <input type="text" id="thread-title" name="thread-title" maxlength="80" required>
-            </div>
-
-            <div class="form-row">
-              <label for="thread-stream-link">Stream link</label>
-              <span class="hint">Prefer “embed stream” to auto-fill.</span><br>
-
-              <input type="text" id="thread-stream-link" name="thread-stream-link"
-                     value="{{ prefill_stream }}" maxlength="500" required>
-
-              <div class="tip-line">
-                <a class="link-btn" href="/embed_stream?return_to=/forum/{{ current_path }}&category_path={{ current_path }}">Embed stream</a>
-              </div>
-            </div>
-
-            <div class="form-row">
-              <label for="thread-expiration">Expiration</label><br>
-              <select id="thread-expiration" name="thread-expiration" required>
-                {% for opt in exp_choices %}
-                  <option value="{{ opt }}">{{ opt }}</option>
-                {% endfor %}
-              </select>
-            </div>
-
-            <div class="form-row">
-              <input type="submit" value="Post stream">
-            </div>
-          </form>
-        </div>
+        {% endif %}
       </section>
     </div>
   </body>
