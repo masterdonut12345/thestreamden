@@ -1,0 +1,24 @@
+{% macro render_post(post) %}
+  <li class="post-item" id="post-{{ post.id }}">
+    <div class="post-meta">Posted at {{ post.created_at }}</div>
+    <div class="post-body">{{ post.body }}</div>
+    <div class="reply-actions">
+      <form action="/thread/{{ thread.id }}/reply" method="POST" class="form-box">
+        <input type="hidden" name="parent_id" value="{{ post.id }}">
+        <textarea name="body" maxlength="2000" required placeholder="Reply to this post"></textarea>
+        <button class="submit-btn" type="submit">Reply</button>
+      </form>
+    </div>
+    {% if post.replies %}
+      <div class="replies">
+        <ul class="post-list">
+          {% for child in post.replies %}
+            {{ render_post(child) }}
+          {% endfor %}
+        </ul>
+      </div>
+    {% endif %}
+  </li>
+{% endmacro %}
+
+{{ render_post(p) }}
