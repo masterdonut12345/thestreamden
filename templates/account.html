@@ -1,0 +1,206 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Your account - The Stream Den</title>
+    <style>
+      :root {
+        --ink: #1b2432;
+        --muted: #4f5b73;
+        --paper: #f2f4fb;
+        --panel: #ffffff;
+        --border: #c8d0dd;
+        --accent: #2f4f9c;
+        --accent-strong: #1f3d80;
+        --panel-soft: #f8f9fc;
+      }
+      * { box-sizing: border-box; }
+      body {
+        font-family: "Georgia", "Times New Roman", serif;
+        color: var(--ink);
+        background: var(--paper);
+        padding: 26px 16px 40px;
+        margin: 0;
+      }
+      a { color: var(--accent); }
+      a:visited { color: var(--accent-strong); }
+
+      .page-wrap { max-width: 1080px; margin: 0 auto; }
+      .shell {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        box-shadow: 0 12px 30px rgba(26, 44, 92, 0.18);
+      }
+      .header {
+        padding: 16px 18px;
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        background: linear-gradient(180deg, #3c5586, #2d416f);
+        color: #f4f6ff;
+      }
+      .header h1 { margin: 0; font-size: 22px; letter-spacing: -0.01em; }
+      .header .nav-btn {
+        display: inline-block;
+        padding: 8px 12px;
+        font-size: 13px;
+        border: 1px solid #1d2740;
+        color: #111827;
+        text-decoration: none;
+        background: linear-gradient(180deg, #ffffff, #f2f4fb);
+        border-radius: 3px;
+        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.45), 0 2px 6px rgba(0,0,0,0.15);
+      }
+      .header .nav-btn:hover { background: linear-gradient(180deg, #f7f9ff, #e7ecf6); }
+
+      .content { padding: 16px 18px 22px 18px; }
+      .panel {
+        border: 1px solid var(--border);
+        background: #fff;
+        padding: 12px;
+        box-shadow: 0 6px 18px rgba(18, 31, 59, 0.08);
+      }
+      .panel + .panel { margin-top: 16px; }
+      .panel h3 { margin: 0 0 10px 0; font-size: 16px; }
+
+      table { width: 100%; border-collapse: collapse; font-size: 13px; }
+      th, td { border: 1px solid var(--border); padding: 9px; }
+      th {
+        background: linear-gradient(180deg, #f6f8ff, #ecf0f8);
+        text-align: left;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        font-size: 12px;
+        color: var(--muted);
+      }
+      tr:nth-child(even) td { background: var(--panel-soft); }
+      .mono { font-family: "SFMono-Regular", "Consolas", monospace; font-size: 12px; }
+      .chip {
+        display: inline-block;
+        padding: 5px 10px;
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        font-size: 12px;
+        color: var(--muted);
+        background: var(--panel-soft);
+      }
+      .danger-btn {
+        display: inline-block;
+        padding: 6px 10px;
+        border: 1px solid #c21f1f;
+        background: linear-gradient(180deg, #ffecec, #ffd9d9);
+        color: #7a0f0f;
+        border-radius: 3px;
+        cursor: pointer;
+      }
+      .danger-btn:hover { background: linear-gradient(180deg, #ffd9d9, #ffc9c9); }
+    </style>
+  </head>
+  <body>
+    <div class="page-wrap">
+      <div class="shell">
+        <div class="header">
+          <div>
+            <h1>Your account</h1>
+            <div style="font-size:13px;">Signed in as <strong>{{ current_user }}</strong></div>
+          </div>
+          <div>
+            <a class="nav-btn" href="/forum">← Back to forum</a>
+          </div>
+        </div>
+
+        <div class="content">
+          <div class="panel">
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
+              <h3>Your threads</h3>
+              <span class="chip">{{ threads|length }} total</span>
+            </div>
+            {% if threads|length == 0 %}
+              <div style="font-size:13px; color:var(--muted);">You have not posted any threads yet.</div>
+            {% else %}
+              <table>
+                <thead>
+                  <tr>
+                    <th>Title</th>
+                    <th>Category</th>
+                    <th>Created</th>
+                    <th>Replies</th>
+                    <th>Clicks</th>
+                    <th style="width:120px;">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for t in threads %}
+                    {% set cat = cat_lookup.get(t.category_id) %}
+                    <tr>
+                      <td><a href="/thread/{{ t.id }}">{{ t.title }}</a></td>
+                      <td>
+                        {% if cat %}
+                          <a href="/forum/{{ build_category_path(cat, cat_lookup) }}">{{ cat.name }}</a>
+                        {% else %}
+                          Unknown
+                        {% endif %}
+                      </td>
+                      <td class="mono">{{ t.created_at }}</td>
+                      <td>{{ t.reply_count or 0 }}</td>
+                      <td>{{ t.clicks or 0 }}</td>
+                      <td>
+                        <form action="/account/delete_thread/{{ t.id }}" method="POST" style="margin:0;">
+                          <button class="danger-btn" type="submit">Delete</button>
+                        </form>
+                      </td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            {% endif %}
+          </div>
+
+          <div class="panel">
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
+              <h3>Your replies</h3>
+              <span class="chip">{{ posts|length }} total</span>
+            </div>
+            {% if posts|length == 0 %}
+              <div style="font-size:13px; color:var(--muted);">You have not posted any replies yet.</div>
+            {% else %}
+              <table>
+                <thead>
+                  <tr>
+                    <th>Thread</th>
+                    <th>Posted</th>
+                    <th>Preview</th>
+                    <th style="width:120px;">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for p in posts %}
+                    {% set thread = thread_lookup.get(p.thread_id) %}
+                    <tr>
+                      <td>
+                        {% if thread %}
+                          <a href="/thread/{{ thread.id }}">#{{ thread.id }} {{ thread.title }}</a>
+                        {% else %}
+                          Unknown thread
+                        {% endif %}
+                      </td>
+                      <td class="mono">{{ p.created_at }}</td>
+                      <td>{{ p.body[:120] }}{% if p.body|length > 120 %}…{% endif %}</td>
+                      <td>
+                        <form action="/account/delete_post/{{ p.id }}" method="POST" style="margin:0;">
+                          <button class="danger-btn" type="submit">Delete</button>
+                        </form>
+                      </td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
