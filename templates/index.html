@@ -141,6 +141,7 @@
       .col-count { width: 90px; text-align: center; }
       .col-action { width: 120px; text-align: center; }
       .col-time { width: 210px; text-align: center; }
+      .col-click { width: 100px; text-align: center; }
 
       .link-btn {
         display: inline-block;
@@ -343,8 +344,8 @@
       <section id="threads-box" class="board-card">
         <div class="board-head">
           <div>
-            <div class="board-title">Streams &amp; Threads</div>
-            <div class="board-subtext">Expiration buckets like a vintage forum lineup.</div>
+            <div class="board-title">Top Threads</div>
+            <div class="board-subtext">Most-clicked streams grouped by expiration.</div>
           </div>
 
           <div class="board-actions">
@@ -377,6 +378,7 @@
                         <th>Stream Thread</th>
                         <th class="col-time">Added (UTC)</th>
                         <th class="col-count">Replies</th>
+                        <th class="col-click">Clicks</th>
                         <th class="col-action">Link</th>
                       </tr>
                     </thead>
@@ -389,6 +391,7 @@
                           </td>
                           <td class="col-time"><span class="mono">{{ t.created_at }}</span></td>
                           <td class="col-count">{{ t.reply_count }}</td>
+                          <td class="col-click">{{ t.clicks or 0 }}</td>
                           <td class="col-action">
                             <a class="link-btn" href="/thread/{{ t.id }}">Open</a>
                           </td>

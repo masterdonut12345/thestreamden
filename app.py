@@ -123,6 +123,22 @@ def save_threads_json(data):
         json.dump(data, f, indent=2)
 
 
+def ensure_thread_defaults():
+    """Backfill missing thread fields for older JSON."""
+    changed = False
+    for t in THREAD_DATA.get("threads", []):
+        if "clicks" not in t:
+            t["clicks"] = 0
+            changed = True
+
+    if changed:
+        THREAD_DATA["raw"]["threads"] = THREAD_DATA["threads"]
+        save_threads_json(THREAD_DATA["raw"])
+
+
+ensure_thread_defaults()
+
+
 def get_category_by_path(path: str):
     path = (path or "").strip("/")
     if not path:
@@ -297,7 +313,8 @@ def append_thread(category_path_str: str, title: str, stream_link: str, expires_
         "created_at": created_at,
         "expires_at": expires_at,
         "expires_choice": expires_choice,
-        "reply_count": 0
+        "reply_count": 0,
+        "clicks": 0,
     }
 
     THREAD_DATA["max_id"] += 1
@@ -439,6 +456,18 @@ def thread_page(thread_id):
     t = THREAD_DATA.get("thread_by_id", {}).get(thread_id)
     if t is None:
         abort(404)
+    # Track click counts for the stream link
+    try:
+        t["clicks"] = int(t.get("clicks", 0)) + 1
+    except Exception:
+        t["clicks"] = 1
+
+    THREAD_DATA["raw"]["threads"] = THREAD_DATA["threads"]
+    save_threads_json(THREAD_DATA["raw"])
+
+    stream_link = t.get("stream_link")
+    if stream_link:
+        return redirect(stream_link)
     return f"Thread page placeholder: {t.get('title')} (id={thread_id})"
 
 
