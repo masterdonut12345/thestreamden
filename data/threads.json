@@ -8,7 +8,8 @@
       "stream_link": "https://test.com",
       "created_at": "2025-12-23T06:32:48.054319+00:00",
       "expires_at": "2025-12-24T06:32:48.054319+00:00",
-      "reply_count": 0
+      "reply_count": 0,
+      "clicks": 6
     },
     {
       "id": 1,
@@ -18,7 +19,32 @@
       "stream_link": "https://test.com",
       "created_at": "2025-12-23T06:35:20.912093+00:00",
       "expires_at": "2025-12-26T06:35:20.912093+00:00",
-      "reply_count": 0
+      "reply_count": 0,
+      "clicks": 0
+    },
+    {
+      "id": 2,
+      "category_id": 1,
+      "title": "Dinamo Bucharest - Rapid Bucuresti",
+      "slug": "dinamo-bucharest-rapid-bucuresti",
+      "stream_link": "https://topembed.pw/channel/PrimaSport3%5BRomania%5D",
+      "created_at": "2025-12-23T21:06:39.224825+00:00",
+      "expires_at": "2025-12-24T21:06:39.224825+00:00",
+      "expires_choice": "1 day",
+      "reply_count": 0,
+      "clicks": 6
+    },
+    {
+      "id": 3,
+      "category_id": 4,
+      "title": "Coraline",
+      "slug": "coraline",
+      "stream_link": "https://nc-fa2.tubi.video/c7081872-5e11-4a8b-a7eb-10e6399b078c/fnwo5b7nbf.m3u8?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjZG5fcHJlZml4IjoiaHR0cHM6Ly9uYy1mYTIudHViaS52aWRlbyIsImV4cCI6MTc2NzEyMTIwMCwibWVkaWFfc2lnIjozNzkyOTEwOH0.zhDPPEo6YTgk1kL9OhNToupyjhHNNDe8iWRTglqZiCA",
+      "created_at": "2025-12-23T21:26:46.315130+00:00",
+      "expires_at": "2026-01-22T21:26:46.315130+00:00",
+      "expires_choice": "1 month",
+      "reply_count": 0,
+      "clicks": 12
     }
   ]
 }
