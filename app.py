@@ -206,6 +206,9 @@ def ensure_thread_defaults():
         if "user" not in t:
             t["user"] = "Anonymous"
             changed = True
+        if "reply_count" not in t:
+            t["reply_count"] = 0
+            changed = True
 
     if changed:
         THREAD_DATA["raw"]["threads"] = THREAD_DATA["threads"]
@@ -227,6 +230,24 @@ def ensure_post_defaults():
 
 
 ensure_post_defaults()
+
+
+def rebuild_reply_counts():
+    """Recompute reply_count on threads from stored posts."""
+    counts = {tid: len(lst) for tid, lst in POSTS_DATA.get("posts_by_thread", {}).items()}
+    changed = False
+    for t in THREAD_DATA.get("threads", []):
+        tid = t.get("id")
+        desired = counts.get(tid, 0)
+        if t.get("reply_count") != desired:
+            t["reply_count"] = desired
+            changed = True
+    if changed:
+        THREAD_DATA["raw"]["threads"] = THREAD_DATA["threads"]
+        save_threads_json(THREAD_DATA["raw"])
+
+
+rebuild_reply_counts()
 
 
 def build_thread_counts(include_descendants: bool = False) -> dict[int, int]:
