@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from flask import Flask, render_template, request, redirect, url_for, abort
+import os
+
+from flask import Flask, render_template, request, redirect, url_for, abort, jsonify
 import re
 import json
 from collections import defaultdict
@@ -16,6 +18,7 @@ CATEGORIES_PATH = Path("data/categories.json")
 THREADS_PATH = Path("data/threads.json")
 
 EXP_CHOICES = ["1 day", "3 days", "1 week", "1 month"]
+ADMIN_TOKEN = os.environ.get("ADMIN_TOKEN")
 
 
 # -----------------------------
@@ -299,6 +302,7 @@ def append_category(parent_path_str, name, desc):
     CATEGORY_DATA["cat_sp_id"][(parent_id, slug)] = new_category_data
     CATEGORY_DATA["data"]["categories"] = CATEGORY_DATA["categories"]
     save_categories_json(CATEGORY_DATA["data"])
+    return new_category_data
 
 
 def append_thread(category_path_str: str, title: str, stream_link: str, expires_choice: str):
@@ -392,21 +396,7 @@ def forum(category_path):
 
 @app.route("/add_category", methods=["POST"])
 def add_category():
-    parent_path = request.form.get("parent_path", "")
-    name = (request.form.get("category-name") or "").strip()
-    desc = (request.form.get("category-desc") or "").strip()
-
-    if not name or len(name) > 12:
-        abort(400)
-    if not desc:
-        abort(400)
-
-    append_category(parent_path, name, desc)
-
-    parent_path = (parent_path or "").strip("/")
-    if parent_path:
-        return redirect(f"/forum/{parent_path}")
-    return redirect(url_for("index"))
+    abort(404)
 
 
 @app.route("/add_thread", methods=["POST"])
@@ -427,6 +417,26 @@ def add_thread():
 
     append_thread(category_path, title, stream_link, expires_choice)
     return redirect(f"/forum/{category_path}")
+
+
+@app.route("/api/admin/categories", methods=["POST"])
+def api_add_category():
+    token = request.headers.get("X-Admin-Token") or request.args.get("token")
+    if not token or (ADMIN_TOKEN and token != ADMIN_TOKEN):
+        abort(403)
+
+    data = request.get_json(silent=True) or {}
+    parent_path = (data.get("parent_path") or "").strip("/")
+    name = (data.get("name") or "").strip()
+    desc = (data.get("desc") or "").strip()
+
+    if not name or len(name) > 12:
+        abort(400)
+    if not desc:
+        abort(400)
+
+    new_cat = append_category(parent_path, name, desc)
+    return jsonify({"category": new_cat}), 201
 
 
 @app.route("/embed_stream", methods=["GET", "POST"])

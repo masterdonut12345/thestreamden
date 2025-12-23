@@ -58,14 +58,14 @@
         display: inline-block;
         padding: 8px 12px;
         font-size: 13px;
-        border: 1px solid rgba(255, 255, 255, 0.35);
-        color: #f5f7ff;
+        border: 1px solid #d08a00;
+        color: #1a1200;
         text-decoration: none;
-        background: linear-gradient(180deg, #4a66a6, #2f4677);
+        background: linear-gradient(180deg, #ffd26a, #f2a600);
         border-radius: 3px;
-        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.25), 0 2px 6px rgba(0,0,0,0.18);
       }
-      .nav-btn:hover { background: linear-gradient(180deg, #5875b6, #375084); }
+      .nav-btn:hover { background: linear-gradient(180deg, #ffe088, #f7b72d); }
 
       .crumbs {
         padding: 11px 16px 10px 16px;
@@ -277,8 +277,6 @@
           </div>
           <div class="board-actions">
             <span class="chip">{{ categories|length }} total</span>
-            <button id="add-cat-btn" class="ghost-btn" type="button"
-                    onclick="openForm(event,'subcategories-box','subcat-list','subcat-form','add-cat-btn')">+ New category</button>
           </div>
         </div>
 
@@ -312,32 +310,6 @@
           {% endif %}
         </div>
 
-        <div id="subcat-form" class="board-body form-body" style="display:none;">
-          <div class="form-actions">
-            <button class="ghost-btn" type="button"
-                    onclick="toggleBox('subcat-list','subcat-form','add-cat-btn','list');">
-              « Back to categories
-            </button>
-          </div>
-
-          <form action="/add_category" method="POST" class="forum-form">
-            <input type="hidden" name="parent_path" value="{{ current_path }}">
-
-            <div class="form-row">
-              <label for="category-name">Name</label><br>
-              <input type="text" id="category-name" name="category-name" maxlength="12" required>
-            </div>
-
-            <div class="form-row">
-              <label for="category-desc">Description</label><br>
-              <textarea id="category-desc" name="category-desc" rows="4" required></textarea>
-            </div>
-
-            <div class="form-row">
-              <input type="submit" value="Post category">
-            </div>
-          </form>
-        </div>
       </section>
 
       <!-- Threads -->
