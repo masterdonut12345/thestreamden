@@ -462,7 +462,7 @@ def login():
 @app.route("/logout")
 def logout():
     session.pop("user", None)
-    return redirect("/forum")
+    return redirect("/")
 
 
 @app.route("/signup", methods=["GET", "POST"])
@@ -637,7 +637,10 @@ def get_descendant_ids(cat_id):
 
 
 def build_breadcrumbs(current_path: str):
-    crumbs = [{"name": "Main", "url": "/forum"}]
+    crumbs = [
+        {"name": "Home", "url": "/"},
+        {"name": "Forum", "url": "/forum"},
+    ]
     current_path = (current_path or "").strip("/")
     if not current_path:
         return crumbs
@@ -852,6 +855,23 @@ def render_forum_page(
         current_user=current_user,
         prefill_title=prefill_title,
         prefill_exp=prefill_exp,
+    )
+
+
+@app.route("/")
+def home():
+    thread_counts = build_thread_counts(include_descendants=True)
+    search_query = request.args.get("search", "")
+    search_results = search_items(search_query, thread_counts) if search_query else {"categories": [], "threads": []}
+    top_threads = get_top_threads(6)
+    return render_template(
+        "home.html",
+        search_query=search_query,
+        search_results=search_results,
+        top_threads=top_threads,
+        cat_lookup=CATEGORY_DATA.get("cat_by_id", {}),
+        build_category_path=build_category_path,
+        current_user=session.get("user"),
     )
 
 
