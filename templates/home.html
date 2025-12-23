@@ -1,0 +1,291 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>The Stream Den</title>
+    <style>
+      :root {
+        --ink: #111827;
+        --muted: #5b6785;
+        --panel: #ffffff;
+        --panel-soft: #f5f7ff;
+        --border: #c8d0dd;
+        --accent: #2f4f9c;
+        --accent-strong: #1f3d80;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+        background: radial-gradient(circle at 20% 20%, #f5f7ff 0, #e9eefb 40%, #e1e7f7 75%);
+        color: var(--ink);
+        padding: 48px 16px;
+      }
+      a { color: var(--accent); text-decoration: none; }
+      a:hover { color: var(--accent-strong); }
+
+      .wrap {
+        max-width: 1080px;
+        margin: 0 auto;
+      }
+      .hero {
+        text-align: center;
+        padding: 28px 18px 18px;
+        background: linear-gradient(180deg, #ffffff, #f3f5ff);
+        border: 1px solid #d8deec;
+        border-radius: 14px;
+        box-shadow: 0 20px 40px rgba(24, 46, 104, 0.12);
+      }
+      .title {
+        font-size: 32px;
+        letter-spacing: -0.01em;
+        margin: 0 0 8px;
+      }
+      .tagline {
+        margin: 0;
+        color: var(--muted);
+        font-size: 15px;
+      }
+      .hero-actions {
+        margin-top: 18px;
+        display: flex;
+        justify-content: center;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+      .pill {
+        padding: 12px 18px;
+        border-radius: 999px;
+        border: 1px solid #d0d8ea;
+        background: linear-gradient(180deg, #f7f9ff, #e9eeff);
+        color: var(--accent-strong);
+        font-weight: 700;
+        box-shadow: inset 0 0 0 1px #ffffffcc, 0 10px 22px rgba(29, 46, 96, 0.12);
+      }
+      .pill:hover { background: linear-gradient(180deg, #f3f6ff, #e5ebff); }
+
+      .grid {
+        margin-top: 22px;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 14px;
+      }
+      .card {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 14px;
+        box-shadow: 0 14px 26px rgba(23, 39, 86, 0.12);
+      }
+      .card h3 {
+        margin: 0 0 8px;
+        font-size: 16px;
+        color: var(--accent-strong);
+        letter-spacing: -0.01em;
+      }
+      .field {
+        width: 100%;
+        padding: 10px 11px;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        font-size: 14px;
+        background: #fdfdff;
+      }
+      .actions {
+        display: flex;
+        gap: 8px;
+        margin-top: 8px;
+      }
+      .btn {
+        flex: 1;
+        border: 1px solid #c8d0dd;
+        border-radius: 6px;
+        padding: 9px 12px;
+        font-size: 14px;
+        background: linear-gradient(180deg, #f6f8ff, #ecf1ff);
+        color: var(--accent-strong);
+        cursor: pointer;
+        text-align: center;
+      }
+      .btn.subtle {
+        background: #ffffff;
+      }
+      .table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+        margin-top: 8px;
+      }
+      .table th, .table td {
+        border: 1px solid var(--border);
+        padding: 9px 10px;
+      }
+      .table th {
+        background: linear-gradient(180deg, #f6f8ff, #ecf0f8);
+        text-align: left;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .table tr:nth-child(even) td { background: var(--panel-soft); }
+      .meta { font-size: 12px; color: var(--muted); }
+      .empty {
+        padding: 10px;
+        border: 1px dashed var(--border);
+        background: var(--panel-soft);
+        color: var(--muted);
+        border-radius: 6px;
+        text-align: center;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="hero">
+        <h1 class="title">The Stream Den</h1>
+        <p class="tagline">Pick a destination: dive into the forum or jump straight to what you need.</p>
+        <div class="hero-actions">
+          <a class="pill" href="/forum">Browse the forum</a>
+          <form action="/" method="GET" style="display:flex; gap:8px; flex-wrap:wrap; justify-content:center;">
+            <input class="field" style="min-width: 260px;" type="text" name="search" value="{{ search_query }}" placeholder="Quick search threads or categories">
+            <button class="btn" type="submit" style="flex:none;">Search</button>
+            {% if search_query %}
+              <a class="btn subtle" href="/">Clear</a>
+            {% endif %}
+          </form>
+        </div>
+      </div>
+
+      <div class="grid">
+        <div class="card">
+          <h3>Quick results</h3>
+          {% if not search_query %}
+            <div class="empty">Search to see matching threads and categories.</div>
+          {% else %}
+            <div class="meta" style="margin-bottom:6px;">Top matches for “{{ search_query }}”</div>
+            <strong>Threads</strong>
+            {% if search_results.threads|length == 0 %}
+              <div class="empty" style="margin-top:6px;">No thread matches.</div>
+            {% else %}
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Title</th>
+                    <th>Clicks</th>
+                    <th>Open</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for t in search_results.threads %}
+                    <tr>
+                      <td>
+                        <div style="font-weight:700;">{{ t.title }}</div>
+                        <div class="meta"><a href="{{ t.category_url }}">{{ t.category_name }}</a></div>
+                      </td>
+                      <td style="text-align:center;">{{ t.clicks }}</td>
+                      <td style="text-align:center;"><a class="btn subtle" href="{{ t.thread_url }}">Open</a></td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            {% endif %}
+
+            <strong style="display:block; margin-top:10px;">Categories</strong>
+            {% if search_results.categories|length == 0 %}
+              <div class="empty" style="margin-top:6px;">No category matches.</div>
+            {% else %}
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Category</th>
+                    <th>Threads</th>
+                    <th>Open</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for c in search_results.categories %}
+                    <tr>
+                      <td>
+                        <div style="font-weight:700;">{{ c.name }}</div>
+                        <div class="meta">{{ c.desc }}</div>
+                      </td>
+                      <td style="text-align:center;">{{ c.threads }}</td>
+                      <td style="text-align:center;"><a class="btn subtle" href="{{ c.url }}">Open</a></td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            {% endif %}
+          {% endif %}
+        </div>
+
+        <div class="card">
+          <h3>Account</h3>
+          {% if current_user %}
+            <div style="font-size:14px; margin-bottom:10px;">Signed in as <strong>{{ current_user }}</strong></div>
+            <div class="actions">
+              <a class="btn" href="/forum">Go to forum</a>
+              <a class="btn subtle" href="/logout">Logout</a>
+            </div>
+            <div class="actions" style="margin-top:6px;">
+              <a class="btn subtle" href="/account">Account portal</a>
+            </div>
+          {% else %}
+            <form action="/login" method="POST">
+              <input type="hidden" name="next" value="/forum">
+              <input class="field" type="text" name="username" placeholder="Username" required style="margin-bottom:8px;">
+              <input class="field" type="password" name="password" placeholder="Password" required>
+              <div class="actions">
+                <button class="btn" type="submit">Login</button>
+                <a class="btn subtle" href="/signup">Sign up</a>
+              </div>
+            </form>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:16px;">
+        <h3>Top streams</h3>
+        {% if top_threads|length == 0 %}
+          <div class="empty">No streams yet.</div>
+        {% else %}
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Stream</th>
+                <th>Category</th>
+                <th>User</th>
+                <th>Clicks</th>
+                <th>Open</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for t in top_threads %}
+                {% set cat = cat_lookup.get(t.category_id) %}
+                {% set cat_path = build_category_path(cat, cat_lookup) if cat else "" %}
+                <tr>
+                  <td>
+                    <div style="font-weight:700;">{{ t.title }}</div>
+                    <div class="meta">{{ t.created_at }}</div>
+                  </td>
+                  <td>
+                    {% if cat %}
+                      <a href="/forum{% if cat_path %}/{{ cat_path }}{% endif %}">{{ cat.name }}</a>
+                    {% else %}
+                      <span class="meta">Unknown</span>
+                    {% endif %}
+                  </td>
+                  <td style="text-align:center;">{{ t.user or 'Anonymous' }}</td>
+                  <td style="text-align:center;">{{ t.clicks or 0 }}</td>
+                  <td style="text-align:center;"><a class="btn subtle" href="/thread/{{ t.id }}">Open</a></td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        {% endif %}
+      </div>
+    </div>
+  </body>
+</html>
