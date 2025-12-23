@@ -16,6 +16,7 @@ app = Flask(__name__)
 
 CATEGORIES_PATH = Path("data/categories.json")
 THREADS_PATH = Path("data/threads.json")
+POSTS_PATH = Path("data/posts.json")
 
 EXP_CHOICES = ["1 day", "3 days", "1 week", "1 month"]
 ADMIN_TOKEN = os.environ.get("ADMIN_TOKEN")
@@ -103,6 +104,43 @@ CATEGORY_DATA = load_categories()
 THREAD_DATA = load_threads()
 
 
+def load_posts():
+    try:
+        with open(POSTS_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+
+        posts = data.get("posts", [])
+        posts_by_thread = defaultdict(list)
+        posts_by_parent = defaultdict(list)
+        max_id = max((p.get("id", -1) for p in posts), default=-1)
+
+        for p in posts:
+            posts_by_thread[p.get("thread_id")].append(p)
+            posts_by_parent[p.get("parent_id")].append(p)
+
+        return {
+            "raw": data,
+            "posts": posts,
+            "posts_by_thread": posts_by_thread,
+            "posts_by_parent": posts_by_parent,
+            "max_id": max_id,
+        }
+    except FileNotFoundError:
+        return {
+            "raw": {"posts": []},
+            "posts": [],
+            "posts_by_thread": defaultdict(list),
+            "posts_by_parent": defaultdict(list),
+            "max_id": -1,
+        }
+    except json.JSONDecodeError as e:
+        print(f"error decoding posts.json: {e}")
+        return {}
+
+
+POSTS_DATA = load_posts()
+
+
 # -----------------------------
 # Helpers
 # -----------------------------
@@ -123,6 +161,12 @@ def save_categories_json(data):
 def save_threads_json(data):
     THREADS_PATH.parent.mkdir(parents=True, exist_ok=True)
     with open(THREADS_PATH, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2)
+
+
+def save_posts_json(data):
+    POSTS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with open(POSTS_PATH, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2)
 
 
@@ -231,6 +275,52 @@ def search_items(query: str, thread_counts: dict[int, int]) -> dict[str, list[di
     cat_results = sorted(cat_results, key=lambda c: (-c.get("threads", 0), c.get("name", "").lower()))[:8]
 
     return {"categories": cat_results, "threads": thread_results}
+
+
+def build_post_tree(thread_id: int) -> list[dict]:
+    posts = POSTS_DATA.get("posts_by_thread", {}).get(thread_id, [])
+    by_parent = POSTS_DATA.get("posts_by_parent", {})
+
+    def recurse(parent_id):
+        children = by_parent.get(parent_id, [])
+        result = []
+        for child in sorted(children, key=lambda p: p.get("created_at", "")):
+            node = dict(child)
+            node["replies"] = recurse(child.get("id"))
+            result.append(node)
+        return result
+
+    return recurse(None)
+
+
+def append_post(thread_id: int, body: str, parent_id: int | None):
+    if thread_id not in THREAD_DATA.get("thread_by_id", {}):
+        abort(404)
+
+    if parent_id is not None:
+        parent_post = next((p for p in POSTS_DATA.get("posts", []) if p.get("id") == parent_id), None)
+        if parent_post is None or parent_post.get("thread_id") != thread_id:
+            abort(400)
+
+    now = datetime.now(timezone.utc).isoformat()
+    next_id = POSTS_DATA["max_id"] + 1
+
+    new_post = {
+        "id": next_id,
+        "thread_id": thread_id,
+        "parent_id": parent_id,
+        "body": body,
+        "created_at": now,
+    }
+
+    POSTS_DATA["max_id"] += 1
+    POSTS_DATA["posts"].append(new_post)
+    POSTS_DATA["posts_by_thread"][thread_id].append(new_post)
+    POSTS_DATA["posts_by_parent"][parent_id].append(new_post)
+
+    POSTS_DATA["raw"]["posts"] = POSTS_DATA["posts"]
+    save_posts_json(POSTS_DATA["raw"])
+    return new_post
 
 
 def get_top_threads(limit: int = 10) -> list[dict]:
@@ -505,6 +595,7 @@ def render_forum_page(
         thread_counts=thread_counts,
         search_query=search_query,
         search_results=search_results,
+        cat_lookup=CATEGORY_DATA.get("cat_by_id", {}),
     )
 
 
@@ -668,7 +759,7 @@ def thread_page(thread_id):
     t = THREAD_DATA.get("thread_by_id", {}).get(thread_id)
     if t is None:
         abort(404)
-    # Track click counts for the stream link
+    # Track click counts when thread is viewed
     try:
         t["clicks"] = int(t.get("clicks", 0)) + 1
     except Exception:
@@ -677,10 +768,29 @@ def thread_page(thread_id):
     THREAD_DATA["raw"]["threads"] = THREAD_DATA["threads"]
     save_threads_json(THREAD_DATA["raw"])
 
-    stream_link = t.get("stream_link")
-    if stream_link:
-        return redirect(stream_link)
-    return f"Thread page placeholder: {t.get('title')} (id={thread_id})"
+    posts_tree = build_post_tree(thread_id)
+    return render_template(
+        "thread.html",
+        thread=t,
+        posts_tree=posts_tree,
+    )
+
+
+@app.route("/thread/<int:thread_id>/reply", methods=["POST"])
+def reply_thread(thread_id):
+    t = THREAD_DATA.get("thread_by_id", {}).get(thread_id)
+    if t is None:
+        abort(404)
+
+    body = (request.form.get("body") or "").strip()
+    if not body or len(body) > 2000:
+        abort(400)
+
+    parent_raw = request.form.get("parent_id")
+    parent_id = int(parent_raw) if parent_raw not in (None, "", "None") else None
+
+    new_post = append_post(thread_id, body, parent_id)
+    return redirect(f"/thread/{thread_id}#post-{new_post['id']}")
 
 
 if __name__ == "__main__":
