@@ -121,8 +121,21 @@
 
       <div class="player">
         <div class="player-box">
-          <div style="font-weight:700; margin-bottom:6px;">Stream link</div>
-          <div><a href="{{ thread.stream_link }}" target="_blank" rel="noopener">{{ thread.stream_link }}</a></div>
+          <div style="font-weight:700; margin-bottom:6px;">Stream</div>
+          {% if embed_info.type == "iframe" %}
+            <iframe src="{{ embed_info.src }}" title="{{ embed_info.title or 'Stream' }}" allowfullscreen></iframe>
+            <div style="margin-top:6px;"><a href="{{ thread.stream_link }}" target="_blank" rel="noopener">Open stream link</a></div>
+          {% elif embed_info.type == "video" %}
+            <video src="{{ embed_info.src }}" controls style="width:100%; border:1px solid var(--border);"></video>
+            <div style="margin-top:6px;"><a href="{{ thread.stream_link }}" target="_blank" rel="noopener">Open stream link</a></div>
+          {% elif embed_info.type == "m3u8" %}
+            <video controls style="width:100%; border:1px solid var(--border);">
+              <source src="{{ embed_info.src }}" type="application/x-mpegURL">
+            </video>
+            <div style="margin-top:6px;"><a href="{{ thread.stream_link }}" target="_blank" rel="noopener">Open stream link</a></div>
+          {% else %}
+            <div><a href="{{ thread.stream_link }}" target="_blank" rel="noopener">{{ thread.stream_link }}</a></div>
+          {% endif %}
         </div>
       </div>
 
