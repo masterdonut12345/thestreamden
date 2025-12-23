@@ -700,6 +700,7 @@ def render_forum_page(
     thread_counts: dict[int, int],
     search_query: str,
     search_results: dict[str, list[dict]],
+    current_user: str | None = None,
 ):
     grouped = group_threads_by_choice(threads) if allow_posting else {}
 
@@ -726,7 +727,7 @@ def render_forum_page(
         search_query=search_query,
         search_results=search_results,
         cat_lookup=CATEGORY_DATA.get("cat_by_id", {}),
-        current_user=session.get("user"),
+        current_user=current_user,
     )
 
 
