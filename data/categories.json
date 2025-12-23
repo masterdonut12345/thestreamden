@@ -31,6 +31,14 @@
       "desc": "A game where you kick a ball.",
       "count": 0,
       "parent_id": 0
+    },
+    {
+      "id": 4,
+      "name": "Animated",
+      "slug": "animated",
+      "desc": "Animated movies.",
+      "count": 0,
+      "parent_id": 2
     }
   ]
 }
