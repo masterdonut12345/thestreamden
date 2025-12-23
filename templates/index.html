@@ -635,7 +635,10 @@
           <h3>Account</h3>
           {% if current_user %}
             <div style="font-size:14px; margin-bottom:6px;">Logged in as <strong>{{ current_user }}</strong></div>
-            <a class="search-btn" style="text-decoration:none;" href="/logout">Logout</a>
+            <div class="search-actions" style="margin-top:6px;">
+              <a class="search-btn" style="text-decoration:none;" href="/account">Account</a>
+              <a class="search-clear" style="text-decoration:none;" href="/logout">Logout</a>
+            </div>
           {% else %}
             <form action="/login" method="POST">
               <input type="hidden" name="next" value="{{ request.path }}">

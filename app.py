@@ -250,6 +250,48 @@ def rebuild_reply_counts():
 rebuild_reply_counts()
 
 
+def rebuild_thread_indexes():
+    threads_by_category = defaultdict(list)
+    thread_by_id = {}
+    current_max = -1
+    for t in THREAD_DATA.get("threads", []):
+        tid = t.get("id")
+        current_max = max(current_max, tid if isinstance(tid, int) else -1)
+        thread_by_id[tid] = t
+        threads_by_category[t.get("category_id")].append(t)
+
+    THREAD_DATA["threads_by_category"] = threads_by_category
+    THREAD_DATA["thread_by_id"] = thread_by_id
+    THREAD_DATA["max_id"] = max(THREAD_DATA.get("max_id", -1), current_max)
+
+
+def rebuild_post_indexes():
+    posts_by_thread = defaultdict(list)
+    posts_by_parent = defaultdict(list)
+    current_max = -1
+    for p in POSTS_DATA.get("posts", []):
+        pid = p.get("id")
+        current_max = max(current_max, pid if isinstance(pid, int) else -1)
+        posts_by_thread[p.get("thread_id")].append(p)
+        posts_by_parent[p.get("parent_id")].append(p)
+
+    POSTS_DATA["posts_by_thread"] = posts_by_thread
+    POSTS_DATA["posts_by_parent"] = posts_by_parent
+    POSTS_DATA["max_id"] = max(POSTS_DATA.get("max_id", -1), current_max)
+
+
+# ensure indexes are in sync after any startup backfills
+rebuild_thread_indexes()
+rebuild_post_indexes()
+
+
+def require_login(next_url: str = "/forum"):
+    user = session.get("user")
+    if not user:
+        return redirect(f"/login?next={next_url}")
+    return user
+
+
 def build_thread_counts(include_descendants: bool = False) -> dict[int, int]:
     """Return a mapping of category_id -> thread count.
 
@@ -443,6 +485,52 @@ def signup():
             session["user"] = username
             return redirect(next_url)
     return render_template("signup.html", error=error, next_url=next_url)
+
+
+def user_threads_and_posts(username: str):
+    threads = [t for t in THREAD_DATA.get("threads", []) if t.get("user") == username]
+    posts = [p for p in POSTS_DATA.get("posts", []) if p.get("user") == username]
+
+    threads_sorted = sorted(threads, key=lambda t: t.get("created_at", ""), reverse=True)
+    posts_sorted = sorted(posts, key=lambda p: p.get("created_at", ""), reverse=True)
+    return threads_sorted, posts_sorted
+
+
+def delete_thread_owned(thread_id: int, username: str):
+    thread = THREAD_DATA.get("thread_by_id", {}).get(thread_id)
+    if thread is None:
+        abort(404)
+    if thread.get("user") != username:
+        abort(403)
+
+    # remove posts for this thread
+    POSTS_DATA["posts"] = [p for p in POSTS_DATA.get("posts", []) if p.get("thread_id") != thread_id]
+    POSTS_DATA["raw"]["posts"] = POSTS_DATA["posts"]
+    save_posts_json(POSTS_DATA["raw"])
+
+    # remove thread itself
+    THREAD_DATA["threads"] = [t for t in THREAD_DATA.get("threads", []) if t.get("id") != thread_id]
+    THREAD_DATA["raw"]["threads"] = THREAD_DATA["threads"]
+    save_threads_json(THREAD_DATA["raw"])
+
+    rebuild_post_indexes()
+    rebuild_thread_indexes()
+    rebuild_reply_counts()
+
+
+def delete_post_owned(post_id: int, username: str):
+    post = next((p for p in POSTS_DATA.get("posts", []) if p.get("id") == post_id), None)
+    if post is None:
+        abort(404)
+    if post.get("user") != username:
+        abort(403)
+
+    POSTS_DATA["posts"] = [p for p in POSTS_DATA.get("posts", []) if p.get("id") != post_id]
+    POSTS_DATA["raw"]["posts"] = POSTS_DATA["posts"]
+    save_posts_json(POSTS_DATA["raw"])
+
+    rebuild_post_indexes()
+    rebuild_reply_counts()
 
 
 def detect_stream_embed(url: str) -> dict:
@@ -864,6 +952,44 @@ def add_thread():
 
     append_thread(category_path, title, stream_link, expires_choice)
     return redirect(f"/forum/{category_path}")
+
+
+@app.route("/account")
+def account():
+    user = require_login("/account")
+    if not isinstance(user, str):
+        return user
+
+    threads, posts = user_threads_and_posts(user)
+    thread_lookup = THREAD_DATA.get("thread_by_id", {})
+    cat_lookup = CATEGORY_DATA.get("cat_by_id", {})
+    return render_template(
+        "account.html",
+        current_user=user,
+        threads=threads,
+        posts=posts,
+        thread_lookup=thread_lookup,
+        cat_lookup=cat_lookup,
+        build_category_path=build_category_path,
+    )
+
+
+@app.route("/account/delete_thread/<int:thread_id>", methods=["POST"])
+def account_delete_thread(thread_id):
+    user = require_login("/account")
+    if not isinstance(user, str):
+        return user
+    delete_thread_owned(thread_id, user)
+    return redirect("/account")
+
+
+@app.route("/account/delete_post/<int:post_id>", methods=["POST"])
+def account_delete_post(post_id):
+    user = require_login("/account")
+    if not isinstance(user, str):
+        return user
+    delete_post_owned(post_id, user)
+    return redirect("/account")
 
 
 @app.route("/api/admin/categories", methods=["POST"])
