@@ -590,7 +590,6 @@ def render_forum_page(
         show_categories_section=show_categories_section,
         thread_title=thread_title,
         thread_subtext=thread_subtext,
-        cat_lookup=CATEGORY_DATA.get("cat_by_id", {}),
         threads_flat=threads if not allow_posting else [],
         thread_counts=thread_counts,
         search_query=search_query,
@@ -773,6 +772,8 @@ def thread_page(thread_id):
         "thread.html",
         thread=t,
         posts_tree=posts_tree,
+        cat_lookup=CATEGORY_DATA.get("cat_by_id", {}),
+        build_category_path=build_category_path,
     )
 
 
