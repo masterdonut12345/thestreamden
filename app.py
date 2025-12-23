@@ -8,7 +8,7 @@ import json
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlsplit, urlunsplit, parse_qsl
 
 import embed_streams  # your helper module
 
@@ -737,6 +737,8 @@ def render_forum_page(
     grouped = group_threads_by_choice(threads) if allow_posting else {}
 
     prefill_stream = request.args.get("prefill_stream", "")
+    prefill_title = request.args.get("prefill_title", "")
+    prefill_exp = request.args.get("prefill_exp", "")
     open_thread_form = request.args.get("open_thread_form", "") == "1"
 
     return render_template(
@@ -760,6 +762,8 @@ def render_forum_page(
         search_results=search_results,
         cat_lookup=CATEGORY_DATA.get("cat_by_id", {}),
         current_user=current_user,
+        prefill_title=prefill_title,
+        prefill_exp=prefill_exp,
     )
 
 
@@ -887,6 +891,9 @@ def embed_stream():
     # where to go back to
     return_to = request.args.get("return_to", "/forum")
     category_path = request.args.get("category_path", "")
+    prefill_title = request.args.get("prefill_title", "")
+    prefill_exp = request.args.get("prefill_exp", "")
+    prefill_stream = request.args.get("prefill_stream", "")
 
     source = request.values.get("source", "twitch")
     user_input = request.values.get("user_input", "")
@@ -896,6 +903,21 @@ def embed_stream():
         parent_host = request.host.split(":")[0]  # needed for twitch "parent="
         candidates = embed_streams.get_embed_candidates(source, user_input, parent_host)
 
+    def ensure_param(url: str, key: str, value: str) -> str:
+        if f"{key}=" in url:
+            return url
+        sep = "&" if "?" in url else "?"
+        return url + sep + urlencode({key: value})
+
+    # ensure we always return to an open add-thread form with any prefill data preserved
+    return_to = ensure_param(return_to, "open_thread_form", "1")
+    if prefill_title:
+        return_to = ensure_param(return_to, "prefill_title", prefill_title)
+    if prefill_exp:
+        return_to = ensure_param(return_to, "prefill_exp", prefill_exp)
+    if prefill_stream:
+        return_to = ensure_param(return_to, "prefill_stream", prefill_stream)
+
     return render_template(
         "embed_stream.html",
         return_to=return_to,
@@ -903,6 +925,9 @@ def embed_stream():
         source=source,
         user_input=user_input,
         candidates=candidates,
+        prefill_title=prefill_title,
+        prefill_exp=prefill_exp,
+        prefill_stream=prefill_stream,
     )
 
 
@@ -914,12 +939,13 @@ def choose_stream():
     if not chosen:
         abort(400)
 
-    # ensure we return with:
-    #  - prefill_stream=...
-    #  - open_thread_form=1   (so UI opens add-thread area automatically)
-    sep = "&" if "?" in return_to else "?"
-    qs = urlencode({"prefill_stream": chosen, "open_thread_form": "1"})
-    return redirect(f"{return_to}{sep}{qs}")
+    parts = urlsplit(return_to)
+    qs_map = dict(parse_qsl(parts.query, keep_blank_values=True))
+    qs_map["prefill_stream"] = chosen
+    qs_map["open_thread_form"] = "1"
+    new_query = urlencode(qs_map)
+    updated_return = urlunsplit((parts.scheme, parts.netloc, parts.path, new_query, parts.fragment))
+    return redirect(updated_return)
 
 
 @app.route("/thread/<int:thread_id>")

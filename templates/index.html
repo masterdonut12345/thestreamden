@@ -291,10 +291,41 @@
         toggleBox(listId, formId, btnId, "form");
       }
 
+      function launchEmbed() {
+        var titleField = document.getElementById("thread-title");
+        var expField = document.getElementById("thread-expiration");
+        var linkField = document.getElementById("thread-stream-link");
+
+        var titleVal = titleField ? titleField.value : "";
+        var expVal = expField ? expField.value : "";
+        var linkVal = linkField ? linkField.value : "";
+
+        var catPath = "{{ current_path }}";
+        var base = "/forum" + (catPath ? "/" + catPath : "");
+
+        var retParams = new URLSearchParams();
+        retParams.set("open_thread_form", "1");
+        if (titleVal) retParams.set("prefill_title", titleVal);
+        if (expVal) retParams.set("prefill_exp", expVal);
+        if (linkVal) retParams.set("prefill_stream", linkVal);
+        var returnTo = base + "?" + retParams.toString();
+
+        var params = new URLSearchParams();
+        params.set("return_to", returnTo);
+        params.set("category_path", catPath);
+        if (titleVal) params.set("prefill_title", titleVal);
+        if (expVal) params.set("prefill_exp", expVal);
+        if (linkVal) params.set("prefill_stream", linkVal);
+
+        window.location.href = "/embed_stream?" + params.toString();
+      }
+
       // auto-open add-thread form when redirected back from choose_stream
       function autoOpenThreadForm() {
         var canPost = "{{ '1' if allow_posting else '0' }}";
+        var isAuthed = "{{ '1' if current_user else '0' }}";
         if (canPost !== "1") { return; }
+        if (isAuthed !== "1") { return; }
         var shouldOpen = "{{ '1' if open_thread_form else '0' }}";
         if (shouldOpen === "1") {
           openForm(null, "threads-box", "thread-list", "thread-form", "add-thread-btn");
@@ -566,7 +597,7 @@
 
                   <div class="form-row">
                     <label for="thread-title">Stream title</label><br>
-                    <input type="text" id="thread-title" name="thread-title" maxlength="80" required>
+                    <input type="text" id="thread-title" name="thread-title" maxlength="80" value="{{ prefill_title }}" required>
                   </div>
 
                   <div class="form-row">
@@ -577,7 +608,7 @@
                            value="{{ prefill_stream }}" maxlength="500" required>
 
                     <div class="tip-line">
-                      <a class="link-btn" href="/embed_stream?return_to=/forum/{{ current_path }}&category_path={{ current_path }}">Embed stream</a>
+                      <button type="button" class="link-btn" onclick="launchEmbed();">Embed stream</button>
                     </div>
                   </div>
 
@@ -585,7 +616,7 @@
                     <label for="thread-expiration">Expiration</label><br>
                     <select id="thread-expiration" name="thread-expiration" required>
                       {% for opt in exp_choices %}
-                        <option value="{{ opt }}">{{ opt }}</option>
+                        <option value="{{ opt }}" {% if prefill_exp == opt %}selected{% endif %}>{{ opt }}</option>
                       {% endfor %}
                     </select>
                   </div>

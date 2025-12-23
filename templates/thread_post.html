@@ -3,11 +3,17 @@
     <div class="post-meta">Posted by {{ post.user or 'Anonymous' }} at {{ post.created_at }}</div>
     <div class="post-body">{{ post.body }}</div>
     <div class="reply-actions">
-      <form action="/thread/{{ thread.id }}/reply" method="POST" class="form-box">
-        <input type="hidden" name="parent_id" value="{{ post.id }}">
-        <textarea name="body" maxlength="2000" required placeholder="Reply to this post"></textarea>
-        <button class="submit-btn" type="submit">Reply</button>
-      </form>
+      {% if current_user %}
+        <form action="/thread/{{ thread.id }}/reply" method="POST" class="form-box">
+          <input type="hidden" name="parent_id" value="{{ post.id }}">
+          <textarea name="body" maxlength="2000" required placeholder="Reply to this post"></textarea>
+          <button class="submit-btn" type="submit">Reply</button>
+        </form>
+      {% else %}
+        <div class="post-meta" style="margin-top:6px;">
+          Login to reply. <a href="/login?next=/thread/{{ thread.id }}">Login</a> or <a href="/signup?next=/thread/{{ thread.id }}">Sign up</a>
+        </div>
+      {% endif %}
     </div>
     {% if post.replies %}
       <div class="replies">
