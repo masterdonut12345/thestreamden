@@ -168,6 +168,30 @@
         </div>
       </div>
 
+      <div style="display:flex; justify-content:flex-end; margin-bottom:12px;">
+        <div class="panel auth-panel">
+          <h3>Account</h3>
+          {% if current_user %}
+            <div class="small-text" style="margin-bottom:6px;">Signed in as <strong>{{ current_user }}</strong></div>
+            <div class="auth-actions">
+              <a class="btn" href="/forum">Forum</a>
+              <a class="btn ghost" href="/account">Account</a>
+              <a class="btn ghost" href="/logout">Logout</a>
+            </div>
+          {% else %}
+            <form action="/login" method="POST">
+              <input type="hidden" name="next" value="/forum">
+              <input class="auth-input" type="text" name="username" placeholder="Username" required style="margin-bottom:6px;">
+              <input class="auth-input" type="password" name="password" placeholder="Password" required>
+              <div class="auth-actions">
+                <button class="btn" type="submit">Login</button>
+                <a class="btn ghost" href="/signup">Sign up</a>
+              </div>
+            </form>
+          {% endif %}
+        </div>
+      </div>
+
       <div class="grid">
         <div class="stack">
           <div class="search-area">
@@ -244,32 +268,11 @@
         </div>
 
         <div class="stack">
-          <div class="panel auth-panel">
-            <h3>Account</h3>
-            {% if current_user %}
-              <div class="small-text" style="margin-bottom:6px;">Signed in as <strong>{{ current_user }}</strong></div>
-              <div class="auth-actions">
-                <a class="btn" href="/forum">Forum</a>
-                <a class="btn ghost" href="/account">Account</a>
-                <a class="btn ghost" href="/logout">Logout</a>
-              </div>
-            {% else %}
-              <form action="/login" method="POST">
-                <input type="hidden" name="next" value="/forum">
-                <input class="auth-input" type="text" name="username" placeholder="Username" required style="margin-bottom:6px;">
-                <input class="auth-input" type="password" name="password" placeholder="Password" required>
-                <div class="auth-actions">
-                  <button class="btn" type="submit">Login</button>
-                  <a class="btn ghost" href="/signup">Sign up</a>
-                </div>
-              </form>
-            {% endif %}
-          </div>
-          <div style="text-align:right;">
-            <a class="btn" href="/forum">Browse forum</a>
-          </div>
           <div class="panel">
-            <h3>Top streams</h3>
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
+              <h3 style="margin:0;">Top streams</h3>
+              <a class="btn" href="/forum">Browse forum</a>
+            </div>
             {% if top_threads|length == 0 %}
               <div class="empty">No streams yet.</div>
             {% else %}
