@@ -415,8 +415,8 @@
               <p class="tagline">Share streams and links in a clean, classic forum layout.</p>
             </div>
             <div class="nav-actions">
-              {% if parent_path %}
-                <a class="nav-btn" href="/forum/{{ parent_path }}">← Back</a>
+              {% if current_path %}
+                <a class="nav-btn" href="/forum{% if parent_path %}/{{ parent_path }}{% endif %}">← Main menu</a>
               {% else %}
                 <a class="nav-btn" href="/">← Main menu</a>
               {% endif %}
