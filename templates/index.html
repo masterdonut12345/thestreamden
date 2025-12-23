@@ -455,7 +455,7 @@
               </div>
 
               <div class="board-actions">
-                {% if allow_posting %}
+                {% if allow_posting and current_user %}
                   <button id="add-thread-btn" class="ghost-btn" type="button"
                           onclick="openForm(event,'threads-box','thread-list','thread-form','add-thread-btn')">+ Post a stream</button>
                 {% endif %}

@@ -367,6 +367,17 @@ def append_post(thread_id: int, body: str, parent_id: int | None):
 
     POSTS_DATA["raw"]["posts"] = POSTS_DATA["posts"]
     save_posts_json(POSTS_DATA["raw"])
+
+    # bump thread reply count
+    t = THREAD_DATA["thread_by_id"].get(thread_id)
+    if t is not None:
+        try:
+            t["reply_count"] = int(t.get("reply_count", 0)) + 1
+        except Exception:
+            t["reply_count"] = 1
+        THREAD_DATA["raw"]["threads"] = THREAD_DATA["threads"]
+        save_threads_json(THREAD_DATA["raw"])
+
     return new_post
 
 
