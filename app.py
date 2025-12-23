@@ -142,12 +142,35 @@ def ensure_thread_defaults():
 ensure_thread_defaults()
 
 
-def build_thread_counts() -> dict[int, int]:
-    """Return a mapping of category_id -> thread count."""
-    return {
+def build_thread_counts(include_descendants: bool = False) -> dict[int, int]:
+    """Return a mapping of category_id -> thread count.
+
+    When include_descendants is True, counts include threads in all child categories.
+    """
+    base_counts = {
         cat_id: len(items)
         for cat_id, items in THREAD_DATA.get("threads_by_category", {}).items()
     }
+
+    if not include_descendants:
+        return base_counts
+
+    children = CATEGORY_DATA["children_by_parent"]
+    memo: dict[int, int] = {}
+
+    def total(cat_id: int) -> int:
+        if cat_id in memo:
+            return memo[cat_id]
+        subtotal = base_counts.get(cat_id, 0)
+        for child in children.get(cat_id, []):
+            subtotal += total(child["id"])
+        memo[cat_id] = subtotal
+        return subtotal
+
+    for cid in CATEGORY_DATA.get("cat_by_id", {}):
+        total(cid)
+
+    return memo
 
 
 def get_top_threads(limit: int = 10) -> list[dict]:
@@ -426,7 +449,7 @@ def index():
     categories = get_category_children(None)
     top_ids = get_descendant_ids(None)
     top_threads = get_top_threads_for_ids(top_ids, 10)
-    thread_counts = build_thread_counts()
+    thread_counts = build_thread_counts(include_descendants=True)
     return render_forum_page(
         category_path="",
         categories=categories,
@@ -453,7 +476,7 @@ def forum(category_path):
         abort(404)
 
     categories = get_category_children(temp_cat)
-    thread_counts = build_thread_counts()
+    thread_counts = build_thread_counts(include_descendants=True)
 
     if depth == 1:
         ids = get_descendant_ids(temp_cat["id"])
