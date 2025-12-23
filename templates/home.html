@@ -1,0 +1,319 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>The Stream Den</title>
+    <style>
+      :root {
+        --ink: #1b2432;
+        --muted: #4f5b73;
+        --paper: #f2f4fb;
+        --panel: #ffffff;
+        --panel-soft: #f8f9fc;
+        --border: #c8d0dd;
+        --accent: #2f4f9c;
+        --accent-strong: #1f3d80;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: "Georgia", "Times New Roman", serif;
+        background: var(--paper);
+        color: var(--ink);
+        padding: 24px 16px 36px;
+      }
+      a { color: var(--accent); text-decoration: none; }
+      a:hover { color: var(--accent-strong); }
+
+      .page-wrap {
+        position: relative;
+        max-width: 1080px;
+        margin: 0 auto;
+        padding-top: 12px;
+      }
+      .header {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        margin-bottom: 14px;
+      }
+      .title {
+        margin: 0;
+        font-size: 28px;
+        letter-spacing: -0.01em;
+      }
+      .tagline {
+        margin: 4px 0 0;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .panel {
+        border: 1px solid var(--border);
+        background: #fff;
+        padding: 12px;
+        box-shadow: 0 6px 18px rgba(18, 31, 59, 0.08);
+      }
+      .panel h3 {
+        margin: 0 0 8px 0;
+        font-size: 15px;
+        color: var(--accent-strong);
+      }
+      .small-text { font-size: 12px; color: var(--muted); }
+
+      .auth-panel {
+        width: 260px;
+      }
+      .auth-input {
+        width: 100%;
+        padding: 8px;
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        font-size: 13px;
+      }
+      .auth-actions {
+        display: flex;
+        gap: 8px;
+        margin-top: 8px;
+      }
+      .btn {
+        display: inline-block;
+        padding: 8px 10px;
+        border: 1px solid var(--border);
+        background: linear-gradient(180deg, #f0f4fb, #e6ecf9);
+        color: var(--accent-strong);
+        font-size: 13px;
+        cursor: pointer;
+        border-radius: 4px;
+        text-align: center;
+      }
+      .btn.ghost {
+        background: #fff;
+      }
+      .btn:hover { background: linear-gradient(180deg, #e9efff, #dfe7ff); }
+
+      .search-area {
+        margin: 12px 0 10px;
+      }
+      .search-form {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        border: 1px solid var(--border);
+        background: #fff;
+        padding: 10px 12px;
+        box-shadow: 0 6px 18px rgba(18, 31, 59, 0.08);
+        width: 100%;
+      }
+      .search-input {
+        flex: 1;
+        min-width: 0;
+        padding: 8px;
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        font-size: 13px;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 14px;
+        align-items: start;
+      }
+      .stack {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      @media (max-width: 900px) {
+        .grid { grid-template-columns: 1fr; }
+        .auth-panel { position: static !important; margin-top: 10px; }
+      }
+
+      .table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+        margin-top: 6px;
+      }
+      .table th, .table td {
+        border: 1px solid var(--border);
+        padding: 9px 10px;
+        background: #fff;
+      }
+      .table th {
+        background: linear-gradient(180deg, #f6f8ff, #ecf0f8);
+        text-align: left;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .table tr:nth-child(even) td { background: var(--panel-soft); }
+      .meta { font-size: 12px; color: var(--muted); }
+      .empty {
+        padding: 10px;
+        border: 1px dashed var(--border);
+        background: var(--panel-soft);
+        color: var(--muted);
+        border-radius: 4px;
+        text-align: center;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page-wrap">
+      <div class="header">
+        <div>
+          <h1 class="title">The Stream Den</h1>
+          <p class="tagline">Jump into the forum or find something fast.</p>
+        </div>
+      </div>
+
+      <div class="auth-panel panel" style="position:absolute; top:0; right:0;">
+        <h3>Account</h3>
+        {% if current_user %}
+          <div class="small-text" style="margin-bottom:6px;">Signed in as <strong>{{ current_user }}</strong></div>
+          <div class="auth-actions">
+            <a class="btn" href="/forum">Forum</a>
+            <a class="btn ghost" href="/account">Account</a>
+            <a class="btn ghost" href="/logout">Logout</a>
+          </div>
+        {% else %}
+          <form action="/login" method="POST">
+            <input type="hidden" name="next" value="/forum">
+            <input class="auth-input" type="text" name="username" placeholder="Username" required style="margin-bottom:6px;">
+            <input class="auth-input" type="password" name="password" placeholder="Password" required>
+            <div class="auth-actions">
+              <button class="btn" type="submit">Login</button>
+              <a class="btn ghost" href="/signup">Sign up</a>
+            </div>
+          </form>
+        {% endif %}
+      </div>
+
+      <div class="grid">
+        <div class="stack">
+          <div class="search-area">
+            <form class="search-form" action="/" method="GET">
+              <input class="search-input" type="text" name="search" value="{{ search_query }}" placeholder="Search threads or categories">
+              <button class="btn" type="submit">Search</button>
+              {% if search_query %}
+                <a class="btn ghost" href="/">Clear</a>
+              {% endif %}
+            </form>
+          </div>
+
+          <div class="panel">
+            <h3>Quick results</h3>
+            {% if not search_query %}
+              <div class="empty">Search to see matching threads and categories.</div>
+            {% else %}
+            <div class="meta" style="margin-bottom:6px;">Top matches for “{{ search_query }}”</div>
+            <strong>Threads</strong>
+            {% if search_results.threads|length == 0 %}
+              <div class="empty" style="margin-top:6px;">No thread matches.</div>
+            {% else %}
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Title</th>
+                    <th>Clicks</th>
+                    <th>Open</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for t in search_results.threads %}
+                    <tr>
+                      <td>
+                        <div style="font-weight:700;">{{ t.title }}</div>
+                        <div class="meta"><a href="{{ t.category_url }}">{{ t.category_name }}</a></div>
+                      </td>
+                      <td style="text-align:center;">{{ t.clicks }}</td>
+                      <td style="text-align:center;"><a class="btn ghost" href="{{ t.thread_url }}">Open</a></td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            {% endif %}
+
+            <strong style="display:block; margin-top:10px;">Categories</strong>
+            {% if search_results.categories|length == 0 %}
+              <div class="empty" style="margin-top:6px;">No category matches.</div>
+            {% else %}
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Category</th>
+                    <th>Threads</th>
+                    <th>Open</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for c in search_results.categories %}
+                    <tr>
+                      <td>
+                        <div style="font-weight:700;">{{ c.name }}</div>
+                        <div class="meta">{{ c.desc }}</div>
+                      </td>
+                      <td style="text-align:center;">{{ c.threads }}</td>
+                      <td style="text-align:center;"><a class="btn ghost" href="{{ c.url }}">Open</a></td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            {% endif %}
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="stack">
+          <div style="text-align:right;">
+            <a class="btn" href="/forum">Browse forum</a>
+          </div>
+          <div class="panel">
+            <h3>Top streams</h3>
+            {% if top_threads|length == 0 %}
+              <div class="empty">No streams yet.</div>
+            {% else %}
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Stream</th>
+                    <th>Category</th>
+                    <th>User</th>
+                    <th>Clicks</th>
+                    <th>Open</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for t in top_threads %}
+                    {% set cat = cat_lookup.get(t.category_id) %}
+                    {% set cat_path = build_category_path(cat, cat_lookup) if cat else "" %}
+                    <tr>
+                      <td>
+                        <div style="font-weight:700;">{{ t.title }}</div>
+                        <div class="meta">{{ t.created_at }}</div>
+                      </td>
+                      <td>
+                        {% if cat %}
+                          <a href="/forum{% if cat_path %}/{{ cat_path }}{% endif %}">{{ cat.name }}</a>
+                        {% else %}
+                          <span class="meta">Unknown</span>
+                        {% endif %}
+                      </td>
+                      <td style="text-align:center;">{{ t.user or 'Anonymous' }}</td>
+                      <td style="text-align:center;">{{ t.clicks or 0 }}</td>
+                      <td style="text-align:center;"><a class="btn ghost" href="/thread/{{ t.id }}">Open</a></td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
