@@ -386,7 +386,7 @@ def render_forum_page(
     thread_title: str,
     thread_subtext: str,
 ):
-    grouped = group_threads_by_choice(threads)
+    grouped = group_threads_by_choice(threads) if allow_posting else {}
 
     prefill_stream = request.args.get("prefill_stream", "")
     open_thread_form = request.args.get("open_thread_form", "") == "1"
@@ -407,6 +407,7 @@ def render_forum_page(
         thread_title=thread_title,
         thread_subtext=thread_subtext,
         cat_lookup=CATEGORY_DATA.get("cat_by_id", {}),
+        threads_flat=threads if not allow_posting else [],
     )
 
 

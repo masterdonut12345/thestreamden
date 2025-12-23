@@ -58,14 +58,14 @@
         display: inline-block;
         padding: 8px 12px;
         font-size: 13px;
-        border: 1px solid #d08a00;
-        color: #1a1200;
+        border: 1px solid #1d2740;
+        color: #111827;
         text-decoration: none;
-        background: linear-gradient(180deg, #ffd26a, #f2a600);
+        background: linear-gradient(180deg, #ffffff, #f2f4fb);
         border-radius: 3px;
-        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.25), 0 2px 6px rgba(0,0,0,0.18);
+        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.45), 0 2px 6px rgba(0,0,0,0.15);
       }
-      .nav-btn:hover { background: linear-gradient(180deg, #ffe088, #f7b72d); }
+      .nav-btn:hover { background: linear-gradient(180deg, #f7f9ff, #e7ecf6); }
 
       .crumbs {
         padding: 11px 16px 10px 16px;
@@ -332,52 +332,89 @@
         </div>
 
         <div id="thread-list" class="board-body">
-          {% for bucket in exp_choices %}
-            <div class="bucket">
-              <div class="bucket-head">
-                <div class="bucket-name">Expires: {{ bucket }}</div>
-                <span class="chip">{{ threads_grouped[bucket]|length }} listed</span>
-              </div>
-
-              {% if threads_grouped[bucket]|length == 0 %}
-                <div class="empty-row">No streams in this window.</div>
-              {% else %}
-                <table class="forum-table thread-table">
-                  <thead>
+          {% if show_top_threads %}
+            {% if threads_flat|length == 0 %}
+              <div class="empty-row">No streams yet.</div>
+            {% else %}
+              <table class="forum-table thread-table">
+                <thead>
+                  <tr>
+                    <th>Stream Thread</th>
+                    <th class="col-time">Added (UTC)</th>
+                    <th class="col-count">Replies</th>
+                    <th class="col-click">Clicks</th>
+                    <th class="col-action">Link</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for t in threads_flat %}
                     <tr>
-                      <th>Stream Thread</th>
-                      <th class="col-time">Added (UTC)</th>
-                      <th class="col-count">Replies</th>
-                      <th class="col-click">Clicks</th>
-                      <th class="col-action">Link</th>
+                      <td>
+                        <div class="thread-title">{{ t.title }}</div>
+                        <div class="thread-meta">
+                          {% set cat = cat_lookup.get(t.category_id) %}
+                          {% if cat %}In {{ cat.name }}{% endif %}
+                        </div>
+                      </td>
+                      <td class="col-time"><span class="mono">{{ t.created_at }}</span></td>
+                      <td class="col-count">{{ t.reply_count }}</td>
+                      <td class="col-click">{{ t.clicks or 0 }}</td>
+                      <td class="col-action">
+                        <a class="link-btn" href="/thread/{{ t.id }}">Open</a>
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {% for t in threads_grouped[bucket] %}
+                  {% endfor %}
+                </tbody>
+              </table>
+            {% endif %}
+          {% else %}
+            {% for bucket in exp_choices %}
+              <div class="bucket">
+                <div class="bucket-head">
+                  <div class="bucket-name">Expires: {{ bucket }}</div>
+                  <span class="chip">{{ threads_grouped[bucket]|length }} listed</span>
+                </div>
+
+                {% if threads_grouped[bucket]|length == 0 %}
+                  <div class="empty-row">No streams in this window.</div>
+                {% else %}
+                  <table class="forum-table thread-table">
+                    <thead>
                       <tr>
-                        <td>
-                          <div class="thread-title">{{ t.title }}</div>
-                          <div class="thread-meta">
-                            Expires in {{ bucket }}
-                            {% if show_top_threads %}
-                              {% set cat = cat_lookup.get(t.category_id) %}
-                              {% if cat %}&mdash; in {{ cat.name }}{% endif %}
-                            {% endif %}
-                          </div>
-                        </td>
-                        <td class="col-time"><span class="mono">{{ t.created_at }}</span></td>
-                        <td class="col-count">{{ t.reply_count }}</td>
-                        <td class="col-click">{{ t.clicks or 0 }}</td>
-                        <td class="col-action">
-                          <a class="link-btn" href="/thread/{{ t.id }}">Open</a>
-                        </td>
+                        <th>Stream Thread</th>
+                        <th class="col-time">Added (UTC)</th>
+                        <th class="col-count">Replies</th>
+                        <th class="col-click">Clicks</th>
+                        <th class="col-action">Link</th>
                       </tr>
-                    {% endfor %}
-                  </tbody>
-                </table>
-              {% endif %}
-            </div>
-          {% endfor %}
+                    </thead>
+                    <tbody>
+                      {% for t in threads_grouped[bucket] %}
+                        <tr>
+                          <td>
+                            <div class="thread-title">{{ t.title }}</div>
+                            <div class="thread-meta">
+                              Expires in {{ bucket }}
+                              {% if show_top_threads %}
+                                {% set cat = cat_lookup.get(t.category_id) %}
+                                {% if cat %}&mdash; in {{ cat.name }}{% endif %}
+                              {% endif %}
+                            </div>
+                          </td>
+                          <td class="col-time"><span class="mono">{{ t.created_at }}</span></td>
+                          <td class="col-count">{{ t.reply_count }}</td>
+                          <td class="col-click">{{ t.clicks or 0 }}</td>
+                          <td class="col-action">
+                            <a class="link-btn" href="/thread/{{ t.id }}">Open</a>
+                          </td>
+                        </tr>
+                      {% endfor %}
+                    </tbody>
+                  </table>
+                {% endif %}
+              </div>
+            {% endfor %}
+          {% endif %}
         </div>
 
         {% if allow_posting %}
