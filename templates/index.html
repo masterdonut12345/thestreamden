@@ -39,19 +39,9 @@
         box-shadow: 0 12px 30px rgba(26, 44, 92, 0.18);
       }
 
-      .layout {
-        display: flex;
-        gap: 16px;
-        padding: 0 16px 18px 16px;
-      }
-      .sidebar {
-        width: 280px;
-        flex-shrink: 0;
-      }
-      .main {
-        flex: 1;
-        min-width: 0;
-      }
+      .page { display: flex; gap: 18px; align-items: flex-start; }
+      .sidebar { width: 300px; flex-shrink: 0; }
+      .main-wrap { flex: 1; min-width: 0; }
       .panel {
         border: 1px solid var(--border);
         background: #fff;
@@ -81,8 +71,6 @@
         border-radius: 4px;
       }
       .search-btn:hover { background: #e6edf9; }
-      .search-list { list-style: none; padding: 0; margin: 8px 0 0 0; }
-      .search-list li { margin-bottom: 8px; }
       .search-meta { font-size: 12px; color: var(--muted); }
 
       .forum-banner {
@@ -294,69 +282,95 @@
   </head>
 
   <body>
-    <div class="forum-shell">
-      <div class="forum-banner">
-        <div>
-          <h1>The Stream Den</h1>
-          <p class="tagline">Share streams and links in a clean, classic forum layout.</p>
-        </div>
-        <div class="nav-actions">
-          {% if parent_path %}
-            <a class="nav-btn" href="/forum/{{ parent_path }}">← Back</a>
-          {% else %}
-            <a class="nav-btn" href="/forum">← Forum home</a>
+    <div class="page">
+      <aside class="sidebar">
+        <div class="panel">
+          <h3>Search</h3>
+          <form action="" method="GET">
+            <input class="search-input" type="text" name="search" value="{{ search_query }}" placeholder="Search threads or categories">
+            <button class="search-btn" type="submit">Search</button>
+          </form>
+          {% if search_query %}
+            <div class="board-subtext" style="margin-top:10px;">Results for “{{ search_query }}”</div>
+            <h4 style="margin:10px 0 6px 0;">Threads</h4>
+            {% if search_results.threads|length == 0 %}
+              <div class="empty-row">No thread matches.</div>
+            {% else %}
+              <table class="forum-table" style="font-size:12px;">
+                <thead>
+                  <tr>
+                    <th>Title</th>
+                    <th class="col-click">Clicks</th>
+                    <th class="col-action">Open</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for t in search_results.threads %}
+                    <tr>
+                      <td>
+                        <div class="thread-title">{{ t.title }}</div>
+                        <div class="search-meta"><a class="btn" href="{{ t.category_url }}">{{ t.category_name }}</a></div>
+                      </td>
+                      <td class="col-click">{{ t.clicks }}</td>
+                      <td class="col-action"><a class="link-btn" href="{{ t.thread_url }}">Open</a></td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            {% endif %}
+            <h4 style="margin:12px 0 6px 0;">Categories</h4>
+            {% if search_results.categories|length == 0 %}
+              <div class="empty-row">No category matches.</div>
+            {% else %}
+              <table class="forum-table" style="font-size:12px;">
+                <thead>
+                  <tr>
+                    <th>Category</th>
+                    <th class="col-count">Threads</th>
+                    <th class="col-action">Open</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for c in search_results.categories %}
+                    <tr>
+                      <td>
+                        <div class="cat-name">{{ c.name }}</div>
+                        <div class="search-meta">{{ c.desc }}</div>
+                      </td>
+                      <td class="col-count">{{ c.threads }}</td>
+                      <td class="col-action"><a class="link-btn" href="{{ c.url }}">Open</a></td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            {% endif %}
           {% endif %}
         </div>
-      </div>
+      </aside>
 
-      <div class="crumbs">
-        {% for crumb in breadcrumbs %}
-          {% if not loop.first %}<span class="sep">&raquo;</span>{% endif %}
-          <a href="{{ crumb.url }}">{{ crumb.name }}</a>
-        {% endfor %}
-      </div>
-
-      <div class="layout">
-        <aside class="sidebar">
-          <div class="panel">
-            <h3>Search</h3>
-            <form action="" method="GET">
-              <input class="search-input" type="text" name="search" value="{{ search_query }}" placeholder="Search threads or categories">
-              <button class="search-btn" type="submit">Search</button>
-            </form>
-            {% if search_query %}
-              <div class="board-subtext" style="margin-top:10px;">Results for “{{ search_query }}”</div>
-              <h4 style="margin:10px 0 6px 0;">Threads</h4>
-              {% if search_results.threads|length == 0 %}
-                <div class="empty-row">No thread matches.</div>
+      <div class="main-wrap">
+        <div class="forum-shell">
+          <div class="forum-banner">
+            <div>
+              <h1>The Stream Den</h1>
+              <p class="tagline">Share streams and links in a clean, classic forum layout.</p>
+            </div>
+            <div class="nav-actions">
+              {% if parent_path %}
+                <a class="nav-btn" href="/forum/{{ parent_path }}">← Back</a>
               {% else %}
-                <ul class="search-list">
-                  {% for t in search_results.threads %}
-                    <li>
-                      <a class="btn" href="{{ t.thread_url }}">{{ t.title }}</a>
-                      <div class="search-meta">Clicks: {{ t.clicks }} • <a class="btn" href="{{ t.category_url }}">{{ t.category_name }}</a></div>
-                    </li>
-                  {% endfor %}
-                </ul>
+                <a class="nav-btn" href="/forum">← Forum home</a>
               {% endif %}
-              <h4 style="margin:12px 0 6px 0;">Categories</h4>
-              {% if search_results.categories|length == 0 %}
-                <div class="empty-row">No category matches.</div>
-              {% else %}
-                <ul class="search-list">
-                  {% for c in search_results.categories %}
-                    <li>
-                      <a class="btn" href="{{ c.url }}">{{ c.name }}</a>
-                      <div class="search-meta">{{ c.threads }} threads • {{ c.desc }}</div>
-                    </li>
-                  {% endfor %}
-                </ul>
-              {% endif %}
-            {% endif %}
+            </div>
           </div>
-        </aside>
 
-        <main class="main">
+          <div class="crumbs">
+            {% for crumb in breadcrumbs %}
+              {% if not loop.first %}<span class="sep">&raquo;</span>{% endif %}
+              <a href="{{ crumb.url }}">{{ crumb.name }}</a>
+            {% endfor %}
+          </div>
+
           {% if show_categories_section %}
             <section id="subcategories-box" class="board-card">
               <div class="board-head">
@@ -551,7 +565,7 @@
               </div>
             {% endif %}
           </section>
-        </main>
+        </div>
       </div>
     </div>
   </body>
