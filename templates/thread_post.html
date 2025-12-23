@@ -1,6 +1,6 @@
 {% macro render_post(post) %}
   <li class="post-item" id="post-{{ post.id }}">
-    <div class="post-meta">Posted at {{ post.created_at }}</div>
+    <div class="post-meta">Posted by {{ post.user or 'Anonymous' }} at {{ post.created_at }}</div>
     <div class="post-body">{{ post.body }}</div>
     <div class="reply-actions">
       <form action="/thread/{{ thread.id }}/reply" method="POST" class="form-box">

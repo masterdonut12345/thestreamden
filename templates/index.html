@@ -302,7 +302,7 @@
 
   <body>
     <div class="page-wrap">
-      <div class="page">
+      <div class="page" style="margin-bottom:16px;">
         <aside class="sidebar">
           <div class="panel search-panel">
             <h3>Search</h3>
@@ -370,9 +370,35 @@
           {% endif %}
         </div>
       </aside>
-
       <div class="main-wrap">
-        <div class="forum-shell">
+        <div class="panel" style="border:1px solid var(--border); padding:12px; box-shadow:0 6px 18px rgba(18,31,59,0.08); background:#fff;">
+          {% if current_user %}
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+              <div>Logged in as <strong>{{ current_user }}</strong></div>
+              <a class="search-btn" style="text-decoration:none; padding:6px 10px;" href="/logout">Logout</a>
+            </div>
+          {% else %}
+            <form action="/login" method="POST" style="display:flex; gap:8px; align-items:flex-end; flex-wrap:wrap;">
+              <div style="flex:1; min-width:140px;">
+                <label style="font-size:12px; color:var(--muted);">Username</label>
+                <input class="search-input" type="text" name="username" required>
+              </div>
+              <div style="flex:1; min-width:140px;">
+                <label style="font-size:12px; color:var(--muted);">Password</label>
+                <input class="search-input" type="password" name="password" required>
+                <input type="hidden" name="next" value="{{ request.path }}">
+              </div>
+              <div style="display:flex; gap:6px; align-items:flex-end;">
+                <button class="search-btn" type="submit" style="padding:8px 12px;">Login</button>
+                <a class="search-clear" href="/signup" style="padding:8px 12px; text-decoration:none;">Sign up</a>
+              </div>
+            </form>
+          {% endif %}
+        </div>
+      </div>
+      </div>
+
+      <div class="forum-shell">
           <div class="forum-banner">
             <div>
               <h1>The Stream Den</h1>
@@ -464,13 +490,15 @@
                 {% else %}
                   <table class="forum-table thread-table">
                     <thead>
-                      <tr>
-                        <th>Stream Thread</th>
+                    <tr>
+                      <th>Stream Thread</th>
+                      <th class="col-action">User</th>
+                        <th class="col-action">User</th>
                         <th class="col-time">Added (UTC)</th>
                         <th class="col-count">Replies</th>
                         <th class="col-click">Clicks</th>
                         <th class="col-action">Link</th>
-                      </tr>
+                    </tr>
                     </thead>
                     <tbody>
                       {% for t in threads_flat %}
@@ -482,6 +510,7 @@
                               {% if cat %}In {{ cat.name }}{% endif %}
                             </div>
                           </td>
+                          <td class="col-action">{{ t.user or 'Anonymous' }}</td>
                           <td class="col-time"><span class="mono">{{ t.created_at }}</span></td>
                           <td class="col-count">{{ t.reply_count }}</td>
                           <td class="col-click">{{ t.clicks or 0 }}</td>

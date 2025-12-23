@@ -142,11 +142,15 @@
       <div class="content">
         <div class="panel">
           <h3 style="margin-top:0;">New post</h3>
-          <form action="/thread/{{ thread.id }}/reply" method="POST">
-            <input type="hidden" name="parent_id" value="">
-            <textarea name="body" maxlength="2000" required placeholder="Share your thoughts..."></textarea>
-            <button class="submit-btn" type="submit">Post reply</button>
-          </form>
+          {% if current_user %}
+            <form action="/thread/{{ thread.id }}/reply" method="POST">
+              <input type="hidden" name="parent_id" value="">
+              <textarea name="body" maxlength="2000" required placeholder="Share your thoughts..."></textarea>
+              <button class="submit-btn" type="submit">Post reply</button>
+            </form>
+          {% else %}
+            <div class="post-item">Login to post. <a href="/login?next=/thread/{{ thread.id }}">Login</a> or <a href="/signup?next=/thread/{{ thread.id }}">Sign up</a></div>
+          {% endif %}
         </div>
 
         <div class="panel">

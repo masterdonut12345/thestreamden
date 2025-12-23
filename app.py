@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 
-from flask import Flask, render_template, request, redirect, url_for, abort, jsonify
+from flask import Flask, render_template, request, redirect, url_for, abort, jsonify, session
 import re
 import json
 from collections import defaultdict
@@ -17,9 +17,12 @@ app = Flask(__name__)
 CATEGORIES_PATH = Path("data/categories.json")
 THREADS_PATH = Path("data/threads.json")
 POSTS_PATH = Path("data/posts.json")
+USERS_PATH = Path("data/users.json")
 
 EXP_CHOICES = ["1 day", "3 days", "1 week", "1 month"]
 ADMIN_TOKEN = os.environ.get("ADMIN_TOKEN")
+
+app.secret_key = os.environ.get("APP_SECRET", "dev-secret-key")
 
 
 # -----------------------------
@@ -141,6 +144,23 @@ def load_posts():
 POSTS_DATA = load_posts()
 
 
+def load_users():
+    try:
+        with open(USERS_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        users = data.get("users", [])
+        user_by_name = {u["username"]: u for u in users}
+        return {"data": data, "users": users, "user_by_name": user_by_name}
+    except FileNotFoundError:
+        return {"data": {"users": []}, "users": [], "user_by_name": {}}
+    except json.JSONDecodeError as e:
+        print(f"error decoding users.json: {e}")
+        return {"data": {"users": []}, "users": [], "user_by_name": {}}
+
+
+USERS_DATA = load_users()
+
+
 # -----------------------------
 # Helpers
 # -----------------------------
@@ -170,12 +190,21 @@ def save_posts_json(data):
         json.dump(data, f, indent=2)
 
 
+def save_users_json(data):
+    USERS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with open(USERS_PATH, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2)
+
+
 def ensure_thread_defaults():
     """Backfill missing thread fields for older JSON."""
     changed = False
     for t in THREAD_DATA.get("threads", []):
         if "clicks" not in t:
             t["clicks"] = 0
+            changed = True
+        if "user" not in t:
+            t["user"] = "Anonymous"
             changed = True
 
     if changed:
@@ -184,6 +213,20 @@ def ensure_thread_defaults():
 
 
 ensure_thread_defaults()
+
+
+def ensure_post_defaults():
+    changed = False
+    for p in POSTS_DATA.get("posts", []):
+        if "user" not in p:
+            p["user"] = "Anonymous"
+            changed = True
+    if changed:
+        POSTS_DATA["raw"]["posts"] = POSTS_DATA["posts"]
+        save_posts_json(POSTS_DATA["raw"])
+
+
+ensure_post_defaults()
 
 
 def build_thread_counts(include_descendants: bool = False) -> dict[int, int]:
@@ -296,6 +339,9 @@ def build_post_tree(thread_id: int) -> list[dict]:
 def append_post(thread_id: int, body: str, parent_id: int | None):
     if thread_id not in THREAD_DATA.get("thread_by_id", {}):
         abort(404)
+    current_user = session.get("user")
+    if not current_user:
+        abort(403)
 
     if parent_id is not None:
         parent_post = next((p for p in POSTS_DATA.get("posts", []) if p.get("id") == parent_id), None)
@@ -311,6 +357,7 @@ def append_post(thread_id: int, body: str, parent_id: int | None):
         "parent_id": parent_id,
         "body": body,
         "created_at": now,
+        "user": current_user,
     }
 
     POSTS_DATA["max_id"] += 1
@@ -321,6 +368,49 @@ def append_post(thread_id: int, body: str, parent_id: int | None):
     POSTS_DATA["raw"]["posts"] = POSTS_DATA["posts"]
     save_posts_json(POSTS_DATA["raw"])
     return new_post
+
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    next_url = request.args.get("next") or request.form.get("next") or "/forum"
+    error = None
+    if request.method == "POST":
+        username = (request.form.get("username") or "").strip()
+        password = (request.form.get("password") or "").strip()
+        user = USERS_DATA["user_by_name"].get(username)
+        if user and user.get("password") == password:
+            session["user"] = username
+            return redirect(next_url)
+        error = "Invalid credentials"
+    return render_template("login.html", next_url=next_url, error=error)
+
+
+@app.route("/logout")
+def logout():
+    session.pop("user", None)
+    return redirect("/forum")
+
+
+@app.route("/signup", methods=["GET", "POST"])
+def signup():
+    error = None
+    next_url = request.args.get("next") or "/forum"
+    if request.method == "POST":
+        username = (request.form.get("username") or "").strip()
+        password = (request.form.get("password") or "").strip()
+        if not username or not password:
+            error = "Username and password required"
+        elif username in USERS_DATA["user_by_name"]:
+            error = "Username already exists"
+        else:
+            new_user = {"username": username, "password": password}
+            USERS_DATA["users"].append(new_user)
+            USERS_DATA["user_by_name"][username] = new_user
+            USERS_DATA["data"]["users"] = USERS_DATA["users"]
+            save_users_json(USERS_DATA["data"])
+            session["user"] = username
+            return redirect(next_url)
+    return render_template("signup.html", error=error, next_url=next_url)
 
 
 def detect_stream_embed(url: str) -> dict:
@@ -549,6 +639,9 @@ def append_category(parent_path_str, name, desc):
 
 
 def append_thread(category_path_str: str, title: str, stream_link: str, expires_choice: str):
+    current_user = session.get("user")
+    if not current_user:
+        abort(403)
     category_path_str = (category_path_str or "").strip("/")
     cat = get_category_by_path(category_path_str)
     if cat is None:
@@ -577,6 +670,7 @@ def append_thread(category_path_str: str, title: str, stream_link: str, expires_
         "expires_choice": expires_choice,
         "reply_count": 0,
         "clicks": 0,
+        "user": current_user,
     }
 
     THREAD_DATA["max_id"] += 1
@@ -632,6 +726,7 @@ def render_forum_page(
         search_query=search_query,
         search_results=search_results,
         cat_lookup=CATEGORY_DATA.get("cat_by_id", {}),
+        current_user=session.get("user"),
     )
 
 
@@ -656,6 +751,7 @@ def index():
         thread_counts=thread_counts,
         search_query=search_query,
         search_results=search_results,
+        current_user=session.get("user"),
     )
 
 
@@ -702,6 +798,7 @@ def forum(category_path):
         thread_counts=thread_counts,
         search_query=search_query,
         search_results=search_results,
+        current_user=session.get("user"),
     )
 
 
@@ -716,6 +813,8 @@ def add_thread():
     title = (request.form.get("thread-title") or "").strip()
     stream_link = (request.form.get("thread-stream-link") or "").strip()
     expires_choice = (request.form.get("thread-expiration") or "").strip()
+    if not session.get("user"):
+        return redirect("/login?next=" + url_for("forum", category_path=category_path))
 
     if not category_path:
         abort(400)
@@ -813,6 +912,7 @@ def thread_page(thread_id):
         cat_lookup=CATEGORY_DATA.get("cat_by_id", {}),
         build_category_path=build_category_path,
         embed_info=embed_info,
+        current_user=session.get("user"),
     )
 
 
@@ -825,6 +925,8 @@ def reply_thread(thread_id):
     body = (request.form.get("body") or "").strip()
     if not body or len(body) > 2000:
         abort(400)
+    if not session.get("user"):
+        return redirect(f"/login?next=/thread/{thread_id}")
 
     parent_raw = request.form.get("parent_id")
     parent_id = int(parent_raw) if parent_raw not in (None, "", "None") else None
