@@ -157,6 +157,21 @@ def get_top_threads(limit: int = 10) -> list[dict]:
     return sorted(threads, key=sort_key)[:limit]
 
 
+def get_top_threads_for_ids(cat_ids: list[int], limit: int = 10) -> list[dict]:
+    threads = THREAD_DATA.get("threads", [])
+    filtered = [t for t in threads if t.get("category_id") in cat_ids]
+
+    def sort_key(t):
+        try:
+            clicks = int(t.get("clicks", 0))
+        except Exception:
+            clicks = 0
+        created = t.get("created_at", "")
+        return (-clicks, created)
+
+    return sorted(filtered, key=sort_key)[:limit]
+
+
 def get_category_by_path(path: str):
     path = (path or "").strip("/")
     if not path:
@@ -181,6 +196,16 @@ def get_category_children(cat):
     if cat is None:
         return children.get(None, [])
     return children.get(cat["id"], [])
+
+
+def get_descendant_ids(cat_id):
+    """Return all descendant category IDs beneath cat_id (None for root)."""
+    ids = []
+    children = CATEGORY_DATA["children_by_parent"].get(cat_id, [])
+    for c in children:
+        ids.append(c["id"])
+        ids.extend(get_descendant_ids(c["id"]))
+    return ids
 
 
 def build_breadcrumbs(current_path: str):
@@ -350,7 +375,17 @@ def append_thread(category_path_str: str, title: str, stream_link: str, expires_
 # Routes
 # -----------------------------
 
-def render_forum_page(category_path: str, categories: list, threads: list, parent_path: str):
+def render_forum_page(
+    category_path: str,
+    categories: list,
+    threads: list,
+    parent_path: str,
+    depth: int,
+    allow_posting: bool,
+    show_categories_section: bool,
+    thread_title: str,
+    thread_subtext: str,
+):
     grouped = group_threads_by_choice(threads)
 
     prefill_stream = request.args.get("prefill_stream", "")
@@ -365,8 +400,12 @@ def render_forum_page(category_path: str, categories: list, threads: list, paren
         threads_grouped=grouped,
         exp_choices=EXP_CHOICES,
         prefill_stream=prefill_stream,
-        open_thread_form=open_thread_form,
-        show_top_threads=(category_path == ""),
+        open_thread_form=open_thread_form and allow_posting,
+        show_top_threads=not allow_posting,
+        allow_posting=allow_posting,
+        show_categories_section=show_categories_section,
+        thread_title=thread_title,
+        thread_subtext=thread_subtext,
         cat_lookup=CATEGORY_DATA.get("cat_by_id", {}),
     )
 
@@ -374,8 +413,19 @@ def render_forum_page(category_path: str, categories: list, threads: list, paren
 @app.route("/forum")
 def index():
     categories = get_category_children(None)
-    top_threads = get_top_threads(10)
-    return render_forum_page("", categories, top_threads, "")
+    top_ids = get_descendant_ids(None)
+    top_threads = get_top_threads_for_ids(top_ids, 10)
+    return render_forum_page(
+        category_path="",
+        categories=categories,
+        threads=top_threads,
+        parent_path="",
+        depth=0,
+        allow_posting=False,
+        show_categories_section=True,
+        thread_title="Top Threads",
+        thread_subtext="Most-clicked streams across all categories.",
+    )
 
 
 @app.route("/forum/<path:category_path>")
@@ -383,15 +433,39 @@ def forum(category_path):
     category_path = (category_path or "").strip("/")
     parts = [p for p in category_path.split("/") if p]
     parent_path = "/".join(parts[:-1])
+    depth = len(parts)
 
     temp_cat = get_category_by_path(category_path)
     if temp_cat is None:
         abort(404)
 
     categories = get_category_children(temp_cat)
-    threads = get_threads_for_category(temp_cat)
 
-    return render_forum_page(category_path, categories, threads, parent_path)
+    if depth == 1:
+        ids = get_descendant_ids(temp_cat["id"])
+        threads = get_top_threads_for_ids(ids, 10)
+        allow_posting = False
+        show_categories_section = True
+        thread_title = "Top Threads"
+        thread_subtext = f"Most-clicked streams inside {temp_cat.get('name', 'this category')}."
+    else:
+        threads = get_threads_for_category(temp_cat)
+        allow_posting = True
+        show_categories_section = False
+        thread_title = "Threads"
+        thread_subtext = "Streams in this category."
+
+    return render_forum_page(
+        category_path=category_path,
+        categories=categories,
+        threads=threads,
+        parent_path=parent_path,
+        depth=depth,
+        allow_posting=allow_posting,
+        show_categories_section=show_categories_section,
+        thread_title=thread_title,
+        thread_subtext=thread_subtext,
+    )
 
 
 @app.route("/add_category", methods=["POST"])

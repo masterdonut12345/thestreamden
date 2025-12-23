@@ -235,6 +235,8 @@
 
       // auto-open add-thread form when redirected back from choose_stream
       function autoOpenThreadForm() {
+        var canPost = "{{ '1' if allow_posting else '0' }}";
+        if (canPost !== "1") { return; }
         var shouldOpen = "{{ '1' if open_thread_form else '0' }}";
         if (shouldOpen === "1") {
           openForm(null, "threads-box", "thread-list", "thread-form", "add-thread-btn");
@@ -268,60 +270,61 @@
         {% endfor %}
       </div>
 
-      <!-- Subcategories -->
-      <section id="subcategories-box" class="board-card">
-        <div class="board-head">
-          <div>
-            <div class="board-title">Subcategories</div>
-            <div class="board-subtext">Pick a room to browse threads.</div>
+      {% if show_categories_section %}
+        <section id="subcategories-box" class="board-card">
+          <div class="board-head">
+            <div>
+              <div class="board-title">{% if current_path %}Subcategories{% else %}Categories{% endif %}</div>
+              <div class="board-subtext">Pick a room to browse threads.</div>
+            </div>
+            <div class="board-actions">
+              <span class="chip">{{ categories|length }} total</span>
+            </div>
           </div>
-          <div class="board-actions">
-            <span class="chip">{{ categories|length }} total</span>
-          </div>
-        </div>
 
-        <div id="subcat-list" class="board-body">
-          {% if categories|length == 0 %}
-            <div class="empty-row">No rooms yet. Start the first category.</div>
-          {% else %}
-            <table class="forum-table">
-              <thead>
-                <tr>
-                  <th>Category</th>
-                  <th class="col-count">Threads</th>
-                  <th class="col-action">Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {% for cat in categories %}
+          <div id="subcat-list" class="board-body">
+            {% if categories|length == 0 %}
+              <div class="empty-row">No rooms yet.</div>
+            {% else %}
+              <table class="forum-table">
+                <thead>
                   <tr>
-                    <td>
-                      <div class="cat-name">{{ cat.name }}</div>
-                      <div class="cat-desc">{{ cat.desc }}</div>
-                    </td>
-                    <td class="col-count">{{ cat.count }}</td>
-                    <td class="col-action">
-                      <a class="link-btn" href="/forum{% if current_path %}/{{ current_path }}{% endif %}/{{ cat.slug }}">Enter »</a>
-                    </td>
+                    <th>{% if current_path %}Subcategory{% else %}Category{% endif %}</th>
+                    <th class="col-count">Threads</th>
+                    <th class="col-action">Action</th>
                   </tr>
-                {% endfor %}
-              </tbody>
-            </table>
-          {% endif %}
-        </div>
+                </thead>
+                <tbody>
+                  {% for cat in categories %}
+                    <tr>
+                      <td>
+                        <div class="cat-name">{{ cat.name }}</div>
+                        <div class="cat-desc">{{ cat.desc }}</div>
+                      </td>
+                      <td class="col-count">{{ cat.count }}</td>
+                      <td class="col-action">
+                        <a class="link-btn" href="/forum{% if current_path %}/{{ current_path }}{% endif %}/{{ cat.slug }}">Enter »</a>
+                      </td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            {% endif %}
+          </div>
 
-      </section>
+        </section>
+      {% endif %}
 
       <!-- Threads -->
       <section id="threads-box" class="board-card">
         <div class="board-head">
           <div>
-            <div class="board-title">Top Threads</div>
-            <div class="board-subtext">Most-clicked streams grouped by expiration.</div>
+            <div class="board-title">{{ thread_title }}</div>
+            <div class="board-subtext">{{ thread_subtext }}</div>
           </div>
 
           <div class="board-actions">
-            {% if current_path %}
+            {% if allow_posting %}
               <button id="add-thread-btn" class="ghost-btn" type="button"
                       onclick="openForm(event,'threads-box','thread-list','thread-form','add-thread-btn')">+ Post a stream</button>
             {% endif %}
@@ -377,7 +380,7 @@
           {% endfor %}
         </div>
 
-        {% if current_path %}
+        {% if allow_posting %}
           <div id="thread-form" class="board-body form-body" style="display:none;">
             <div class="form-actions">
               <button class="ghost-btn" type="button"
