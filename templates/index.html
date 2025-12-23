@@ -296,12 +296,14 @@
                 </thead>
                 <tbody>
                   {% for cat in categories %}
-                    <tr>
-                      <td>
-                        <div class="cat-name">{{ cat.name }}</div>
-                        <div class="cat-desc">{{ cat.desc }}</div>
-                      </td>
-                      <td class="col-count">{{ cat.count }}</td>
+                  <tr>
+                    <td>
+                      <div class="cat-name">
+                        <a class="btn" href="/forum{% if current_path %}/{{ current_path }}{% endif %}/{{ cat.slug }}">{{ cat.name }}</a>
+                      </div>
+                      <div class="cat-desc">{{ cat.desc }}</div>
+                    </td>
+                      <td class="col-count">{{ thread_counts.get(cat.id, 0) }}</td>
                       <td class="col-action">
                         <a class="link-btn" href="/forum{% if current_path %}/{{ current_path }}{% endif %}/{{ cat.slug }}">Enter »</a>
                       </td>

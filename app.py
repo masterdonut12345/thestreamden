@@ -142,6 +142,14 @@ def ensure_thread_defaults():
 ensure_thread_defaults()
 
 
+def build_thread_counts() -> dict[int, int]:
+    """Return a mapping of category_id -> thread count."""
+    return {
+        cat_id: len(items)
+        for cat_id, items in THREAD_DATA.get("threads_by_category", {}).items()
+    }
+
+
 def get_top_threads(limit: int = 10) -> list[dict]:
     """Return the top threads across all categories by clicks (desc), then recent."""
     threads = THREAD_DATA.get("threads", [])
@@ -385,6 +393,7 @@ def render_forum_page(
     show_categories_section: bool,
     thread_title: str,
     thread_subtext: str,
+    thread_counts: dict[int, int],
 ):
     grouped = group_threads_by_choice(threads) if allow_posting else {}
 
@@ -408,6 +417,7 @@ def render_forum_page(
         thread_subtext=thread_subtext,
         cat_lookup=CATEGORY_DATA.get("cat_by_id", {}),
         threads_flat=threads if not allow_posting else [],
+        thread_counts=thread_counts,
     )
 
 
@@ -416,6 +426,7 @@ def index():
     categories = get_category_children(None)
     top_ids = get_descendant_ids(None)
     top_threads = get_top_threads_for_ids(top_ids, 10)
+    thread_counts = build_thread_counts()
     return render_forum_page(
         category_path="",
         categories=categories,
@@ -426,6 +437,7 @@ def index():
         show_categories_section=True,
         thread_title="Top Threads",
         thread_subtext="Most-clicked streams across all categories.",
+        thread_counts=thread_counts,
     )
 
 
@@ -441,6 +453,7 @@ def forum(category_path):
         abort(404)
 
     categories = get_category_children(temp_cat)
+    thread_counts = build_thread_counts()
 
     if depth == 1:
         ids = get_descendant_ids(temp_cat["id"])
@@ -466,6 +479,7 @@ def forum(category_path):
         show_categories_section=show_categories_section,
         thread_title=thread_title,
         thread_subtext=thread_subtext,
+        thread_counts=thread_counts,
     )
 
 
