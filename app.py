@@ -123,6 +123,37 @@ def save_threads_json(data):
         json.dump(data, f, indent=2)
 
 
+def ensure_thread_defaults():
+    """Backfill missing thread fields for older JSON."""
+    changed = False
+    for t in THREAD_DATA.get("threads", []):
+        if "clicks" not in t:
+            t["clicks"] = 0
+            changed = True
+
+    if changed:
+        THREAD_DATA["raw"]["threads"] = THREAD_DATA["threads"]
+        save_threads_json(THREAD_DATA["raw"])
+
+
+ensure_thread_defaults()
+
+
+def get_top_threads(limit: int = 10) -> list[dict]:
+    """Return the top threads across all categories by clicks (desc), then recent."""
+    threads = THREAD_DATA.get("threads", [])
+
+    def sort_key(t):
+        try:
+            clicks = int(t.get("clicks", 0))
+        except Exception:
+            clicks = 0
+        created = t.get("created_at", "")
+        return (-clicks, created)
+
+    return sorted(threads, key=sort_key)[:limit]
+
+
 def get_category_by_path(path: str):
     path = (path or "").strip("/")
     if not path:
@@ -297,7 +328,8 @@ def append_thread(category_path_str: str, title: str, stream_link: str, expires_
         "created_at": created_at,
         "expires_at": expires_at,
         "expires_choice": expires_choice,
-        "reply_count": 0
+        "reply_count": 0,
+        "clicks": 0,
     }
 
     THREAD_DATA["max_id"] += 1
@@ -330,13 +362,16 @@ def render_forum_page(category_path: str, categories: list, threads: list, paren
         exp_choices=EXP_CHOICES,
         prefill_stream=prefill_stream,
         open_thread_form=open_thread_form,
+        show_top_threads=(category_path == ""),
+        cat_lookup=CATEGORY_DATA.get("cat_by_id", {}),
     )
 
 
 @app.route("/forum")
 def index():
     categories = get_category_children(None)
-    return render_forum_page("", categories, [], "")
+    top_threads = get_top_threads(10)
+    return render_forum_page("", categories, top_threads, "")
 
 
 @app.route("/forum/<path:category_path>")
@@ -439,6 +474,18 @@ def thread_page(thread_id):
     t = THREAD_DATA.get("thread_by_id", {}).get(thread_id)
     if t is None:
         abort(404)
+    # Track click counts for the stream link
+    try:
+        t["clicks"] = int(t.get("clicks", 0)) + 1
+    except Exception:
+        t["clicks"] = 1
+
+    THREAD_DATA["raw"]["threads"] = THREAD_DATA["threads"]
+    save_threads_json(THREAD_DATA["raw"])
+
+    stream_link = t.get("stream_link")
+    if stream_link:
+        return redirect(stream_link)
     return f"Thread page placeholder: {t.get('title')} (id={thread_id})"
 
 
