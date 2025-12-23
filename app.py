@@ -173,6 +173,66 @@ def build_thread_counts(include_descendants: bool = False) -> dict[int, int]:
     return memo
 
 
+def build_category_path(cat: dict, cat_by_id: dict[int, dict]) -> str:
+    slugs = []
+    current = cat
+    while current:
+        slug = current.get("slug")
+        if slug:
+            slugs.append(slug)
+        parent_id = current.get("parent_id")
+        current = cat_by_id.get(parent_id)
+    return "/".join(reversed(slugs))
+
+
+def search_items(query: str, thread_counts: dict[int, int]) -> dict[str, list[dict]]:
+    q = (query or "").strip().lower()
+    if not q:
+        return {"categories": [], "threads": []}
+
+    cat_by_id = CATEGORY_DATA.get("cat_by_id", {})
+    cat_results = []
+    for c in CATEGORY_DATA.get("categories", []):
+        blob = f"{c.get('name','')} {c.get('desc','')}".lower()
+        if q in blob:
+            path = build_category_path(c, cat_by_id)
+            url = "/forum" + (f"/{path}" if path else "")
+            cat_results.append({
+                "name": c.get("name", ""),
+                "desc": c.get("desc", ""),
+                "url": url,
+                "threads": thread_counts.get(c.get("id"), 0),
+            })
+
+    def thread_sort(t):
+        try:
+            clicks = int(t.get("clicks", 0))
+        except Exception:
+            clicks = 0
+        created = t.get("created_at", "")
+        return (-clicks, created)
+
+    thread_results = []
+    for t in THREAD_DATA.get("threads", []):
+        text = f"{t.get('title','')} {t.get('stream_link','')}".lower()
+        if q in text:
+            cat = cat_by_id.get(t.get("category_id"))
+            path = build_category_path(cat, cat_by_id) if cat else ""
+            thread_results.append({
+                "title": t.get("title", ""),
+                "clicks": t.get("clicks", 0),
+                "created_at": t.get("created_at", ""),
+                "thread_url": f"/thread/{t.get('id')}",
+                "category_url": "/forum" + (f"/{path}" if path else ""),
+                "category_name": cat.get("name") if cat else "Unknown",
+            })
+
+    thread_results = sorted(thread_results, key=thread_sort)[:8]
+    cat_results = sorted(cat_results, key=lambda c: (-c.get("threads", 0), c.get("name", "").lower()))[:8]
+
+    return {"categories": cat_results, "threads": thread_results}
+
+
 def get_top_threads(limit: int = 10) -> list[dict]:
     """Return the top threads across all categories by clicks (desc), then recent."""
     threads = THREAD_DATA.get("threads", [])
@@ -417,6 +477,8 @@ def render_forum_page(
     thread_title: str,
     thread_subtext: str,
     thread_counts: dict[int, int],
+    search_query: str,
+    search_results: dict[str, list[dict]],
 ):
     grouped = group_threads_by_choice(threads) if allow_posting else {}
 
@@ -441,6 +503,8 @@ def render_forum_page(
         cat_lookup=CATEGORY_DATA.get("cat_by_id", {}),
         threads_flat=threads if not allow_posting else [],
         thread_counts=thread_counts,
+        search_query=search_query,
+        search_results=search_results,
     )
 
 
@@ -450,6 +514,8 @@ def index():
     top_ids = get_descendant_ids(None)
     top_threads = get_top_threads_for_ids(top_ids, 10)
     thread_counts = build_thread_counts(include_descendants=True)
+    search_query = request.args.get("search", "")
+    search_results = search_items(search_query, thread_counts) if search_query else {"categories": [], "threads": []}
     return render_forum_page(
         category_path="",
         categories=categories,
@@ -461,6 +527,8 @@ def index():
         thread_title="Top Threads",
         thread_subtext="Most-clicked streams across all categories.",
         thread_counts=thread_counts,
+        search_query=search_query,
+        search_results=search_results,
     )
 
 
@@ -477,6 +545,8 @@ def forum(category_path):
 
     categories = get_category_children(temp_cat)
     thread_counts = build_thread_counts(include_descendants=True)
+    search_query = request.args.get("search", "")
+    search_results = search_items(search_query, thread_counts) if search_query else {"categories": [], "threads": []}
 
     if depth == 1:
         ids = get_descendant_ids(temp_cat["id"])
@@ -503,6 +573,8 @@ def forum(category_path):
         thread_title=thread_title,
         thread_subtext=thread_subtext,
         thread_counts=thread_counts,
+        search_query=search_query,
+        search_results=search_results,
     )
 
 

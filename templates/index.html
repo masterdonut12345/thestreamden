@@ -39,6 +39,52 @@
         box-shadow: 0 12px 30px rgba(26, 44, 92, 0.18);
       }
 
+      .layout {
+        display: flex;
+        gap: 16px;
+        padding: 0 16px 18px 16px;
+      }
+      .sidebar {
+        width: 280px;
+        flex-shrink: 0;
+      }
+      .main {
+        flex: 1;
+        min-width: 0;
+      }
+      .panel {
+        border: 1px solid var(--border);
+        background: #fff;
+        padding: 12px;
+        box-shadow: 0 6px 18px rgba(18, 31, 59, 0.08);
+      }
+      .panel h3 {
+        margin: 0 0 8px 0;
+        font-size: 15px;
+      }
+      .search-input {
+        width: 100%;
+        padding: 8px;
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        font-size: 13px;
+      }
+      .search-btn {
+        margin-top: 8px;
+        width: 100%;
+        padding: 8px;
+        border: 1px solid var(--border);
+        background: #f0f4fb;
+        color: var(--accent-strong);
+        font-size: 13px;
+        cursor: pointer;
+        border-radius: 4px;
+      }
+      .search-btn:hover { background: #e6edf9; }
+      .search-list { list-style: none; padding: 0; margin: 8px 0 0 0; }
+      .search-list li { margin-bottom: 8px; }
+      .search-meta { font-size: 12px; color: var(--muted); }
+
       .forum-banner {
         padding: 18px 22px;
         display: flex;
@@ -270,115 +316,114 @@
         {% endfor %}
       </div>
 
-      {% if show_categories_section %}
-        <section id="subcategories-box" class="board-card">
-          <div class="board-head">
-            <div>
-              <div class="board-title">{% if current_path %}Subcategories{% else %}Categories{% endif %}</div>
-              <div class="board-subtext">Pick a room to browse threads.</div>
-            </div>
-            <div class="board-actions">
-              <span class="chip">{{ categories|length }} total</span>
-            </div>
-          </div>
-
-          <div id="subcat-list" class="board-body">
-            {% if categories|length == 0 %}
-              <div class="empty-row">No rooms yet.</div>
-            {% else %}
-              <table class="forum-table">
-                <thead>
-                  <tr>
-                    <th>{% if current_path %}Subcategory{% else %}Category{% endif %}</th>
-                    <th class="col-count">Threads</th>
-                    <th class="col-action">Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {% for cat in categories %}
-                  <tr>
-                    <td>
-                      <div class="cat-name">
-                        <a class="btn" href="/forum{% if current_path %}/{{ current_path }}{% endif %}/{{ cat.slug }}">{{ cat.name }}</a>
-                      </div>
-                      <div class="cat-desc">{{ cat.desc }}</div>
-                    </td>
-                      <td class="col-count">{{ thread_counts.get(cat.id, 0) }}</td>
-                      <td class="col-action">
-                        <a class="link-btn" href="/forum{% if current_path %}/{{ current_path }}{% endif %}/{{ cat.slug }}">Enter »</a>
-                      </td>
-                    </tr>
+      <div class="layout">
+        <aside class="sidebar">
+          <div class="panel">
+            <h3>Search</h3>
+            <form action="" method="GET">
+              <input class="search-input" type="text" name="search" value="{{ search_query }}" placeholder="Search threads or categories">
+              <button class="search-btn" type="submit">Search</button>
+            </form>
+            {% if search_query %}
+              <div class="board-subtext" style="margin-top:10px;">Results for “{{ search_query }}”</div>
+              <h4 style="margin:10px 0 6px 0;">Threads</h4>
+              {% if search_results.threads|length == 0 %}
+                <div class="empty-row">No thread matches.</div>
+              {% else %}
+                <ul class="search-list">
+                  {% for t in search_results.threads %}
+                    <li>
+                      <a class="btn" href="{{ t.thread_url }}">{{ t.title }}</a>
+                      <div class="search-meta">Clicks: {{ t.clicks }} • <a class="btn" href="{{ t.category_url }}">{{ t.category_name }}</a></div>
+                    </li>
                   {% endfor %}
-                </tbody>
-              </table>
-            {% endif %}
-          </div>
-
-        </section>
-      {% endif %}
-
-      <!-- Threads -->
-      <section id="threads-box" class="board-card">
-        <div class="board-head">
-          <div>
-            <div class="board-title">{{ thread_title }}</div>
-            <div class="board-subtext">{{ thread_subtext }}</div>
-          </div>
-
-          <div class="board-actions">
-            {% if allow_posting %}
-              <button id="add-thread-btn" class="ghost-btn" type="button"
-                      onclick="openForm(event,'threads-box','thread-list','thread-form','add-thread-btn')">+ Post a stream</button>
-            {% endif %}
-          </div>
-        </div>
-
-        <div id="thread-list" class="board-body">
-          {% if show_top_threads %}
-            {% if threads_flat|length == 0 %}
-              <div class="empty-row">No streams yet.</div>
-            {% else %}
-              <table class="forum-table thread-table">
-                <thead>
-                  <tr>
-                    <th>Stream Thread</th>
-                    <th class="col-time">Added (UTC)</th>
-                    <th class="col-count">Replies</th>
-                    <th class="col-click">Clicks</th>
-                    <th class="col-action">Link</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {% for t in threads_flat %}
-                    <tr>
-                      <td>
-                        <div class="thread-title">{{ t.title }}</div>
-                        <div class="thread-meta">
-                          {% set cat = cat_lookup.get(t.category_id) %}
-                          {% if cat %}In {{ cat.name }}{% endif %}
-                        </div>
-                      </td>
-                      <td class="col-time"><span class="mono">{{ t.created_at }}</span></td>
-                      <td class="col-count">{{ t.reply_count }}</td>
-                      <td class="col-click">{{ t.clicks or 0 }}</td>
-                      <td class="col-action">
-                        <a class="link-btn" href="/thread/{{ t.id }}">Open</a>
-                      </td>
-                    </tr>
+                </ul>
+              {% endif %}
+              <h4 style="margin:12px 0 6px 0;">Categories</h4>
+              {% if search_results.categories|length == 0 %}
+                <div class="empty-row">No category matches.</div>
+              {% else %}
+                <ul class="search-list">
+                  {% for c in search_results.categories %}
+                    <li>
+                      <a class="btn" href="{{ c.url }}">{{ c.name }}</a>
+                      <div class="search-meta">{{ c.threads }} threads • {{ c.desc }}</div>
+                    </li>
                   {% endfor %}
-                </tbody>
-              </table>
+                </ul>
+              {% endif %}
             {% endif %}
-          {% else %}
-            {% for bucket in exp_choices %}
-              <div class="bucket">
-                <div class="bucket-head">
-                  <div class="bucket-name">Expires: {{ bucket }}</div>
-                  <span class="chip">{{ threads_grouped[bucket]|length }} listed</span>
+          </div>
+        </aside>
+
+        <main class="main">
+          {% if show_categories_section %}
+            <section id="subcategories-box" class="board-card">
+              <div class="board-head">
+                <div>
+                  <div class="board-title">{% if current_path %}Subcategories{% else %}Categories{% endif %}</div>
+                  <div class="board-subtext">Pick a room to browse threads.</div>
                 </div>
+                <div class="board-actions">
+                  <span class="chip">{{ categories|length }} total</span>
+                </div>
+              </div>
 
-                {% if threads_grouped[bucket]|length == 0 %}
-                  <div class="empty-row">No streams in this window.</div>
+              <div id="subcat-list" class="board-body">
+                {% if categories|length == 0 %}
+                  <div class="empty-row">No rooms yet.</div>
+                {% else %}
+                  <table class="forum-table">
+                    <thead>
+                      <tr>
+                        <th>{% if current_path %}Subcategory{% else %}Category{% endif %}</th>
+                        <th class="col-count">Threads</th>
+                        <th class="col-action">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {% for cat in categories %}
+                      <tr>
+                        <td>
+                          <div class="cat-name">
+                            <a class="btn" href="/forum{% if current_path %}/{{ current_path }}{% endif %}/{{ cat.slug }}">{{ cat.name }}</a>
+                          </div>
+                          <div class="cat-desc">{{ cat.desc }}</div>
+                        </td>
+                          <td class="col-count">{{ thread_counts.get(cat.id, 0) }}</td>
+                          <td class="col-action">
+                            <a class="link-btn" href="/forum{% if current_path %}/{{ current_path }}{% endif %}/{{ cat.slug }}">Enter »</a>
+                          </td>
+                        </tr>
+                      {% endfor %}
+                    </tbody>
+                  </table>
+                {% endif %}
+              </div>
+
+            </section>
+          {% endif %}
+
+          <!-- Threads -->
+          <section id="threads-box" class="board-card">
+            <div class="board-head">
+              <div>
+                <div class="board-title">{{ thread_title }}</div>
+                <div class="board-subtext">{{ thread_subtext }}</div>
+              </div>
+
+              <div class="board-actions">
+                {% if allow_posting %}
+                  <button id="add-thread-btn" class="ghost-btn" type="button"
+                          onclick="openForm(event,'threads-box','thread-list','thread-form','add-thread-btn')">+ Post a stream</button>
+                {% endif %}
+              </div>
+            </div>
+
+            <div id="thread-list" class="board-body">
+              {% if show_top_threads %}
+                {% if threads_flat|length == 0 %}
+                  <div class="empty-row">No streams yet.</div>
                 {% else %}
                   <table class="forum-table thread-table">
                     <thead>
@@ -391,16 +436,13 @@
                       </tr>
                     </thead>
                     <tbody>
-                      {% for t in threads_grouped[bucket] %}
+                      {% for t in threads_flat %}
                         <tr>
                           <td>
                             <div class="thread-title">{{ t.title }}</div>
                             <div class="thread-meta">
-                              Expires in {{ bucket }}
-                              {% if show_top_threads %}
-                                {% set cat = cat_lookup.get(t.category_id) %}
-                                {% if cat %}&mdash; in {{ cat.name }}{% endif %}
-                              {% endif %}
+                              {% set cat = cat_lookup.get(t.category_id) %}
+                              {% if cat %}In {{ cat.name }}{% endif %}
                             </div>
                           </td>
                           <td class="col-time"><span class="mono">{{ t.created_at }}</span></td>
@@ -414,56 +456,103 @@
                     </tbody>
                   </table>
                 {% endif %}
-              </div>
-            {% endfor %}
-          {% endif %}
-        </div>
+              {% else %}
+                {% for bucket in exp_choices %}
+                  <div class="bucket">
+                    <div class="bucket-head">
+                      <div class="bucket-name">Expires: {{ bucket }}</div>
+                      <span class="chip">{{ threads_grouped[bucket]|length }} listed</span>
+                    </div>
 
-        {% if allow_posting %}
-          <div id="thread-form" class="board-body form-body" style="display:none;">
-            <div class="form-actions">
-              <button class="ghost-btn" type="button"
-                      onclick="toggleBox('thread-list','thread-form','add-thread-btn','list');">
-                « Back to threads
-              </button>
+                    {% if threads_grouped[bucket]|length == 0 %}
+                      <div class="empty-row">No streams in this window.</div>
+                    {% else %}
+                      <table class="forum-table thread-table">
+                        <thead>
+                          <tr>
+                            <th>Stream Thread</th>
+                            <th class="col-time">Added (UTC)</th>
+                            <th class="col-count">Replies</th>
+                            <th class="col-click">Clicks</th>
+                            <th class="col-action">Link</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {% for t in threads_grouped[bucket] %}
+                            <tr>
+                              <td>
+                                <div class="thread-title">{{ t.title }}</div>
+                                <div class="thread-meta">
+                                  Expires in {{ bucket }}
+                                  {% if show_top_threads %}
+                                    {% set cat = cat_lookup.get(t.category_id) %}
+                                    {% if cat %}&mdash; in {{ cat.name }}{% endif %}
+                                  {% endif %}
+                                </div>
+                              </td>
+                              <td class="col-time"><span class="mono">{{ t.created_at }}</span></td>
+                              <td class="col-count">{{ t.reply_count }}</td>
+                              <td class="col-click">{{ t.clicks or 0 }}</td>
+                              <td class="col-action">
+                                <a class="link-btn" href="/thread/{{ t.id }}">Open</a>
+                              </td>
+                            </tr>
+                          {% endfor %}
+                        </tbody>
+                      </table>
+                    {% endif %}
+                  </div>
+                {% endfor %}
+              {% endif %}
             </div>
 
-            <form action="/add_thread" method="POST" class="forum-form">
-              <input type="hidden" name="category_path" value="{{ current_path }}">
-
-              <div class="form-row">
-                <label for="thread-title">Stream title</label><br>
-                <input type="text" id="thread-title" name="thread-title" maxlength="80" required>
-              </div>
-
-              <div class="form-row">
-                <label for="thread-stream-link">Stream link</label>
-                <span class="hint">Prefer “embed stream” to auto-fill.</span><br>
-
-                <input type="text" id="thread-stream-link" name="thread-stream-link"
-                       value="{{ prefill_stream }}" maxlength="500" required>
-
-                <div class="tip-line">
-                  <a class="link-btn" href="/embed_stream?return_to=/forum/{{ current_path }}&category_path={{ current_path }}">Embed stream</a>
+            {% if allow_posting %}
+              <div id="thread-form" class="board-body form-body" style="display:none;">
+                <div class="form-actions">
+                  <button class="ghost-btn" type="button"
+                          onclick="toggleBox('thread-list','thread-form','add-thread-btn','list');">
+                    « Back to threads
+                  </button>
                 </div>
-              </div>
 
-              <div class="form-row">
-                <label for="thread-expiration">Expiration</label><br>
-                <select id="thread-expiration" name="thread-expiration" required>
-                  {% for opt in exp_choices %}
-                    <option value="{{ opt }}">{{ opt }}</option>
-                  {% endfor %}
-                </select>
-              </div>
+                <form action="/add_thread" method="POST" class="forum-form">
+                  <input type="hidden" name="category_path" value="{{ current_path }}">
 
-              <div class="form-row">
-                <input type="submit" value="Post stream">
+                  <div class="form-row">
+                    <label for="thread-title">Stream title</label><br>
+                    <input type="text" id="thread-title" name="thread-title" maxlength="80" required>
+                  </div>
+
+                  <div class="form-row">
+                    <label for="thread-stream-link">Stream link</label>
+                    <span class="hint">Prefer “embed stream” to auto-fill.</span><br>
+
+                    <input type="text" id="thread-stream-link" name="thread-stream-link"
+                           value="{{ prefill_stream }}" maxlength="500" required>
+
+                    <div class="tip-line">
+                      <a class="link-btn" href="/embed_stream?return_to=/forum/{{ current_path }}&category_path={{ current_path }}">Embed stream</a>
+                    </div>
+                  </div>
+
+                  <div class="form-row">
+                    <label for="thread-expiration">Expiration</label><br>
+                    <select id="thread-expiration" name="thread-expiration" required>
+                      {% for opt in exp_choices %}
+                        <option value="{{ opt }}">{{ opt }}</option>
+                      {% endfor %}
+                    </select>
+                  </div>
+
+                  <div class="form-row">
+                    <input type="submit" value="Post stream">
+                  </div>
+                </form>
               </div>
-            </form>
-          </div>
-        {% endif %}
-      </section>
+            {% endif %}
+          </section>
+        </main>
+      </div>
     </div>
   </body>
 </html>
