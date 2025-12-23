@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from flask import Flask, render_template, request, redirect, url_for, abort
+import os
+
+from flask import Flask, render_template, request, redirect, url_for, abort, jsonify
 import re
 import json
 from collections import defaultdict
@@ -16,6 +18,7 @@ CATEGORIES_PATH = Path("data/categories.json")
 THREADS_PATH = Path("data/threads.json")
 
 EXP_CHOICES = ["1 day", "3 days", "1 week", "1 month"]
+ADMIN_TOKEN = os.environ.get("ADMIN_TOKEN")
 
 
 # -----------------------------
@@ -121,6 +124,37 @@ def save_threads_json(data):
     THREADS_PATH.parent.mkdir(parents=True, exist_ok=True)
     with open(THREADS_PATH, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2)
+
+
+def ensure_thread_defaults():
+    """Backfill missing thread fields for older JSON."""
+    changed = False
+    for t in THREAD_DATA.get("threads", []):
+        if "clicks" not in t:
+            t["clicks"] = 0
+            changed = True
+
+    if changed:
+        THREAD_DATA["raw"]["threads"] = THREAD_DATA["threads"]
+        save_threads_json(THREAD_DATA["raw"])
+
+
+ensure_thread_defaults()
+
+
+def get_top_threads(limit: int = 10) -> list[dict]:
+    """Return the top threads across all categories by clicks (desc), then recent."""
+    threads = THREAD_DATA.get("threads", [])
+
+    def sort_key(t):
+        try:
+            clicks = int(t.get("clicks", 0))
+        except Exception:
+            clicks = 0
+        created = t.get("created_at", "")
+        return (-clicks, created)
+
+    return sorted(threads, key=sort_key)[:limit]
 
 
 def get_category_by_path(path: str):
@@ -268,6 +302,7 @@ def append_category(parent_path_str, name, desc):
     CATEGORY_DATA["cat_sp_id"][(parent_id, slug)] = new_category_data
     CATEGORY_DATA["data"]["categories"] = CATEGORY_DATA["categories"]
     save_categories_json(CATEGORY_DATA["data"])
+    return new_category_data
 
 
 def append_thread(category_path_str: str, title: str, stream_link: str, expires_choice: str):
@@ -297,7 +332,8 @@ def append_thread(category_path_str: str, title: str, stream_link: str, expires_
         "created_at": created_at,
         "expires_at": expires_at,
         "expires_choice": expires_choice,
-        "reply_count": 0
+        "reply_count": 0,
+        "clicks": 0,
     }
 
     THREAD_DATA["max_id"] += 1
@@ -330,13 +366,16 @@ def render_forum_page(category_path: str, categories: list, threads: list, paren
         exp_choices=EXP_CHOICES,
         prefill_stream=prefill_stream,
         open_thread_form=open_thread_form,
+        show_top_threads=(category_path == ""),
+        cat_lookup=CATEGORY_DATA.get("cat_by_id", {}),
     )
 
 
 @app.route("/forum")
 def index():
     categories = get_category_children(None)
-    return render_forum_page("", categories, [], "")
+    top_threads = get_top_threads(10)
+    return render_forum_page("", categories, top_threads, "")
 
 
 @app.route("/forum/<path:category_path>")
@@ -357,21 +396,7 @@ def forum(category_path):
 
 @app.route("/add_category", methods=["POST"])
 def add_category():
-    parent_path = request.form.get("parent_path", "")
-    name = (request.form.get("category-name") or "").strip()
-    desc = (request.form.get("category-desc") or "").strip()
-
-    if not name or len(name) > 12:
-        abort(400)
-    if not desc:
-        abort(400)
-
-    append_category(parent_path, name, desc)
-
-    parent_path = (parent_path or "").strip("/")
-    if parent_path:
-        return redirect(f"/forum/{parent_path}")
-    return redirect(url_for("index"))
+    abort(404)
 
 
 @app.route("/add_thread", methods=["POST"])
@@ -392,6 +417,26 @@ def add_thread():
 
     append_thread(category_path, title, stream_link, expires_choice)
     return redirect(f"/forum/{category_path}")
+
+
+@app.route("/api/admin/categories", methods=["POST"])
+def api_add_category():
+    token = request.headers.get("X-Admin-Token") or request.args.get("token")
+    if not token or (ADMIN_TOKEN and token != ADMIN_TOKEN):
+        abort(403)
+
+    data = request.get_json(silent=True) or {}
+    parent_path = (data.get("parent_path") or "").strip("/")
+    name = (data.get("name") or "").strip()
+    desc = (data.get("desc") or "").strip()
+
+    if not name or len(name) > 12:
+        abort(400)
+    if not desc:
+        abort(400)
+
+    new_cat = append_category(parent_path, name, desc)
+    return jsonify({"category": new_cat}), 201
 
 
 @app.route("/embed_stream", methods=["GET", "POST"])
@@ -439,6 +484,18 @@ def thread_page(thread_id):
     t = THREAD_DATA.get("thread_by_id", {}).get(thread_id)
     if t is None:
         abort(404)
+    # Track click counts for the stream link
+    try:
+        t["clicks"] = int(t.get("clicks", 0)) + 1
+    except Exception:
+        t["clicks"] = 1
+
+    THREAD_DATA["raw"]["threads"] = THREAD_DATA["threads"]
+    save_threads_json(THREAD_DATA["raw"])
+
+    stream_link = t.get("stream_link")
+    if stream_link:
+        return redirect(stream_link)
     return f"Thread page placeholder: {t.get('title')} (id={thread_id})"
 
 
