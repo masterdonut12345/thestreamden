@@ -377,26 +377,6 @@
         </aside>
 
         <div class="main-wrap">
-      <div class="auth-panel panel search-panel">
-        <h3>Account</h3>
-        {% if current_user %}
-          <div style="font-size:14px; margin-bottom:6px;">Logged in as <strong>{{ current_user }}</strong></div>
-          <a class="search-btn" style="text-decoration:none;" href="/logout">Logout</a>
-        {% else %}
-          <form action="/login" method="POST">
-            <input type="hidden" name="next" value="{{ request.path }}">
-            <label style="font-size:12px; color:var(--muted);">Username</label>
-            <input class="search-input" type="text" name="username" required>
-            <label style="font-size:12px; color:var(--muted);">Password</label>
-            <input class="search-input" type="password" name="password" required>
-            <div class="search-actions" style="margin-top:6px;">
-              <button class="search-btn" type="submit">Login</button>
-              <a class="search-clear" href="/signup">Sign up</a>
-            </div>
-          </form>
-        {% endif %}
-      </div>
-
         <div class="forum-shell">
           <div class="forum-banner">
             <div>
@@ -619,6 +599,26 @@
           </section>
         </div>
       </div>
-    </div>
+
+        <div class="auth-panel panel search-panel">
+          <h3>Account</h3>
+          {% if current_user %}
+            <div style="font-size:14px; margin-bottom:6px;">Logged in as <strong>{{ current_user }}</strong></div>
+            <a class="search-btn" style="text-decoration:none;" href="/logout">Logout</a>
+          {% else %}
+            <form action="/login" method="POST">
+              <input type="hidden" name="next" value="{{ request.path }}">
+              <label style="font-size:12px; color:var(--muted);">Username</label>
+              <input class="search-input" type="text" name="username" required>
+              <label style="font-size:12px; color:var(--muted);">Password</label>
+              <input class="search-input" type="password" name="password" required>
+              <div class="search-actions" style="margin-top:6px;">
+                <button class="search-btn" type="submit">Login</button>
+                <a class="search-clear" href="/signup">Sign up</a>
+              </div>
+            </form>
+          {% endif %}
+        </div>
+      </div>
   </body>
 </html>
