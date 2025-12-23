@@ -323,6 +323,43 @@ def append_post(thread_id: int, body: str, parent_id: int | None):
     return new_post
 
 
+def detect_stream_embed(url: str) -> dict:
+    """
+    Return a dict describing how to embed a stream.
+    Keys: type (iframe|video|m3u8|link), src, title
+    """
+    from urllib.parse import urlparse, parse_qs
+
+    if not url:
+        return {"type": "link", "src": url}
+
+    u = urlparse(url)
+    host = (u.netloc or "").lower()
+    path = (u.path or "").lower()
+
+    if path.endswith(".m3u8"):
+        return {"type": "m3u8", "src": url}
+    if path.endswith((".mp4", ".webm", ".ogg")):
+        return {"type": "video", "src": url}
+
+    if "youtube.com" in host or "youtu.be" in host:
+        video_id = None
+        if "youtu.be" in host:
+            video_id = u.path.strip("/")
+        else:
+            qs = parse_qs(u.query)
+            video_id = qs.get("v", [None])[0]
+        if video_id:
+            return {"type": "iframe", "src": f"https://www.youtube.com/embed/{video_id}", "title": "YouTube"}
+
+    if "twitch.tv" in host:
+        slug = u.path.strip("/")
+        if slug:
+            return {"type": "iframe", "src": f"https://player.twitch.tv/?channel={slug}&parent=localhost&parent=127.0.0.1", "title": "Twitch"}
+
+    return {"type": "iframe", "src": url, "title": "Stream"}
+
+
 def get_top_threads(limit: int = 10) -> list[dict]:
     """Return the top threads across all categories by clicks (desc), then recent."""
     threads = THREAD_DATA.get("threads", [])
@@ -768,12 +805,14 @@ def thread_page(thread_id):
     save_threads_json(THREAD_DATA["raw"])
 
     posts_tree = build_post_tree(thread_id)
+    embed_info = detect_stream_embed(t.get("stream_link", ""))
     return render_template(
         "thread.html",
         thread=t,
         posts_tree=posts_tree,
         cat_lookup=CATEGORY_DATA.get("cat_by_id", {}),
         build_category_path=build_category_path,
+        embed_info=embed_info,
     )
 
 
