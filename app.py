@@ -765,10 +765,12 @@ def detect_stream_embed(url: str, parent_host: str) -> dict:
     if "x.com" in host or "twitter.com" in host:
         post_url = url
         html = (
-            f'<blockquote class="twitter-tweet"><a href="{post_url}"></a></blockquote>'
-            f'<script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>'
+            '<blockquote class="twitter-tweet">'
+            f'<p lang="en" dir="ltr"><a href="{post_url}">View on X</a></p>'
+            "</blockquote>"
+            '<script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>'
         )
-        return {"type": "html", "html": html, "title": "X"}
+        return {"type": "html", "html": html, "title": "X post"}
 
     if path.endswith(".m3u8"):
         return {"type": "m3u8", "src": url}

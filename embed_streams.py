@@ -140,6 +140,15 @@ def _youtube_candidates(user_input: str) -> List[EmbedCandidate]:
     ]
 
 
+def _x_widget_html(post_url: str) -> str:
+    return (
+        '<blockquote class="twitter-tweet">'
+        f'<p lang="en" dir="ltr"><a href="{post_url}">View on X</a></p>'
+        "</blockquote>"
+        '<script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>'
+    )
+
+
 def _x_candidates(user_input: str) -> List[EmbedCandidate]:
     """
     Accepts:
@@ -155,11 +164,7 @@ def _x_candidates(user_input: str) -> List[EmbedCandidate]:
         # user might paste just "user/status/id" — try to salvage
         s = "https://x.com/" + s.strip("/")
 
-    # widget preview
-    html = (
-        f'<blockquote class="twitter-tweet"><a href="{s}"></a></blockquote>'
-        f'<script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>'
-    )
+    html = _x_widget_html(s)
 
     return [
         EmbedCandidate(
