@@ -144,15 +144,16 @@
                         {% endif %}
                       </td>
                       <td class="mono">{{ t.created_at }}</td>
-                      <td>{{ t.reply_count or 0 }}</td>
-                      <td>{{ t.clicks or 0 }}</td>
-                      <td>
-                        <form action="/account/delete_thread/{{ t.id }}" method="POST" style="margin:0;">
-                          <button class="danger-btn" type="submit">Delete</button>
-                        </form>
-                      </td>
-                    </tr>
-                  {% endfor %}
+                    <td>{{ t.reply_count or 0 }}</td>
+                    <td>{{ t.clicks or 0 }}</td>
+                    <td>
+                      <form action="/account/delete_thread/{{ t.id }}" method="POST" style="margin:0;">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                        <button class="danger-btn" type="submit">Delete</button>
+                      </form>
+                    </td>
+                  </tr>
+                {% endfor %}
                 </tbody>
               </table>
             {% endif %}
@@ -186,15 +187,16 @@
                           Unknown thread
                         {% endif %}
                       </td>
-                      <td class="mono">{{ p.created_at }}</td>
-                      <td>{{ p.body[:120] }}{% if p.body|length > 120 %}…{% endif %}</td>
-                      <td>
-                        <form action="/account/delete_post/{{ p.id }}" method="POST" style="margin:0;">
-                          <button class="danger-btn" type="submit">Delete</button>
-                        </form>
-                      </td>
-                    </tr>
-                  {% endfor %}
+                    <td class="mono">{{ p.created_at }}</td>
+                    <td>{{ p.body[:120] }}{% if p.body|length > 120 %}…{% endif %}</td>
+                    <td>
+                      <form action="/account/delete_post/{{ p.id }}" method="POST" style="margin:0;">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                        <button class="danger-btn" type="submit">Delete</button>
+                      </form>
+                    </td>
+                  </tr>
+                {% endfor %}
                 </tbody>
               </table>
             {% endif %}

@@ -144,6 +144,7 @@
           <h3 style="margin-top:0;">New post</h3>
           {% if current_user %}
             <form action="/thread/{{ thread.id }}/reply" method="POST">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
               <input type="hidden" name="parent_id" value="">
               <textarea name="body" maxlength="2000" required placeholder="Share your thoughts..."></textarea>
               <button class="submit-btn" type="submit">Post reply</button>

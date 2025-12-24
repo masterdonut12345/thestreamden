@@ -5,6 +5,7 @@
     <div class="reply-actions">
       {% if current_user %}
         <form action="/thread/{{ thread.id }}/reply" method="POST" class="form-box">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
           <input type="hidden" name="parent_id" value="{{ post.id }}">
           <textarea name="body" maxlength="2000" required placeholder="Reply to this post"></textarea>
           <button class="submit-btn" type="submit">Reply</button>

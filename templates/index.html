@@ -609,6 +609,7 @@
                 </div>
 
                 <form action="/add_thread" method="POST" class="forum-form">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                   <input type="hidden" name="category_path" value="{{ current_path }}">
 
                   <div class="form-row">
@@ -658,6 +659,7 @@
               </div>
             {% else %}
               <form action="/login" method="POST">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                 <input type="hidden" name="next" value="{{ request.path }}">
                 <label style="font-size:12px; color:var(--muted);">Username</label>
                 <input class="search-input" type="text" name="username" required>
