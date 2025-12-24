@@ -860,19 +860,7 @@ def render_forum_page(
 
 @app.route("/")
 def home():
-    thread_counts = build_thread_counts(include_descendants=True)
-    search_query = request.args.get("search", "")
-    search_results = search_items(search_query, thread_counts) if search_query else {"categories": [], "threads": []}
-    top_threads = get_top_threads(6)
-    return render_template(
-        "home.html",
-        search_query=search_query,
-        search_results=search_results,
-        top_threads=top_threads,
-        cat_lookup=CATEGORY_DATA.get("cat_by_id", {}),
-        build_category_path=build_category_path,
-        current_user=session.get("user"),
-    )
+    return redirect("/forum")
 
 
 @app.route("/forum")
