@@ -80,6 +80,12 @@ def generate_csrf_token() -> str:
         session["csrf_token"] = token
     return token
 
+def generate_csrf_token() -> str:
+    token = session.get("csrf_token")
+    if not token:
+        token = secrets.token_urlsafe(32)
+        session["csrf_token"] = token
+    return token
 
 def require_csrf():
     token = session.get("csrf_token")
@@ -87,11 +93,19 @@ def require_csrf():
     if not token or not submitted or not hmac.compare_digest(token, submitted):
         abort(400)
 
+def require_csrf():
+    token = session.get("csrf_token")
+    submitted = request.form.get("csrf_token") or request.headers.get("X-CSRF-Token")
+    if not token or not submitted or not hmac.compare_digest(token, submitted):
+        abort(400)
 
 @app.context_processor
 def inject_csrf():
     return {"csrf_token": generate_csrf_token()}
 
+@app.context_processor
+def inject_csrf():
+    return {"csrf_token": generate_csrf_token()}
 
 def get_current_user(db):
     uid = session.get("user_id")
@@ -118,6 +132,11 @@ def slugify(name: str) -> str:
     s = s.strip("-")
     return s or "item"
 
+def slugify(name: str) -> str:
+    s = (name or "").strip().lower()
+    s = re.sub(r"[^a-z0-9]+", "-", s)
+    s = s.strip("-")
+    return s or "item"
 
 def parse_expiration_choice(choice: str) -> Optional[timedelta]:
     mapping = {
@@ -128,6 +147,14 @@ def parse_expiration_choice(choice: str) -> Optional[timedelta]:
     }
     return mapping.get(choice)
 
+def parse_expiration_choice(choice: str) -> Optional[timedelta]:
+    mapping = {
+        "1 day": timedelta(days=1),
+        "3 days": timedelta(days=3),
+        "1 week": timedelta(weeks=1),
+        "1 month": timedelta(days=30),
+    }
+    return mapping.get(choice)
 
 def serialize_category(cat: Category) -> dict:
     return {
@@ -140,6 +167,16 @@ def serialize_category(cat: Category) -> dict:
         "updated_at": cat.updated_at.isoformat() if cat.updated_at else "",
     }
 
+def serialize_category(cat: Category) -> dict:
+    return {
+        "id": cat.id,
+        "name": cat.name,
+        "slug": cat.slug,
+        "desc": cat.desc,
+        "parent_id": cat.parent_id,
+        "created_at": cat.created_at.isoformat() if cat.created_at else "",
+        "updated_at": cat.updated_at.isoformat() if cat.updated_at else "",
+    }
 
 def serialize_thread(thread: Thread) -> dict:
     return {
@@ -156,6 +193,20 @@ def serialize_thread(thread: Thread) -> dict:
         "user": thread.user.username if thread.user else "Anonymous",
     }
 
+def serialize_thread(thread: Thread) -> dict:
+    return {
+        "id": thread.id,
+        "category_id": thread.category_id,
+        "title": thread.title,
+        "slug": thread.slug,
+        "stream_link": thread.stream_link,
+        "created_at": thread.created_at.isoformat() if thread.created_at else "",
+        "expires_at": thread.expires_at.isoformat() if thread.expires_at else "",
+        "expires_choice": thread.expires_choice,
+        "reply_count": thread.reply_count or 0,
+        "clicks": thread.clicks or 0,
+        "user": thread.user.username if thread.user else "Anonymous",
+    }
 
 def serialize_post(post: Post) -> dict:
     return {
