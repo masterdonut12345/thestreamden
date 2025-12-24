@@ -604,14 +604,26 @@ def append_category(db, parent_path_str, name, desc):
     parent_path_str = (parent_path_str or "").strip("/")
     parent_cat = get_category_by_path(db, parent_path_str) if parent_path_str else None
     parent_id = parent_cat["id"] if parent_cat else None
+    slug = slugify(name)
+
+    existing = db.execute(
+        select(Category).where(Category.parent_id == parent_id, Category.slug == slug)
+    ).scalar_one_or_none()
+    if existing:
+        abort(409, description="Category already exists under this parent")
+
     new_category = Category(
         name=name,
-        slug=slugify(name),
+        slug=slug,
         desc=desc,
         parent_id=parent_id,
     )
     db.add(new_category)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        abort(409, description="Category already exists under this parent")
     db.refresh(new_category)
     return serialize_category(new_category)
 
@@ -749,6 +761,14 @@ def detect_stream_embed(url: str, parent_host: str) -> dict:
     u = urlparse(url)
     host = (u.netloc or "").lower()
     path = (u.path or "").lower()
+
+    if "x.com" in host or "twitter.com" in host:
+        post_url = url
+        html = (
+            f'<blockquote class="twitter-tweet"><a href="{post_url}"></a></blockquote>'
+            f'<script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>'
+        )
+        return {"type": "html", "html": html, "title": "X"}
 
     if path.endswith(".m3u8"):
         return {"type": "m3u8", "src": url}

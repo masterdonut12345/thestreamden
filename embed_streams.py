@@ -164,7 +164,7 @@ def _x_candidates(user_input: str) -> List[EmbedCandidate]:
     return [
         EmbedCandidate(
             kind="x",
-            label="X post (preview uses official widget)",
+            label="X post",
             preview_html=html,
             chosen_value=s,  # store the post URL
         )
