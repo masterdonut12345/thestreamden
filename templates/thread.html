@@ -125,6 +125,9 @@
           {% if embed_info.type == "iframe" %}
             <iframe src="{{ embed_info.src }}" title="{{ embed_info.title or 'Stream' }}" allowfullscreen></iframe>
             <div style="margin-top:6px;"><a href="{{ thread.stream_link }}" target="_blank" rel="noopener">Open stream link</a></div>
+          {% elif embed_info.type == "html" %}
+            <div class="embed-html">{{ embed_info.html | safe }}</div>
+            <div style="margin-top:6px;"><a href="{{ thread.stream_link }}" target="_blank" rel="noopener">Open stream link</a></div>
           {% elif embed_info.type == "video" %}
             <video src="{{ embed_info.src }}" controls style="width:100%; border:1px solid var(--border);"></video>
             <div style="margin-top:6px;"><a href="{{ thread.stream_link }}" target="_blank" rel="noopener">Open stream link</a></div>
