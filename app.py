@@ -323,6 +323,82 @@ def build_thread_counts(include_descendants: bool = False) -> dict[int, int]:
     return memo
 
 
+def build_forum_stats(limit: int = 5) -> dict:
+    """Compute aggregate forum counts and a simple contributor leaderboard."""
+    categories_total = len(CATEGORY_DATA.get("categories", []))
+    threads_total = len(THREAD_DATA.get("threads", []))
+    posts_total = len(POSTS_DATA.get("posts", []))
+
+    user_totals: dict[str, dict] = {}
+
+    def ensure_user(username: str) -> dict:
+        name = username or "Anonymous"
+        if name not in user_totals:
+            user_totals[name] = {
+                "threads": 0,
+                "posts": 0,
+                "latest_post": None,
+                "latest_post_dt": datetime.min.replace(tzinfo=timezone.utc),
+                "latest_thread": None,
+                "latest_thread_dt": datetime.min.replace(tzinfo=timezone.utc),
+            }
+        return user_totals[name]
+
+    def parse_dt(val: str) -> datetime:
+        try:
+            dt = datetime.fromisoformat(val)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            return dt
+        except Exception:
+            return datetime.min.replace(tzinfo=timezone.utc)
+
+    for t in THREAD_DATA.get("threads", []):
+        info = ensure_user(t.get("user"))
+        info["threads"] += 1
+        dt = parse_dt(t.get("created_at", ""))
+        if dt > info["latest_thread_dt"]:
+            info["latest_thread_dt"] = dt
+            info["latest_thread"] = t
+
+    for p in POSTS_DATA.get("posts", []):
+        info = ensure_user(p.get("user"))
+        info["posts"] += 1
+        dt = parse_dt(p.get("created_at", ""))
+        if dt > info["latest_post_dt"]:
+            info["latest_post_dt"] = dt
+            info["latest_post"] = p
+
+    leaderboard = []
+    for username, details in user_totals.items():
+        total = details["threads"] + details["posts"]
+        link = None
+        if details["latest_post"]:
+            lp = details["latest_post"]
+            link = f"/thread/{lp.get('thread_id')}#post-{lp.get('id')}"
+        elif details["latest_thread"]:
+            link = f"/thread/{details['latest_thread'].get('id')}"
+        leaderboard.append({
+            "username": username,
+            "threads": details["threads"],
+            "posts": details["posts"],
+            "total": total,
+            "link": link,
+        })
+
+    leaderboard = sorted(
+        leaderboard,
+        key=lambda item: (-item["total"], -item["posts"], item["username"].lower()),
+    )[:limit]
+
+    return {
+        "categories": categories_total,
+        "threads": threads_total,
+        "posts": posts_total,
+        "leaderboard": leaderboard,
+    }
+
+
 def build_category_path(cat: dict, cat_by_id: dict[int, dict]) -> str:
     slugs = []
     current = cat
@@ -831,6 +907,7 @@ def render_forum_page(
     prefill_title = request.args.get("prefill_title", "")
     prefill_exp = request.args.get("prefill_exp", "")
     open_thread_form = request.args.get("open_thread_form", "") == "1"
+    forum_stats = build_forum_stats()
 
     return render_template(
         "index.html",
@@ -855,6 +932,7 @@ def render_forum_page(
         current_user=current_user,
         prefill_title=prefill_title,
         prefill_exp=prefill_exp,
+        forum_stats=forum_stats,
     )
 
 
