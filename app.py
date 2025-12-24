@@ -910,6 +910,7 @@ def home():
 def index():
     db = get_db()
     categories, cat_lookup, children = load_category_indexes(db)
+    top_categories = get_category_children(children, None)
     top_ids = get_descendant_ids(children, None)
     threads = get_top_threads_for_ids(db, top_ids, 10)
     thread_counts = build_thread_counts(db, include_descendants=True, children=children)
@@ -921,7 +922,7 @@ def index():
     )
     return render_forum_page(
         category_path="",
-        categories=categories,
+        categories=top_categories,
         threads=threads,
         parent_path="",
         depth=0,
