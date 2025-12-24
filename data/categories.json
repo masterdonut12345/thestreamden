@@ -54,7 +54,7 @@
       "slug": "animated",
       "desc": "Animated movies.",
       "count": 0,
-      "parent_id": 2
+      "parent_id": 1
     },
     {
       "id": 7,
@@ -62,7 +62,7 @@
       "slug": "comedy",
       "desc": "Comedy movies.",
       "count": 0,
-      "parent_id": 2
+      "parent_id": 1
     },
     {
       "id": 8,
@@ -102,7 +102,7 @@
       "slug": "action",
       "desc": "Action-packed films.",
       "count": 0,
-      "parent_id": 2
+      "parent_id": 1
     },
     {
       "id": 13,
@@ -110,7 +110,7 @@
       "slug": "drama",
       "desc": "Story-driven cinema.",
       "count": 0,
-      "parent_id": 2
+      "parent_id": 1
     },
     {
       "id": 14,
@@ -118,7 +118,7 @@
       "slug": "documentary",
       "desc": "Non-fiction movies.",
       "count": 0,
-      "parent_id": 2
+      "parent_id": 1
     },
     {
       "id": 15,
