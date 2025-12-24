@@ -71,6 +71,30 @@
       "desc": "A game with a ball, included NBA, NCAA, ect",
       "count": 0,
       "parent_id": 0
+    },
+    {
+      "id": 10,
+      "name": "American Football",
+      "slug": "americanfootball",
+      "desc": "Category for American Football.",
+      "count": 0,
+      "parent_id": 0
+    },
+    {
+      "id": 11,
+      "name": "Ice Hockey",
+      "slug": "icehockey",
+      "desc": "Category for Ice Hockey.",
+      "count": 0,
+      "parent_id": 0
+    },
+    {
+      "id": 12,
+      "name": "Fighting Sports",
+      "slug": "fightingsports",
+      "desc": "Category for Fighting sports (Boxing/MMA).",
+      "count": 0,
+      "parent_id": 0
     }
   ]
 }
