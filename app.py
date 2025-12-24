@@ -32,6 +32,7 @@ app = Flask(__name__)
 
 EXP_CHOICES = ["1 day", "3 days", "1 week", "1 month"]
 ADMIN_TOKEN = os.environ.get("ADMIN_TOKEN")
+TWITCH_PARENT_HOST = "thestreamden.com"
 
 app.secret_key = os.environ.get("APP_SECRET", "dev-secret-key")
 app.config.update(
@@ -991,8 +992,7 @@ def embed_stream():
     candidates = []
     if request.method == "POST":
         require_csrf()
-        parent_host = request.host.split(":")[0]  # needed for twitch "parent="
-        candidates = embed_streams.get_embed_candidates(source, user_input, parent_host)
+        candidates = embed_streams.get_embed_candidates(source, user_input, TWITCH_PARENT_HOST)
 
     def ensure_param(url: str, key: str, value: str) -> str:
         if f"{key}=" in url:
@@ -1059,8 +1059,7 @@ def thread_page(thread_id):
     db.refresh(t)
 
     posts_tree = build_post_tree(db, thread_id)
-    host = request.host.split(":")[0]
-    embed_info = detect_stream_embed(t.stream_link, host)
+    embed_info = detect_stream_embed(t.stream_link, TWITCH_PARENT_HOST)
     categories, cat_lookup, _ = load_category_indexes(db)
     return render_template(
         "thread.html",
