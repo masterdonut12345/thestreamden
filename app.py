@@ -1,169 +1,196 @@
 from __future__ import annotations
 
+import hmac
 import os
-
-from flask import Flask, render_template, request, redirect, url_for, abort, jsonify, session
 import re
+import secrets
+import threading
+import time
 import json
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
-from urllib.parse import urlencode, urlsplit, urlunsplit, parse_qsl
+from typing import Optional
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
-import embed_streams  # your helper module
+from flask import (
+    Flask,
+    abort,
+    g,
+    jsonify,
+    redirect,
+    render_template,
+    request,
+    session,
+    url_for,
+)
+from sqlalchemy import func, or_, select
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import joinedload
+from werkzeug.security import check_password_hash, generate_password_hash
+
+import embed_streams
+from cleanup_expired import cleanup_expired_threads
+from db_models import Category, Post, SessionLocal, Thread, User, init_db
+from pathlib import Path
 
 app = Flask(__name__)
 
-CATEGORIES_PATH = Path("data/categories.json")
-THREADS_PATH = Path("data/threads.json")
-POSTS_PATH = Path("data/posts.json")
-USERS_PATH = Path("data/users.json")
-
 EXP_CHOICES = ["1 day", "3 days", "1 week", "1 month"]
 ADMIN_TOKEN = os.environ.get("ADMIN_TOKEN")
+TWITCH_PARENT_HOST = "thestreamden.com"
+CLEANUP_INTERVAL_SECONDS = int(os.environ.get("CLEANUP_INTERVAL_SECONDS", "3600"))
+_cleanup_thread_started = False
+_seed_started = False
 
 app.secret_key = os.environ.get("APP_SECRET", "dev-secret-key")
+app.config.update(
+    SESSION_COOKIE_SECURE=True,
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE="Lax",
+)
+
+# Ensure database tables exist on startup
+init_db()
 
 
 # -----------------------------
-# Loaders
+# DB/session helpers
 # -----------------------------
 
-def load_categories():
-    try:
-        with open(CATEGORIES_PATH, "r", encoding="utf-8") as f:
-            data = json.load(f)
-
-        category_data = data.get("categories", [])
-        cat_by_id = {c["id"]: c for c in category_data}
-        max_id = max((c["id"] for c in category_data), default=-1)
-
-        children_by_parent = defaultdict(list)
-        cat_sp_id = {}  # (parent_id, slug) -> category dict
-
-        for c in category_data:
-            children_by_parent[c.get("parent_id")].append(c)
-            key = (c.get("parent_id"), c.get("slug"))
-            cat_sp_id[key] = c
-
-        return {
-            "data": data,
-            "categories": category_data,
-            "cat_by_id": cat_by_id,
-            "children_by_parent": children_by_parent,
-            "cat_sp_id": cat_sp_id,
-            "max_id": max_id,
-        }
-
-    except FileNotFoundError:
-        return {
-            "data": {"categories": []},
-            "categories": [],
-            "cat_by_id": {},
-            "children_by_parent": defaultdict(list),
-            "cat_sp_id": {},
-            "max_id": -1,
-        }
-    except json.JSONDecodeError as e:
-        print(f"error decoding categories.json: {e}")
-        return {}
+def get_db():
+    if "db" not in g:
+        g.db = SessionLocal()
+    return g.db
 
 
-def load_threads():
-    try:
-        with open(THREADS_PATH, "r", encoding="utf-8") as f:
-            data = json.load(f)
-
-        thread_data = data.get("threads", [])
-        thread_by_id = {t["id"]: t for t in thread_data}
-        max_id = max((t["id"] for t in thread_data), default=-1)
-
-        threads_by_category = defaultdict(list)
-        for t in thread_data:
-            threads_by_category[t.get("category_id")].append(t)
-
-        return {
-            "raw": data,
-            "threads": thread_data,
-            "thread_by_id": thread_by_id,
-            "threads_by_category": threads_by_category,
-            "max_id": max_id,
-        }
-
-    except FileNotFoundError:
-        return {
-            "raw": {"threads": []},
-            "threads": [],
-            "thread_by_id": {},
-            "threads_by_category": defaultdict(list),
-            "max_id": -1,
-        }
-    except json.JSONDecodeError as e:
-        print(f"error decoding threads.json: {e}")
-        return {}
-
-
-CATEGORY_DATA = load_categories()
-THREAD_DATA = load_threads()
-
-
-def load_posts():
-    try:
-        with open(POSTS_PATH, "r", encoding="utf-8") as f:
-            data = json.load(f)
-
-        posts = data.get("posts", [])
-        posts_by_thread = defaultdict(list)
-        posts_by_parent = defaultdict(list)
-        max_id = max((p.get("id", -1) for p in posts), default=-1)
-
-        for p in posts:
-            posts_by_thread[p.get("thread_id")].append(p)
-            posts_by_parent[p.get("parent_id")].append(p)
-
-        return {
-            "raw": data,
-            "posts": posts,
-            "posts_by_thread": posts_by_thread,
-            "posts_by_parent": posts_by_parent,
-            "max_id": max_id,
-        }
-    except FileNotFoundError:
-        return {
-            "raw": {"posts": []},
-            "posts": [],
-            "posts_by_thread": defaultdict(list),
-            "posts_by_parent": defaultdict(list),
-            "max_id": -1,
-        }
-    except json.JSONDecodeError as e:
-        print(f"error decoding posts.json: {e}")
-        return {}
-
-
-POSTS_DATA = load_posts()
-
-
-def load_users():
-    try:
-        with open(USERS_PATH, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        users = data.get("users", [])
-        user_by_name = {u["username"]: u for u in users}
-        return {"data": data, "users": users, "user_by_name": user_by_name}
-    except FileNotFoundError:
-        return {"data": {"users": []}, "users": [], "user_by_name": {}}
-    except json.JSONDecodeError as e:
-        print(f"error decoding users.json: {e}")
-        return {"data": {"users": []}, "users": [], "user_by_name": {}}
-
-
-USERS_DATA = load_users()
+@app.teardown_appcontext
+def shutdown_session(exception=None):
+    db = g.pop("db", None)
+    if db is not None:
+        if exception:
+            db.rollback()
+        db.close()
 
 
 # -----------------------------
-# Helpers
+# Auth + CSRF helpers
 # -----------------------------
+
+def generate_csrf_token() -> str:
+    token = session.get("csrf_token")
+    if not token:
+        token = secrets.token_urlsafe(32)
+        session["csrf_token"] = token
+    return token
+
+
+def require_csrf():
+    token = session.get("csrf_token")
+    submitted = request.form.get("csrf_token") or request.headers.get("X-CSRF-Token")
+    if not token or not submitted or not hmac.compare_digest(token, submitted):
+        abort(400)
+
+
+@app.context_processor
+def inject_csrf():
+    return {"csrf_token": generate_csrf_token()}
+
+
+def get_current_user(db):
+    uid = session.get("user_id")
+    if not uid:
+        return None
+    return db.get(User, uid)
+
+
+def require_login(next_url: str = "/forum"):
+    db = get_db()
+    user = get_current_user(db)
+    if not user:
+        return redirect(f"/login?next={next_url}")
+    return user
+
+
+# -----------------------------
+# Utility helpers
+# -----------------------------
+
+def ensure_seed_categories():
+    """Ensure DB categories match the seed hierarchy in data/categories.json."""
+    seed_path = Path("data/categories.json")
+    if not seed_path.exists():
+        return
+
+    try:
+        seed = json.loads(seed_path.read_text(encoding="utf-8")).get("categories", [])
+    except Exception as exc:
+        print(f"[seed] Failed to read categories.json: {exc}")
+        return
+
+    # Map seed id -> seed entry and seed slug -> seed entry
+    seed_by_id = {c["id"]: c for c in seed if "id" in c}
+    seed_by_slug = {c["slug"]: c for c in seed if "slug" in c}
+
+    def parent_slug(c):
+        pid = c.get("parent_id")
+        if pid is None:
+            return None
+        parent = seed_by_id.get(pid)
+        return parent.get("slug") if parent else None
+
+    remaining = list(seed)
+    slug_to_db_obj: dict[str, Category] = {}
+
+    db = SessionLocal()
+    try:
+        while remaining:
+            progressed = False
+            next_round = []
+            for c in remaining:
+                p_slug = parent_slug(c)
+                if p_slug and p_slug not in seed_by_slug:
+                    # parent missing from seed; skip this entry
+                    continue
+                if p_slug and p_slug not in slug_to_db_obj:
+                    next_round.append(c)
+                    continue
+
+                parent_obj = slug_to_db_obj.get(p_slug)
+                parent_id = parent_obj.id if parent_obj else None
+
+                existing = (
+                    db.execute(select(Category).where(Category.slug == c["slug"])).scalar_one_or_none()
+                )
+                if existing:
+                    existing.name = c.get("name", existing.name)
+                    existing.desc = c.get("desc", existing.desc)
+                    existing.parent_id = parent_id
+                    obj = existing
+                else:
+                    obj = Category(
+                        name=c.get("name", "Category"),
+                        slug=c.get("slug", "category"),
+                        desc=c.get("desc", ""),
+                        parent_id=parent_id,
+                    )
+                    db.add(obj)
+
+                db.flush()
+                slug_to_db_obj[c["slug"]] = obj
+                progressed = True
+
+            if not progressed:
+                # Avoid infinite loop if there are inconsistent seed entries
+                break
+            remaining = next_round
+
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        print(f"[seed] Failed to ensure seed categories: {exc}")
+    finally:
+        db.close()
+
 
 def slugify(name: str) -> str:
     s = (name or "").strip().lower()
@@ -172,231 +199,63 @@ def slugify(name: str) -> str:
     return s or "item"
 
 
-def save_categories_json(data):
-    CATEGORIES_PATH.parent.mkdir(parents=True, exist_ok=True)
-    with open(CATEGORIES_PATH, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2)
-
-
-def save_threads_json(data):
-    THREADS_PATH.parent.mkdir(parents=True, exist_ok=True)
-    with open(THREADS_PATH, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2)
-
-
-def save_posts_json(data):
-    POSTS_PATH.parent.mkdir(parents=True, exist_ok=True)
-    with open(POSTS_PATH, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2)
-
-
-def save_users_json(data):
-    USERS_PATH.parent.mkdir(parents=True, exist_ok=True)
-    with open(USERS_PATH, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2)
-
-
-def ensure_thread_defaults():
-    """Backfill missing thread fields for older JSON."""
-    changed = False
-    for t in THREAD_DATA.get("threads", []):
-        if "clicks" not in t:
-            t["clicks"] = 0
-            changed = True
-        if "user" not in t:
-            t["user"] = "Anonymous"
-            changed = True
-        if "reply_count" not in t:
-            t["reply_count"] = 0
-            changed = True
-
-    if changed:
-        THREAD_DATA["raw"]["threads"] = THREAD_DATA["threads"]
-        save_threads_json(THREAD_DATA["raw"])
-
-
-ensure_thread_defaults()
-
-
-def ensure_post_defaults():
-    changed = False
-    for p in POSTS_DATA.get("posts", []):
-        if "user" not in p:
-            p["user"] = "Anonymous"
-            changed = True
-    if changed:
-        POSTS_DATA["raw"]["posts"] = POSTS_DATA["posts"]
-        save_posts_json(POSTS_DATA["raw"])
-
-
-ensure_post_defaults()
-
-
-def rebuild_reply_counts():
-    """Recompute reply_count on threads from stored posts."""
-    counts = {tid: len(lst) for tid, lst in POSTS_DATA.get("posts_by_thread", {}).items()}
-    changed = False
-    for t in THREAD_DATA.get("threads", []):
-        tid = t.get("id")
-        desired = counts.get(tid, 0)
-        if t.get("reply_count") != desired:
-            t["reply_count"] = desired
-            changed = True
-    if changed:
-        THREAD_DATA["raw"]["threads"] = THREAD_DATA["threads"]
-        save_threads_json(THREAD_DATA["raw"])
-
-
-rebuild_reply_counts()
-
-
-def rebuild_thread_indexes():
-    threads_by_category = defaultdict(list)
-    thread_by_id = {}
-    current_max = -1
-    for t in THREAD_DATA.get("threads", []):
-        tid = t.get("id")
-        current_max = max(current_max, tid if isinstance(tid, int) else -1)
-        thread_by_id[tid] = t
-        threads_by_category[t.get("category_id")].append(t)
-
-    THREAD_DATA["threads_by_category"] = threads_by_category
-    THREAD_DATA["thread_by_id"] = thread_by_id
-    THREAD_DATA["max_id"] = max(THREAD_DATA.get("max_id", -1), current_max)
-
-
-def rebuild_post_indexes():
-    posts_by_thread = defaultdict(list)
-    posts_by_parent = defaultdict(list)
-    current_max = -1
-    for p in POSTS_DATA.get("posts", []):
-        pid = p.get("id")
-        current_max = max(current_max, pid if isinstance(pid, int) else -1)
-        posts_by_thread[p.get("thread_id")].append(p)
-        posts_by_parent[p.get("parent_id")].append(p)
-
-    POSTS_DATA["posts_by_thread"] = posts_by_thread
-    POSTS_DATA["posts_by_parent"] = posts_by_parent
-    POSTS_DATA["max_id"] = max(POSTS_DATA.get("max_id", -1), current_max)
-
-
-# ensure indexes are in sync after any startup backfills
-rebuild_thread_indexes()
-rebuild_post_indexes()
-
-
-def require_login(next_url: str = "/forum"):
-    user = session.get("user")
-    if not user:
-        return redirect(f"/login?next={next_url}")
-    return user
-
-
-def build_thread_counts(include_descendants: bool = False) -> dict[int, int]:
-    """Return a mapping of category_id -> thread count.
-
-    When include_descendants is True, counts include threads in all child categories.
-    """
-    base_counts = {
-        cat_id: len(items)
-        for cat_id, items in THREAD_DATA.get("threads_by_category", {}).items()
+def parse_expiration_choice(choice: str) -> Optional[timedelta]:
+    mapping = {
+        "1 day": timedelta(days=1),
+        "3 days": timedelta(days=3),
+        "1 week": timedelta(weeks=1),
+        "1 month": timedelta(days=30),
     }
-
-    if not include_descendants:
-        return base_counts
-
-    children = CATEGORY_DATA["children_by_parent"]
-    memo: dict[int, int] = {}
-
-    def total(cat_id: int) -> int:
-        if cat_id in memo:
-            return memo[cat_id]
-        subtotal = base_counts.get(cat_id, 0)
-        for child in children.get(cat_id, []):
-            subtotal += total(child["id"])
-        memo[cat_id] = subtotal
-        return subtotal
-
-    for cid in CATEGORY_DATA.get("cat_by_id", {}):
-        total(cid)
-
-    return memo
+    return mapping.get(choice)
 
 
-def build_forum_stats(limit: int = 5) -> dict:
-    """Compute aggregate forum counts and a simple contributor leaderboard."""
-    categories_total = len(CATEGORY_DATA.get("categories", []))
-    threads_total = len(THREAD_DATA.get("threads", []))
-    posts_total = len(POSTS_DATA.get("posts", []))
-
-    user_totals: dict[str, dict] = {}
-
-    def ensure_user(username: str) -> dict:
-        name = username or "Anonymous"
-        if name not in user_totals:
-            user_totals[name] = {
-                "threads": 0,
-                "posts": 0,
-                "latest_post": None,
-                "latest_post_dt": datetime.min.replace(tzinfo=timezone.utc),
-                "latest_thread": None,
-                "latest_thread_dt": datetime.min.replace(tzinfo=timezone.utc),
-            }
-        return user_totals[name]
-
-    def parse_dt(val: str) -> datetime:
-        try:
-            dt = datetime.fromisoformat(val)
-            if dt.tzinfo is None:
-                dt = dt.replace(tzinfo=timezone.utc)
-            return dt
-        except Exception:
-            return datetime.min.replace(tzinfo=timezone.utc)
-
-    for t in THREAD_DATA.get("threads", []):
-        info = ensure_user(t.get("user"))
-        info["threads"] += 1
-        dt = parse_dt(t.get("created_at", ""))
-        if dt > info["latest_thread_dt"]:
-            info["latest_thread_dt"] = dt
-            info["latest_thread"] = t
-
-    for p in POSTS_DATA.get("posts", []):
-        info = ensure_user(p.get("user"))
-        info["posts"] += 1
-        dt = parse_dt(p.get("created_at", ""))
-        if dt > info["latest_post_dt"]:
-            info["latest_post_dt"] = dt
-            info["latest_post"] = p
-
-    leaderboard = []
-    for username, details in user_totals.items():
-        total = details["threads"] + details["posts"]
-        link = None
-        if details["latest_post"]:
-            lp = details["latest_post"]
-            link = f"/thread/{lp.get('thread_id')}#post-{lp.get('id')}"
-        elif details["latest_thread"]:
-            link = f"/thread/{details['latest_thread'].get('id')}"
-        leaderboard.append({
-            "username": username,
-            "threads": details["threads"],
-            "posts": details["posts"],
-            "total": total,
-            "link": link,
-        })
-
-    leaderboard = sorted(
-        leaderboard,
-        key=lambda item: (-item["total"], -item["posts"], item["username"].lower()),
-    )[:limit]
-
+def serialize_category(cat: Category) -> dict:
     return {
-        "categories": categories_total,
-        "threads": threads_total,
-        "posts": posts_total,
-        "leaderboard": leaderboard,
+        "id": cat.id,
+        "name": cat.name,
+        "slug": cat.slug,
+        "desc": cat.desc,
+        "parent_id": cat.parent_id,
+        "created_at": cat.created_at.isoformat() if cat.created_at else "",
+        "updated_at": cat.updated_at.isoformat() if cat.updated_at else "",
     }
+
+
+def serialize_thread(thread: Thread) -> dict:
+    return {
+        "id": thread.id,
+        "category_id": thread.category_id,
+        "title": thread.title,
+        "slug": thread.slug,
+        "stream_link": thread.stream_link,
+        "created_at": thread.created_at.isoformat() if thread.created_at else "",
+        "expires_at": thread.expires_at.isoformat() if thread.expires_at else "",
+        "expires_choice": thread.expires_choice,
+        "reply_count": thread.reply_count or 0,
+        "clicks": thread.clicks or 0,
+        "user": thread.user.username if thread.user else "Anonymous",
+    }
+
+
+def serialize_post(post: Post) -> dict:
+    return {
+        "id": post.id,
+        "thread_id": post.thread_id,
+        "parent_id": post.parent_id,
+        "body": post.body,
+        "created_at": post.created_at.isoformat() if post.created_at else "",
+        "user": post.user.username if post.user else "Anonymous",
+    }
+
+
+def load_category_indexes(db):
+    categories = db.execute(select(Category)).scalars().all()
+    serialized = [serialize_category(c) for c in categories]
+    cat_by_id = {c["id"]: c for c in serialized}
+    children_by_parent = defaultdict(list)
+    for c in serialized:
+        children_by_parent[c["parent_id"]].append(c)
+    return serialized, cat_by_id, children_by_parent
 
 
 def build_category_path(cat: dict, cat_by_id: dict[int, dict]) -> str:
@@ -411,57 +270,255 @@ def build_category_path(cat: dict, cat_by_id: dict[int, dict]) -> str:
     return "/".join(reversed(slugs))
 
 
-def search_items(query: str, thread_counts: dict[int, int]) -> dict[str, list[dict]]:
+def get_descendant_ids(children_map, cat_id):
+    ids = []
+    for c in children_map.get(cat_id, []):
+        ids.append(c["id"])
+        ids.extend(get_descendant_ids(children_map, c["id"]))
+    return ids
+
+
+def get_category_by_path(db, path: str) -> Optional[dict]:
+    path = (path or "").strip("/")
+    if not path:
+        return None
+    parts = [p for p in path.split("/") if p]
+    parent_id = None
+    current = None
+    for slug in parts:
+        current = (
+            db.execute(
+                select(Category).where(Category.parent_id == parent_id, Category.slug == slug)
+            )
+            .scalars()
+            .first()
+        )
+        if current is None:
+            return None
+        parent_id = current.id
+    return serialize_category(current)
+
+
+def get_category_children(children_map, cat):
+    if cat is None:
+        return children_map.get(None, [])
+    return children_map.get(cat["id"], [])
+
+
+def build_thread_counts(db, include_descendants=False, children=None):
+    result = db.execute(select(Thread.category_id, func.count(Thread.id)).group_by(Thread.category_id)).all()
+    base_counts = {cat_id: count for cat_id, count in result}
+    if not include_descendants:
+        return base_counts
+    children = children or defaultdict(list)
+    memo = {}
+
+    def total(cid: int) -> int:
+        if cid in memo:
+            return memo[cid]
+        subtotal = base_counts.get(cid, 0)
+        for child in children.get(cid, []):
+            subtotal += total(child["id"])
+        memo[cid] = subtotal
+        return subtotal
+
+    for cid in base_counts.keys() | set(children.keys()):
+        total(cid)
+    return memo
+
+
+def build_forum_stats(db, limit: int = 5) -> dict:
+    categories_total = db.scalar(select(func.count(Category.id))) or 0
+    threads_total = db.scalar(select(func.count(Thread.id))) or 0
+    posts_total = db.scalar(select(func.count(Post.id))) or 0
+
+    user_totals: dict[str, dict] = {}
+
+    def ensure_user(name: str):
+        key = name or "Anonymous"
+        if key not in user_totals:
+            user_totals[key] = {
+                "threads": 0,
+                "posts": 0,
+                "latest_post": None,
+                "latest_post_dt": datetime.min.replace(tzinfo=timezone.utc),
+                "latest_thread": None,
+                "latest_thread_dt": datetime.min.replace(tzinfo=timezone.utc),
+            }
+        return user_totals[key]
+
+    threads = (
+        db.execute(select(Thread).options(joinedload(Thread.user)))
+        .scalars()
+        .all()
+    )
+    for t in threads:
+        info = ensure_user(t.user.username if t.user else "Anonymous")
+        info["threads"] += 1
+        dt = t.created_at or datetime.min.replace(tzinfo=timezone.utc)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        if dt > info["latest_thread_dt"]:
+            info["latest_thread_dt"] = dt
+            info["latest_thread"] = serialize_thread(t)
+
+    posts = (
+        db.execute(select(Post).options(joinedload(Post.user)))
+        .scalars()
+        .all()
+    )
+    for p in posts:
+        info = ensure_user(p.user.username if p.user else "Anonymous")
+        info["posts"] += 1
+        dt = p.created_at or datetime.min.replace(tzinfo=timezone.utc)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        if dt > info["latest_post_dt"]:
+            info["latest_post_dt"] = dt
+            info["latest_post"] = serialize_post(p)
+
+    leaderboard = []
+    for username, details in user_totals.items():
+        total = details["threads"] + details["posts"]
+        link = None
+        if details["latest_post"]:
+            lp = details["latest_post"]
+            link = f"/thread/{lp.get('thread_id')}#post-{lp.get('id')}"
+        elif details["latest_thread"]:
+            link = f"/thread/{details['latest_thread'].get('id')}"
+        leaderboard.append(
+            {
+                "username": username,
+                "threads": details["threads"],
+                "posts": details["posts"],
+                "total": total,
+                "link": link,
+            }
+        )
+
+    leaderboard = sorted(
+        leaderboard,
+        key=lambda item: (-item["total"], -item["posts"], item["username"].lower()),
+    )[:limit]
+
+    return {
+        "categories": categories_total,
+        "threads": threads_total,
+        "posts": posts_total,
+        "leaderboard": leaderboard,
+    }
+
+
+def search_items(db, query: str, thread_counts: dict[int, int], cat_lookup: dict[int, dict], categories: list[dict]) -> dict:
     q = (query or "").strip().lower()
     if not q:
         return {"categories": [], "threads": []}
 
-    cat_by_id = CATEGORY_DATA.get("cat_by_id", {})
     cat_results = []
-    for c in CATEGORY_DATA.get("categories", []):
+    for c in categories:
         blob = f"{c.get('name','')} {c.get('desc','')}".lower()
         if q in blob:
-            path = build_category_path(c, cat_by_id)
+            path = build_category_path(c, cat_lookup)
             url = "/forum" + (f"/{path}" if path else "")
-            cat_results.append({
-                "name": c.get("name", ""),
-                "desc": c.get("desc", ""),
-                "url": url,
-                "threads": thread_counts.get(c.get("id"), 0),
-            })
+            cat_results.append(
+                {
+                    "name": c.get("name", ""),
+                    "desc": c.get("desc", ""),
+                    "url": url,
+                    "threads": thread_counts.get(c.get("id"), 0),
+                }
+            )
 
-    def thread_sort(t):
+    thread_results = (
+        db.execute(
+            select(Thread, Category)
+            .join(Category, Thread.category_id == Category.id)
+            .where(
+                or_(
+                    func.lower(Thread.title).like(f"%{q}%"),
+                    func.lower(Thread.stream_link).like(f"%{q}%"),
+                )
+            )
+            .order_by(Thread.clicks.desc(), Thread.created_at.desc())
+            .limit(8)
+        )
+        .all()
+    )
+
+    out_threads = []
+    for t, cat in thread_results:
+        cat_path = build_category_path(serialize_category(cat), cat_lookup) if cat else ""
+        out_threads.append(
+            {
+                "title": t.title,
+                "clicks": t.clicks or 0,
+                "created_at": t.created_at.isoformat() if t.created_at else "",
+                "thread_url": f"/thread/{t.id}",
+                "category_url": "/forum" + (f"/{cat_path}" if cat_path else ""),
+                "category_name": cat.name if cat else "Unknown",
+            }
+        )
+
+    cat_results = sorted(
+        cat_results, key=lambda c: (-c.get("threads", 0), c.get("name", "").lower())
+    )[:8]
+    return {"categories": cat_results, "threads": out_threads}
+
+
+def group_threads_by_choice(threads: list[dict]) -> dict[str, list[dict]]:
+    out = {k: [] for k in EXP_CHOICES}
+    now = datetime.now(timezone.utc)
+
+    for t in threads:
+        choice = t.get("expires_choice")
+        if choice in out:
+            out[choice].append(t)
+            continue
+
+        exp_s = t.get("expires_at") or ""
         try:
-            clicks = int(t.get("clicks", 0))
+            exp_dt = datetime.fromisoformat(exp_s)
+            if exp_dt.tzinfo is None:
+                exp_dt = exp_dt.replace(tzinfo=timezone.utc)
         except Exception:
-            clicks = 0
-        created = t.get("created_at", "")
-        return (-clicks, created)
+            out["1 month"].append(t)
+            continue
 
-    thread_results = []
-    for t in THREAD_DATA.get("threads", []):
-        text = f"{t.get('title','')} {t.get('stream_link','')}".lower()
-        if q in text:
-            cat = cat_by_id.get(t.get("category_id"))
-            path = build_category_path(cat, cat_by_id) if cat else ""
-            thread_results.append({
-                "title": t.get("title", ""),
-                "clicks": t.get("clicks", 0),
-                "created_at": t.get("created_at", ""),
-                "thread_url": f"/thread/{t.get('id')}",
-                "category_url": "/forum" + (f"/{path}" if path else ""),
-                "category_name": cat.get("name") if cat else "Unknown",
-            })
+        delta = exp_dt - now
+        secs = delta.total_seconds()
+        if secs <= 0:
+            out["1 day"].append(t)
+        elif secs <= 24 * 3600:
+            out["1 day"].append(t)
+        elif secs <= 3 * 24 * 3600:
+            out["3 days"].append(t)
+        elif secs <= 7 * 24 * 3600:
+            out["1 week"].append(t)
+        else:
+            out["1 month"].append(t)
 
-    thread_results = sorted(thread_results, key=thread_sort)[:8]
-    cat_results = sorted(cat_results, key=lambda c: (-c.get("threads", 0), c.get("name", "").lower()))[:8]
+    def exp_key(td):
+        return td.get("expires_at") or ""
 
-    return {"categories": cat_results, "threads": thread_results}
+    for k in out:
+        out[k].sort(key=exp_key)
+    return out
 
 
-def build_post_tree(thread_id: int) -> list[dict]:
-    posts = POSTS_DATA.get("posts_by_thread", {}).get(thread_id, [])
-    by_parent = POSTS_DATA.get("posts_by_parent", {})
+def build_post_tree(db, thread_id: int) -> list[dict]:
+    posts = (
+        db.execute(
+            select(Post)
+            .where(Post.thread_id == thread_id)
+            .options(joinedload(Post.user))
+            .order_by(Post.created_at.asc(), Post.id.asc())
+        )
+        .scalars()
+        .all()
+    )
+    by_parent = defaultdict(list)
+    for p in posts:
+        by_parent[p.parent_id].append(serialize_post(p))
 
     def recurse(parent_id):
         children = [c for c in by_parent.get(parent_id, []) if c.get("thread_id") == thread_id]
@@ -475,145 +532,171 @@ def build_post_tree(thread_id: int) -> list[dict]:
     return recurse(None)
 
 
-def append_post(thread_id: int, body: str, parent_id: int | None):
-    if thread_id not in THREAD_DATA.get("thread_by_id", {}):
-        abort(404)
-    current_user = session.get("user")
-    if not current_user:
-        abort(403)
-
-    if parent_id is not None:
-        parent_post = next((p for p in POSTS_DATA.get("posts", []) if p.get("id") == parent_id), None)
-        if parent_post is None or parent_post.get("thread_id") != thread_id:
-            abort(400)
-
-    now = datetime.now(timezone.utc).isoformat()
-    next_id = POSTS_DATA["max_id"] + 1
-
-    new_post = {
-        "id": next_id,
-        "thread_id": thread_id,
-        "parent_id": parent_id,
-        "body": body,
-        "created_at": now,
-        "user": current_user,
-    }
-
-    POSTS_DATA["max_id"] += 1
-    POSTS_DATA["posts"].append(new_post)
-    POSTS_DATA["posts_by_thread"][thread_id].append(new_post)
-    POSTS_DATA["posts_by_parent"][parent_id].append(new_post)
-
-    POSTS_DATA["raw"]["posts"] = POSTS_DATA["posts"]
-    save_posts_json(POSTS_DATA["raw"])
-
-    # bump thread reply count
-    t = THREAD_DATA["thread_by_id"].get(thread_id)
-    if t is not None:
-        try:
-            t["reply_count"] = int(t.get("reply_count", 0)) + 1
-        except Exception:
-            t["reply_count"] = 1
-        THREAD_DATA["raw"]["threads"] = THREAD_DATA["threads"]
-        save_threads_json(THREAD_DATA["raw"])
-
-    return new_post
-
-
-@app.route("/login", methods=["GET", "POST"])
-def login():
-    next_url = request.args.get("next") or request.form.get("next") or "/forum"
-    error = None
-    if request.method == "POST":
-        username = (request.form.get("username") or "").strip()
-        password = (request.form.get("password") or "").strip()
-        user = USERS_DATA["user_by_name"].get(username)
-        if user and user.get("password") == password:
-            session["user"] = username
-            return redirect(next_url)
-        error = "Invalid credentials"
-    return render_template("login.html", next_url=next_url, error=error)
-
-
-@app.route("/logout")
-def logout():
-    session.pop("user", None)
-    return redirect("/")
-
-
-@app.route("/signup", methods=["GET", "POST"])
-def signup():
-    error = None
-    next_url = request.args.get("next") or "/forum"
-    if request.method == "POST":
-        username = (request.form.get("username") or "").strip()
-        password = (request.form.get("password") or "").strip()
-        if not username or not password:
-            error = "Username and password required"
-        elif username in USERS_DATA["user_by_name"]:
-            error = "Username already exists"
-        else:
-            new_user = {"username": username, "password": password}
-            USERS_DATA["users"].append(new_user)
-            USERS_DATA["user_by_name"][username] = new_user
-            USERS_DATA["data"]["users"] = USERS_DATA["users"]
-            save_users_json(USERS_DATA["data"])
-            session["user"] = username
-            return redirect(next_url)
-    return render_template("signup.html", error=error, next_url=next_url)
-
-
-def user_threads_and_posts(username: str):
-    threads = [t for t in THREAD_DATA.get("threads", []) if t.get("user") == username]
-    posts = [p for p in POSTS_DATA.get("posts", []) if p.get("user") == username]
-
-    threads_sorted = sorted(threads, key=lambda t: t.get("created_at", ""), reverse=True)
-    posts_sorted = sorted(posts, key=lambda p: p.get("created_at", ""), reverse=True)
-    return threads_sorted, posts_sorted
-
-
-def delete_thread_owned(thread_id: int, username: str):
-    thread = THREAD_DATA.get("thread_by_id", {}).get(thread_id)
+def append_post(db, thread_id: int, body: str, parent_id: int | None, user: User):
+    thread = db.get(Thread, thread_id)
     if thread is None:
         abort(404)
-    if thread.get("user") != username:
+    if parent_id is not None:
+        parent_post = db.get(Post, parent_id)
+        if parent_post is None or parent_post.thread_id != thread_id:
+            abort(400)
+
+    now = datetime.now(timezone.utc)
+    new_post = Post(
+        thread_id=thread_id,
+        parent_id=parent_id,
+        body=body,
+        user_id=user.id,
+        created_at=now,
+    )
+    db.add(new_post)
+    thread.reply_count = (thread.reply_count or 0) + 1
+    db.commit()
+    db.refresh(new_post)
+    return serialize_post(new_post)
+
+
+def append_category(db, parent_path_str, name, desc):
+    parent_path_str = (parent_path_str or "").strip("/")
+    parent_cat = get_category_by_path(db, parent_path_str) if parent_path_str else None
+    parent_id = parent_cat["id"] if parent_cat else None
+    new_category = Category(
+        name=name,
+        slug=slugify(name),
+        desc=desc,
+        parent_id=parent_id,
+    )
+    db.add(new_category)
+    db.commit()
+    db.refresh(new_category)
+    return serialize_category(new_category)
+
+
+def append_thread(db, category_path_str: str, title: str, stream_link: str, expires_choice: str, user: User):
+    category_path_str = (category_path_str or "").strip("/")
+    cat = get_category_by_path(db, category_path_str)
+    if cat is None:
+        abort(400)
+    expires_delta = parse_expiration_choice(expires_choice)
+    if expires_delta is None:
+        abort(400)
+
+    now = datetime.now(timezone.utc)
+    expires_at = now + expires_delta
+
+    new_thread = Thread(
+        category_id=cat["id"],
+        user_id=user.id,
+        title=title,
+        slug=slugify(title),
+        stream_link=stream_link,
+        created_at=now,
+        expires_at=expires_at,
+        expires_choice=expires_choice,
+        reply_count=0,
+        clicks=0,
+    )
+    db.add(new_thread)
+    db.commit()
+    db.refresh(new_thread)
+    db.refresh(user)
+    return serialize_thread(new_thread)
+
+
+def get_top_threads(db, limit: int = 10) -> list[dict]:
+    threads = (
+        db.execute(
+            select(Thread)
+            .options(joinedload(Thread.user))
+            .order_by(Thread.clicks.desc(), Thread.created_at.desc())
+            .limit(limit)
+        )
+        .scalars()
+        .all()
+    )
+    return [serialize_thread(t) for t in threads]
+
+
+def get_top_threads_for_ids(db, cat_ids: list[int], limit: int = 10) -> list[dict]:
+    if not cat_ids:
+        return []
+    threads = (
+        db.execute(
+            select(Thread)
+            .where(Thread.category_id.in_(cat_ids))
+            .options(joinedload(Thread.user))
+            .order_by(Thread.clicks.desc(), Thread.created_at.desc())
+            .limit(limit)
+        )
+        .scalars()
+        .all()
+    )
+    return [serialize_thread(t) for t in threads]
+
+
+def get_threads_for_category(db, cat: dict) -> list[dict]:
+    if cat is None:
+        return []
+    threads = (
+        db.execute(
+            select(Thread)
+            .where(Thread.category_id == cat["id"])
+            .options(joinedload(Thread.user))
+            .order_by(Thread.created_at.desc())
+        )
+        .scalars()
+        .all()
+    )
+    return [serialize_thread(t) for t in threads]
+
+
+def user_threads_and_posts(db, user: User):
+    threads = (
+        db.execute(
+            select(Thread)
+            .where(Thread.user_id == user.id)
+            .order_by(Thread.created_at.desc())
+        )
+        .scalars()
+        .all()
+    )
+    posts = (
+        db.execute(
+            select(Post)
+            .where(Post.user_id == user.id)
+            .order_by(Post.created_at.desc())
+        )
+        .scalars()
+        .all()
+    )
+    return [serialize_thread(t) for t in threads], [serialize_post(p) for p in posts]
+
+
+def delete_thread_owned(db, thread_id: int, user: User):
+    thread = db.get(Thread, thread_id)
+    if thread is None:
+        abort(404)
+    if thread.user_id != user.id:
         abort(403)
-
-    # remove posts for this thread
-    POSTS_DATA["posts"] = [p for p in POSTS_DATA.get("posts", []) if p.get("thread_id") != thread_id]
-    POSTS_DATA["raw"]["posts"] = POSTS_DATA["posts"]
-    save_posts_json(POSTS_DATA["raw"])
-
-    # remove thread itself
-    THREAD_DATA["threads"] = [t for t in THREAD_DATA.get("threads", []) if t.get("id") != thread_id]
-    THREAD_DATA["raw"]["threads"] = THREAD_DATA["threads"]
-    save_threads_json(THREAD_DATA["raw"])
-
-    rebuild_post_indexes()
-    rebuild_thread_indexes()
-    rebuild_reply_counts()
+    db.delete(thread)
+    db.commit()
 
 
-def delete_post_owned(post_id: int, username: str):
-    post = next((p for p in POSTS_DATA.get("posts", []) if p.get("id") == post_id), None)
+def delete_post_owned(db, post_id: int, user: User):
+    post = db.get(Post, post_id)
     if post is None:
         abort(404)
-    if post.get("user") != username:
+    if post.user_id != user.id:
         abort(403)
+    thread = db.get(Thread, post.thread_id)
+    db.delete(post)
+    db.commit()
+    if thread:
+        thread.reply_count = max((thread.reply_count or 1) - 1, 0)
+        db.commit()
 
-    POSTS_DATA["posts"] = [p for p in POSTS_DATA.get("posts", []) if p.get("id") != post_id]
-    POSTS_DATA["raw"]["posts"] = POSTS_DATA["posts"]
-    save_posts_json(POSTS_DATA["raw"])
 
-    rebuild_post_indexes()
-    rebuild_reply_counts()
-
-
-def detect_stream_embed(url: str) -> dict:
-    """
-    Return a dict describing how to embed a stream.
-    Keys: type (iframe|video|m3u8|link), src, title
-    """
+def detect_stream_embed(url: str, parent_host: str) -> dict:
     from urllib.parse import urlparse, parse_qs
 
     if not url:
@@ -636,255 +719,23 @@ def detect_stream_embed(url: str) -> dict:
             qs = parse_qs(u.query)
             video_id = qs.get("v", [None])[0]
         if video_id:
-            return {"type": "iframe", "src": f"https://www.youtube.com/embed/{video_id}", "title": "YouTube"}
+            return {
+                "type": "iframe",
+                "src": f"https://www.youtube.com/embed/{video_id}",
+                "title": "YouTube",
+            }
 
     if "twitch.tv" in host:
         slug = u.path.strip("/")
         if slug:
-            return {"type": "iframe", "src": f"https://player.twitch.tv/?channel={slug}&parent=localhost&parent=127.0.0.1", "title": "Twitch"}
+            return {
+                "type": "iframe",
+                "src": f"https://player.twitch.tv/?channel={slug}&parent={parent_host}",
+                "title": "Twitch",
+            }
 
     return {"type": "iframe", "src": url, "title": "Stream"}
 
-
-def get_top_threads(limit: int = 10) -> list[dict]:
-    """Return the top threads across all categories by clicks (desc), then recent."""
-    threads = THREAD_DATA.get("threads", [])
-
-    def sort_key(t):
-        try:
-            clicks = int(t.get("clicks", 0))
-        except Exception:
-            clicks = 0
-        created = t.get("created_at", "")
-        return (-clicks, created)
-
-    return sorted(threads, key=sort_key)[:limit]
-
-
-def get_top_threads_for_ids(cat_ids: list[int], limit: int = 10) -> list[dict]:
-    threads = THREAD_DATA.get("threads", [])
-    filtered = [t for t in threads if t.get("category_id") in cat_ids]
-
-    def sort_key(t):
-        try:
-            clicks = int(t.get("clicks", 0))
-        except Exception:
-            clicks = 0
-        created = t.get("created_at", "")
-        return (-clicks, created)
-
-    return sorted(filtered, key=sort_key)[:limit]
-
-
-def get_category_by_path(path: str):
-    path = (path or "").strip("/")
-    if not path:
-        return None
-
-    split_path = [p for p in path.split("/") if p]
-    idx = CATEGORY_DATA.get("cat_sp_id", {})
-    parent_id = None
-    current = None
-
-    for slug in split_path:
-        current = idx.get((parent_id, slug))
-        if current is None:
-            return None
-        parent_id = current["id"]
-
-    return current
-
-
-def get_category_children(cat):
-    children = CATEGORY_DATA["children_by_parent"]
-    if cat is None:
-        return children.get(None, [])
-    return children.get(cat["id"], [])
-
-
-def get_descendant_ids(cat_id):
-    """Return all descendant category IDs beneath cat_id (None for root)."""
-    ids = []
-    children = CATEGORY_DATA["children_by_parent"].get(cat_id, [])
-    for c in children:
-        ids.append(c["id"])
-        ids.extend(get_descendant_ids(c["id"]))
-    return ids
-
-
-def build_breadcrumbs(current_path: str):
-    crumbs = [
-        {"name": "Home", "url": "/"},
-        {"name": "Forum", "url": "/forum"},
-    ]
-    current_path = (current_path or "").strip("/")
-    if not current_path:
-        return crumbs
-
-    parts = [p for p in current_path.split("/") if p]
-    idx = CATEGORY_DATA.get("cat_sp_id", {})
-    parent_id = None
-    path_so_far = []
-
-    for slug in parts:
-        cat = idx.get((parent_id, slug))
-        if cat is None:
-            break
-        path_so_far.append(slug)
-        crumbs.append({
-            "name": cat.get("name", slug),
-            "url": "/forum/" + "/".join(path_so_far)
-        })
-        parent_id = cat["id"]
-
-    return crumbs
-
-
-def parse_expiration_choice(choice: str) -> timedelta | None:
-    mapping = {
-        "1 day": timedelta(days=1),
-        "3 days": timedelta(days=3),
-        "1 week": timedelta(weeks=1),
-        "1 month": timedelta(days=30),
-    }
-    return mapping.get(choice)
-
-
-def get_threads_for_category(cat):
-    by_cat = THREAD_DATA.get("threads_by_category", defaultdict(list))
-    if cat is None:
-        return []  # no root threads by design
-    return by_cat.get(cat["id"], [])
-
-def group_threads_by_choice(threads: list[dict]) -> dict[str, list[dict]]:
-    out = {k: [] for k in EXP_CHOICES}
-
-    now = datetime.now(timezone.utc)
-
-    for t in threads:
-        # 1) if explicit choice exists and is valid, use it
-        choice = t.get("expires_choice")
-        if choice in out:
-            out[choice].append(t)
-            continue
-
-        # 2) otherwise infer bucket from expires_at
-        exp_s = t.get("expires_at") or ""
-        try:
-            exp_dt = datetime.fromisoformat(exp_s)  # works with +00:00
-            if exp_dt.tzinfo is None:
-                exp_dt = exp_dt.replace(tzinfo=timezone.utc)
-        except Exception:
-            # can't parse -> shove in 1 month as a safe default
-            out["1 month"].append(t)
-            continue
-
-        delta = exp_dt - now
-        secs = delta.total_seconds()
-
-        if secs <= 0:
-            # already expired: you can choose to hide these instead
-            out["1 day"].append(t)
-        elif secs <= 24 * 3600:
-            out["1 day"].append(t)
-        elif secs <= 3 * 24 * 3600:
-            out["3 days"].append(t)
-        elif secs <= 7 * 24 * 3600:
-            out["1 week"].append(t)
-        else:
-            out["1 month"].append(t)
-
-    # Sort inside each bucket by soonest expiration
-    def exp_key(td):
-        return td.get("expires_at") or ""
-
-    for k in out:
-        out[k].sort(key=exp_key)
-
-    return out
-
-# -----------------------------
-# Mutations
-# -----------------------------
-
-def append_category(parent_path_str, name, desc):
-    parent_path_str = (parent_path_str or "").strip("/")
-    parent_cat = get_category_by_path(parent_path_str) if parent_path_str else None
-
-    next_id = CATEGORY_DATA["max_id"] + 1
-    slug = slugify(name)
-    parent_id = parent_cat["id"] if parent_cat else None
-
-    if parent_cat is not None:
-        parent_cat["count"] = int(parent_cat.get("count", 0)) + 1
-
-    new_category_data = {
-        "id": next_id,
-        "name": name,
-        "slug": slug,
-        "desc": desc,
-        "count": 0,
-        "parent_id": parent_id,
-    }
-
-    CATEGORY_DATA["max_id"] += 1
-    CATEGORY_DATA["categories"].append(new_category_data)
-    CATEGORY_DATA["cat_by_id"][next_id] = new_category_data
-    CATEGORY_DATA["children_by_parent"][parent_id].append(new_category_data)
-    CATEGORY_DATA["cat_sp_id"][(parent_id, slug)] = new_category_data
-    CATEGORY_DATA["data"]["categories"] = CATEGORY_DATA["categories"]
-    save_categories_json(CATEGORY_DATA["data"])
-    return new_category_data
-
-
-def append_thread(category_path_str: str, title: str, stream_link: str, expires_choice: str):
-    current_user = session.get("user")
-    if not current_user:
-        abort(403)
-    category_path_str = (category_path_str or "").strip("/")
-    cat = get_category_by_path(category_path_str)
-    if cat is None:
-        abort(400)
-
-    expires_delta = parse_expiration_choice(expires_choice)
-    if expires_delta is None:
-        abort(400)
-
-    now = datetime.now(timezone.utc)
-    created_at = now.isoformat()
-    expires_at = (now + expires_delta).isoformat()
-
-    next_id = THREAD_DATA["max_id"] + 1
-    slug = slugify(title)
-    category_id = cat["id"]
-
-    new_thread = {
-        "id": next_id,
-        "category_id": category_id,
-        "title": title,
-        "slug": slug,
-        "stream_link": stream_link,
-        "created_at": created_at,
-        "expires_at": expires_at,
-        "expires_choice": expires_choice,
-        "reply_count": 0,
-        "clicks": 0,
-        "user": current_user,
-    }
-
-    THREAD_DATA["max_id"] += 1
-    THREAD_DATA["threads"].append(new_thread)
-    THREAD_DATA["thread_by_id"][next_id] = new_thread
-    THREAD_DATA["threads_by_category"][category_id].append(new_thread)
-
-    THREAD_DATA["raw"]["threads"] = THREAD_DATA["threads"]
-    save_threads_json(THREAD_DATA["raw"])
-    return new_thread
-
-
-# -----------------------------
-# Routes
-# -----------------------------
 
 def render_forum_page(
     category_path: str,
@@ -899,6 +750,7 @@ def render_forum_page(
     thread_counts: dict[int, int],
     search_query: str,
     search_results: dict[str, list[dict]],
+    cat_lookup: dict[int, dict],
     current_user: str | None = None,
 ):
     grouped = group_threads_by_choice(threads) if allow_posting else {}
@@ -907,14 +759,14 @@ def render_forum_page(
     prefill_title = request.args.get("prefill_title", "")
     prefill_exp = request.args.get("prefill_exp", "")
     open_thread_form = request.args.get("open_thread_form", "") == "1"
-    forum_stats = build_forum_stats()
+    forum_stats = build_forum_stats(get_db())
 
     return render_template(
         "index.html",
         categories=categories,
         current_path=category_path,
         parent_path=parent_path,
-        breadcrumbs=build_breadcrumbs(category_path),
+        breadcrumbs=build_breadcrumbs(category_path, cat_lookup),
         threads_grouped=grouped,
         exp_choices=EXP_CHOICES,
         prefill_stream=prefill_stream,
@@ -928,12 +780,81 @@ def render_forum_page(
         thread_counts=thread_counts,
         search_query=search_query,
         search_results=search_results,
-        cat_lookup=CATEGORY_DATA.get("cat_by_id", {}),
+        cat_lookup=cat_lookup,
         current_user=current_user,
         prefill_title=prefill_title,
         prefill_exp=prefill_exp,
         forum_stats=forum_stats,
     )
+
+
+def build_breadcrumbs(current_path: str, cat_lookup: dict[int, dict]):
+    crumbs = [
+        {"name": "Home", "url": "/"},
+        {"name": "Forum", "url": "/forum"},
+    ]
+    current_path = (current_path or "").strip("/")
+    if not current_path:
+        return crumbs
+
+    parts = [p for p in current_path.split("/") if p]
+    parent_id = None
+    path_so_far = []
+
+    for slug in parts:
+        cat = next(
+            (c for c in cat_lookup.values() if c["slug"] == slug and c["parent_id"] == parent_id),
+            None,
+        )
+        if cat is None:
+            break
+        path_so_far.append(slug)
+        crumbs.append({"name": cat.get("name", slug), "url": "/forum/" + "/".join(path_so_far)})
+        parent_id = cat["id"]
+
+    return crumbs
+
+
+# -----------------------------
+# Background cleanup worker
+# -----------------------------
+
+
+def _start_cleanup_worker():
+    global _cleanup_thread_started
+    if _cleanup_thread_started:
+        return
+
+    def _loop():
+        while True:
+            try:
+                deleted = cleanup_expired_threads()
+                if deleted:
+                    print(f"[cleanup] Removed {deleted} expired threads")
+            except Exception as exc:
+                print(f"[cleanup] Error during cleanup: {exc}")
+            time.sleep(CLEANUP_INTERVAL_SECONDS)
+
+    t = threading.Thread(target=_loop, daemon=True, name="expired-cleanup")
+    t.start()
+    _cleanup_thread_started = True
+
+
+# -----------------------------
+# Routes
+# -----------------------------
+
+
+@app.before_request
+def attach_user():
+    db = get_db()
+    g.current_user = get_current_user(db)
+    global _seed_started
+    if not _seed_started:
+        ensure_seed_categories()
+        _seed_started = True
+    generate_csrf_token()
+    _start_cleanup_worker()
 
 
 @app.route("/")
@@ -943,16 +864,21 @@ def home():
 
 @app.route("/forum")
 def index():
-    categories = get_category_children(None)
-    top_ids = get_descendant_ids(None)
-    top_threads = get_top_threads_for_ids(top_ids, 10)
-    thread_counts = build_thread_counts(include_descendants=True)
+    db = get_db()
+    categories, cat_lookup, children = load_category_indexes(db)
+    top_ids = get_descendant_ids(children, None)
+    threads = get_top_threads_for_ids(db, top_ids, 10)
+    thread_counts = build_thread_counts(db, include_descendants=True, children=children)
     search_query = request.args.get("search", "")
-    search_results = search_items(search_query, thread_counts) if search_query else {"categories": [], "threads": []}
+    search_results = (
+        search_items(db, search_query, thread_counts, cat_lookup, categories)
+        if search_query
+        else {"categories": [], "threads": []}
+    )
     return render_forum_page(
         category_path="",
         categories=categories,
-        threads=top_threads,
+        threads=threads,
         parent_path="",
         depth=0,
         allow_posting=False,
@@ -962,35 +888,41 @@ def index():
         thread_counts=thread_counts,
         search_query=search_query,
         search_results=search_results,
-        current_user=session.get("user"),
+        cat_lookup=cat_lookup,
+        current_user=g.current_user.username if g.current_user else None,
     )
 
 
 @app.route("/forum/<path:category_path>")
 def forum(category_path):
+    db = get_db()
     category_path = (category_path or "").strip("/")
     parts = [p for p in category_path.split("/") if p]
     parent_path = "/".join(parts[:-1])
     depth = len(parts)
 
-    temp_cat = get_category_by_path(category_path)
+    temp_cat = get_category_by_path(db, category_path)
     if temp_cat is None:
         abort(404)
 
-    categories = get_category_children(temp_cat)
-    thread_counts = build_thread_counts(include_descendants=True)
+    categories, cat_lookup, children = load_category_indexes(db)
+    thread_counts = build_thread_counts(db, include_descendants=True, children=children)
     search_query = request.args.get("search", "")
-    search_results = search_items(search_query, thread_counts) if search_query else {"categories": [], "threads": []}
+    search_results = (
+        search_items(db, search_query, thread_counts, cat_lookup, categories)
+        if search_query
+        else {"categories": [], "threads": []}
+    )
 
     if depth == 1:
-        ids = get_descendant_ids(temp_cat["id"])
-        threads = get_top_threads_for_ids(ids, 10)
+        ids = get_descendant_ids(children, temp_cat["id"])
+        threads = get_top_threads_for_ids(db, ids, 10)
         allow_posting = False
         show_categories_section = True
         thread_title = "Top Threads"
         thread_subtext = f"Most-clicked streams inside {temp_cat.get('name', 'this category')}."
     else:
-        threads = get_threads_for_category(temp_cat)
+        threads = get_threads_for_category(db, temp_cat)
         allow_posting = True
         show_categories_section = False
         thread_title = "Threads"
@@ -998,7 +930,7 @@ def forum(category_path):
 
     return render_forum_page(
         category_path=category_path,
-        categories=categories,
+        categories=get_category_children(children, temp_cat),
         threads=threads,
         parent_path=parent_path,
         depth=depth,
@@ -1009,23 +941,23 @@ def forum(category_path):
         thread_counts=thread_counts,
         search_query=search_query,
         search_results=search_results,
-        current_user=session.get("user"),
+        cat_lookup=cat_lookup,
+        current_user=g.current_user.username if g.current_user else None,
     )
-
-
-@app.route("/add_category", methods=["POST"])
-def add_category():
-    abort(404)
 
 
 @app.route("/add_thread", methods=["POST"])
 def add_thread():
+    require_csrf()
+    db = get_db()
+    user = require_login("/forum")
+    if not isinstance(user, User):
+        return user
+
     category_path = (request.form.get("category_path") or "").strip("/")
     title = (request.form.get("thread-title") or "").strip()
     stream_link = (request.form.get("thread-stream-link") or "").strip()
     expires_choice = (request.form.get("thread-expiration") or "").strip()
-    if not session.get("user"):
-        return redirect("/login?next=" + url_for("forum", category_path=category_path))
 
     if not category_path:
         abort(400)
@@ -1036,22 +968,28 @@ def add_thread():
     if expires_choice not in EXP_CHOICES:
         abort(400)
 
-    append_thread(category_path, title, stream_link, expires_choice)
+    append_thread(db, category_path, title, stream_link, expires_choice, user)
     return redirect(f"/forum/{category_path}")
 
 
 @app.route("/account")
 def account():
+    db = get_db()
     user = require_login("/account")
-    if not isinstance(user, str):
+    if not isinstance(user, User):
         return user
 
-    threads, posts = user_threads_and_posts(user)
-    thread_lookup = THREAD_DATA.get("thread_by_id", {})
-    cat_lookup = CATEGORY_DATA.get("cat_by_id", {})
+    threads, posts = user_threads_and_posts(db, user)
+    _, cat_lookup, _ = load_category_indexes(db)
+    all_threads = (
+        db.execute(select(Thread).options(joinedload(Thread.user)))
+        .scalars()
+        .all()
+    )
+    thread_lookup = {t.id: serialize_thread(t) for t in all_threads}
     return render_template(
         "account.html",
-        current_user=user,
+        current_user=user.username,
         threads=threads,
         posts=posts,
         thread_lookup=thread_lookup,
@@ -1062,24 +1000,81 @@ def account():
 
 @app.route("/account/delete_thread/<int:thread_id>", methods=["POST"])
 def account_delete_thread(thread_id):
+    require_csrf()
+    db = get_db()
     user = require_login("/account")
-    if not isinstance(user, str):
+    if not isinstance(user, User):
         return user
-    delete_thread_owned(thread_id, user)
+    delete_thread_owned(db, thread_id, user)
     return redirect("/account")
 
 
 @app.route("/account/delete_post/<int:post_id>", methods=["POST"])
 def account_delete_post(post_id):
+    require_csrf()
+    db = get_db()
     user = require_login("/account")
-    if not isinstance(user, str):
+    if not isinstance(user, User):
         return user
-    delete_post_owned(post_id, user)
+    delete_post_owned(db, post_id, user)
     return redirect("/account")
+
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    db = get_db()
+    next_url = request.args.get("next") or request.form.get("next") or "/forum"
+    error = None
+    if request.method == "POST":
+        require_csrf()
+        username = (request.form.get("username") or "").strip()
+        password = (request.form.get("password") or "").strip()
+        user = db.execute(select(User).where(User.username == username)).scalar_one_or_none()
+        if user and check_password_hash(user.password_hash, password):
+            session["user_id"] = user.id
+            session["username"] = user.username
+            return redirect(next_url)
+        error = "Invalid credentials"
+    return render_template("login.html", next_url=next_url, error=error)
+
+
+@app.route("/logout")
+def logout():
+    session.pop("user_id", None)
+    session.pop("username", None)
+    return redirect("/")
+
+
+@app.route("/signup", methods=["GET", "POST"])
+def signup():
+    db = get_db()
+    error = None
+    next_url = request.args.get("next") or "/forum"
+    if request.method == "POST":
+        require_csrf()
+        username = (request.form.get("username") or "").strip()
+        password = (request.form.get("password") or "").strip()
+        if not username or not password:
+            error = "Username and password required"
+        else:
+            hashed = generate_password_hash(password)
+            new_user = User(username=username, password_hash=hashed)
+            db.add(new_user)
+            try:
+                db.commit()
+            except IntegrityError:
+                db.rollback()
+                error = "Username already exists"
+            else:
+                session["user_id"] = new_user.id
+                session["username"] = new_user.username
+                return redirect(next_url)
+    return render_template("signup.html", error=error, next_url=next_url)
 
 
 @app.route("/api/admin/categories", methods=["POST"])
 def api_add_category():
+    db = get_db()
     token = request.headers.get("X-Admin-Token") or request.args.get("token")
     if not token or (ADMIN_TOKEN and token != ADMIN_TOKEN):
         abort(403)
@@ -1094,13 +1089,12 @@ def api_add_category():
     if not desc:
         abort(400)
 
-    new_cat = append_category(parent_path, name, desc)
+    new_cat = append_category(db, parent_path, name, desc)
     return jsonify({"category": new_cat}), 201
 
 
 @app.route("/embed_stream", methods=["GET", "POST"])
 def embed_stream():
-    # where to go back to
     return_to = request.args.get("return_to", "/forum")
     category_path = request.args.get("category_path", "")
     prefill_title = request.args.get("prefill_title", "")
@@ -1112,8 +1106,8 @@ def embed_stream():
 
     candidates = []
     if request.method == "POST":
-        parent_host = request.host.split(":")[0]  # needed for twitch "parent="
-        candidates = embed_streams.get_embed_candidates(source, user_input, parent_host)
+        require_csrf()
+        candidates = embed_streams.get_embed_candidates(source, user_input, TWITCH_PARENT_HOST)
 
     def ensure_param(url: str, key: str, value: str) -> str:
         if f"{key}=" in url:
@@ -1121,7 +1115,6 @@ def embed_stream():
         sep = "&" if "?" in url else "?"
         return url + sep + urlencode({key: value})
 
-    # ensure we always return to an open add-thread form with any prefill data preserved
     return_to = ensure_param(return_to, "open_thread_form", "1")
     if prefill_title:
         return_to = ensure_param(return_to, "prefill_title", prefill_title)
@@ -1145,6 +1138,7 @@ def embed_stream():
 
 @app.route("/choose_stream", methods=["POST"])
 def choose_stream():
+    require_csrf()
     chosen = (request.form.get("chosen_value") or "").strip()
     return_to = request.form.get("return_to", "/forum")
 
@@ -1162,49 +1156,59 @@ def choose_stream():
 
 @app.route("/thread/<int:thread_id>")
 def thread_page(thread_id):
-    t = THREAD_DATA.get("thread_by_id", {}).get(thread_id)
+    db = get_db()
+    t = (
+        db.execute(
+            select(Thread)
+            .where(Thread.id == thread_id)
+            .options(joinedload(Thread.user), joinedload(Thread.category))
+        )
+        .scalars()
+        .first()
+    )
     if t is None:
         abort(404)
-    # Track click counts when thread is viewed
-    try:
-        t["clicks"] = int(t.get("clicks", 0)) + 1
-    except Exception:
-        t["clicks"] = 1
 
-    THREAD_DATA["raw"]["threads"] = THREAD_DATA["threads"]
-    save_threads_json(THREAD_DATA["raw"])
+    t.clicks = (t.clicks or 0) + 1
+    db.commit()
+    db.refresh(t)
 
-    posts_tree = build_post_tree(thread_id)
-    embed_info = detect_stream_embed(t.get("stream_link", ""))
+    posts_tree = build_post_tree(db, thread_id)
+    embed_info = detect_stream_embed(t.stream_link, TWITCH_PARENT_HOST)
+    categories, cat_lookup, _ = load_category_indexes(db)
     return render_template(
         "thread.html",
-        thread=t,
+        thread=serialize_thread(t),
         posts_tree=posts_tree,
-        cat_lookup=CATEGORY_DATA.get("cat_by_id", {}),
+        cat_lookup=cat_lookup,
         build_category_path=build_category_path,
         embed_info=embed_info,
-        current_user=session.get("user"),
+        current_user=g.current_user.username if g.current_user else None,
     )
 
 
 @app.route("/thread/<int:thread_id>/reply", methods=["POST"])
 def reply_thread(thread_id):
-    t = THREAD_DATA.get("thread_by_id", {}).get(thread_id)
+    require_csrf()
+    db = get_db()
+    user = require_login(f"/thread/{thread_id}")
+    if not isinstance(user, User):
+        return user
+
+    t = db.get(Thread, thread_id)
     if t is None:
         abort(404)
 
     body = (request.form.get("body") or "").strip()
     if not body or len(body) > 2000:
         abort(400)
-    if not session.get("user"):
-        return redirect(f"/login?next=/thread/{thread_id}")
 
     parent_raw = request.form.get("parent_id")
     parent_id = int(parent_raw) if parent_raw not in (None, "", "None") else None
 
-    new_post = append_post(thread_id, body, parent_id)
+    new_post = append_post(db, thread_id, body, parent_id, user)
     return redirect(f"/thread/{thread_id}#post-{new_post['id']}")
 
 
 if __name__ == "__main__":
-    app.run(host="127.0.0.1", port=5000, debug=True)
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)), debug=False)
