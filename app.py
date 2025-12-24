@@ -6,6 +6,7 @@ import re
 import secrets
 import threading
 import time
+import json
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from typing import Optional
@@ -39,6 +40,7 @@ ADMIN_TOKEN = os.environ.get("ADMIN_TOKEN")
 TWITCH_PARENT_HOST = "thestreamden.com"
 CLEANUP_INTERVAL_SECONDS = int(os.environ.get("CLEANUP_INTERVAL_SECONDS", "3600"))
 _cleanup_thread_started = False
+_seed_started = False
 
 app.secret_key = os.environ.get("APP_SECRET", "dev-secret-key")
 app.config.update(
@@ -49,7 +51,6 @@ app.config.update(
 
 # Ensure database tables exist on startup
 init_db()
-ensure_seed_categories()
 
 
 # -----------------------------
@@ -263,6 +264,15 @@ def serialize_post(post: Post) -> dict:
         "created_at": post.created_at.isoformat() if post.created_at else "",
         "user": post.user.username if post.user else "Anonymous",
     }
+
+def load_category_indexes(db):
+    categories = db.execute(select(Category)).scalars().all()
+    serialized = [serialize_category(c) for c in categories]
+    cat_by_id = {c["id"]: c for c in serialized}
+    children_by_parent = defaultdict(list)
+    for c in serialized:
+        children_by_parent[c["parent_id"]].append(c)
+    return serialized, cat_by_id, children_by_parent
 
 def load_category_indexes(db):
     categories = db.execute(select(Category)).scalars().all()
@@ -874,6 +884,10 @@ def _start_cleanup_worker():
 def attach_user():
     db = get_db()
     g.current_user = get_current_user(db)
+    global _seed_started
+    if not _seed_started:
+        ensure_seed_categories()
+        _seed_started = True
     generate_csrf_token()
     _start_cleanup_worker()
 
