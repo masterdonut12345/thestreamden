@@ -90,11 +90,21 @@ def require_csrf():
     if not token or not submitted or not hmac.compare_digest(token, submitted):
         abort(400)
 
+@app.teardown_appcontext
+def shutdown_session(exception=None):
+    db = g.pop("db", None)
+    if db is not None:
+        if exception:
+            db.rollback()
+        db.close()
 
 @app.context_processor
 def inject_csrf():
     return {"csrf_token": generate_csrf_token()}
 
+# -----------------------------
+# Auth + CSRF helpers
+# -----------------------------
 
 def get_current_user(db):
     uid = session.get("user_id")
@@ -102,6 +112,11 @@ def get_current_user(db):
         return None
     return db.get(User, uid)
 
+def require_csrf():
+    token = session.get("csrf_token")
+    submitted = request.form.get("csrf_token") or request.headers.get("X-CSRF-Token")
+    if not token or not submitted or not hmac.compare_digest(token, submitted):
+        abort(400)
 
 def require_login(next_url: str = "/forum"):
     db = get_db()
@@ -110,6 +125,9 @@ def require_login(next_url: str = "/forum"):
         return redirect(f"/login?next={next_url}")
     return user
 
+@app.context_processor
+def inject_csrf():
+    return {"csrf_token": generate_csrf_token()}
 
 # -----------------------------
 # Utility helpers
@@ -247,6 +265,32 @@ def serialize_post(post: Post) -> dict:
         "user": post.user.username if post.user else "Anonymous",
     }
 
+def load_category_indexes(db):
+    categories = db.execute(select(Category)).scalars().all()
+    serialized = [serialize_category(c) for c in categories]
+    cat_by_id = {c["id"]: c for c in serialized}
+    children_by_parent = defaultdict(list)
+    for c in serialized:
+        children_by_parent[c["parent_id"]].append(c)
+    return serialized, cat_by_id, children_by_parent
+
+def load_category_indexes(db):
+    categories = db.execute(select(Category)).scalars().all()
+    serialized = [serialize_category(c) for c in categories]
+    cat_by_id = {c["id"]: c for c in serialized}
+    children_by_parent = defaultdict(list)
+    for c in serialized:
+        children_by_parent[c["parent_id"]].append(c)
+    return serialized, cat_by_id, children_by_parent
+
+def load_category_indexes(db):
+    categories = db.execute(select(Category)).scalars().all()
+    serialized = [serialize_category(c) for c in categories]
+    cat_by_id = {c["id"]: c for c in serialized}
+    children_by_parent = defaultdict(list)
+    for c in serialized:
+        children_by_parent[c["parent_id"]].append(c)
+    return serialized, cat_by_id, children_by_parent
 
 def load_category_indexes(db):
     categories = db.execute(select(Category)).scalars().all()
