@@ -762,6 +762,14 @@ def detect_stream_embed(url: str, parent_host: str) -> dict:
     host = (u.netloc or "").lower()
     path = (u.path or "").lower()
 
+    if "x.com" in host or "twitter.com" in host:
+        post_url = url
+        html = (
+            f'<blockquote class="twitter-tweet"><a href="{post_url}"></a></blockquote>'
+            f'<script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>'
+        )
+        return {"type": "html", "html": html, "title": "X"}
+
     if path.endswith(".m3u8"):
         return {"type": "m3u8", "src": url}
     if path.endswith((".mp4", ".webm", ".ogg")):
