@@ -385,7 +385,7 @@
                     {% for t in search_results.threads %}
                       <tr>
                         <td>
-                          <div class="thread-title">{{ t.title }}</div>
+                          <div class="thread-title"><a href="{{ t.thread_url }}">{{ t.title }}</a></div>
                           <div class="search-meta"><a class="btn" href="{{ t.category_url }}">{{ t.category_name }}</a></div>
                         </td>
                         <td class="col-click">{{ t.clicks }}</td>
@@ -430,7 +430,7 @@
           <div class="forum-banner">
             <div>
               <h1>The Stream Den</h1>
-              <p class="tagline">The fastest-growing decentralized stream sharing platform.</p>
+              <p class="tagline">The decentralized stream sharing platform.</p>
             </div>
             <div class="nav-actions">
               {% if current_path %}
@@ -526,15 +526,15 @@
                     </tr>
                     </thead>
                     <tbody>
-                      {% for t in threads_flat %}
-                        <tr>
-                          <td>
-                            <div class="thread-title">{{ t.title }}</div>
-                            <div class="thread-meta">
-                              {% set cat = cat_lookup.get(t.category_id) %}
-                              {% if cat %}In {{ cat.name }}{% endif %}
-                            </div>
-                          </td>
+                    {% for t in threads_flat %}
+                      <tr>
+                        <td>
+                          <div class="thread-title"><a href="/thread/{{ t.id }}">{{ t.title }}</a></div>
+                          <div class="thread-meta">
+                            {% set cat = cat_lookup.get(t.category_id) %}
+                            {% if cat %}In {{ cat.name }}{% endif %}
+                          </div>
+                        </td>
                           <td class="col-user">{{ t.user or 'Anonymous' }}</td>
                           <td class="col-time"><span class="mono">{{ t.created_at }}</span></td>
                           <td class="col-count">{{ t.reply_count }}</td>
@@ -573,7 +573,7 @@
                           {% for t in threads_grouped[bucket] %}
                             <tr>
                               <td>
-                                <div class="thread-title">{{ t.title }}</div>
+                                <div class="thread-title"><a href="/thread/{{ t.id }}">{{ t.title }}</a></div>
                                 <div class="thread-meta">
                                   Expires in {{ bucket }}
                                   {% if show_top_threads %}
