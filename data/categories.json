@@ -9,7 +9,7 @@
       "parent_id": null
     },
     {
-      "id": 2,
+      "id": 1,
       "name": "Movies",
       "slug": "movies",
       "desc": "Main movie category.",
@@ -17,7 +17,7 @@
       "parent_id": null
     },
     {
-      "id": 3,
+      "id": 2,
       "name": "TV Shows",
       "slug": "tvshows",
       "desc": "Main TV show category.",
@@ -25,7 +25,7 @@
       "parent_id": null
     },
     {
-      "id": 4,
+      "id": 3,
       "name": "Gaming Streams",
       "slug": "gamingstreams",
       "desc": "Main gaming stream category (twitch, rumble, ect).",
@@ -33,7 +33,7 @@
       "parent_id": null
     },
     {
-      "id": 5,
+      "id": 4,
       "name": "Live News",
       "slug": "livenews",
       "desc": "Main news broadcast category.",
@@ -41,7 +41,7 @@
       "parent_id": null
     },
     {
-      "id": 6,
+      "id": 5,
       "name": "Soccer",
       "slug": "soccer",
       "desc": "A game where you kick a ball.",
@@ -49,7 +49,7 @@
       "parent_id": 0
     },
     {
-      "id": 7,
+      "id": 6,
       "name": "Animated",
       "slug": "animated",
       "desc": "Animated movies.",
@@ -57,7 +57,7 @@
       "parent_id": 2
     },
     {
-      "id": 8,
+      "id": 7,
       "name": "Comedy",
       "slug": "comedy",
       "desc": "Comedy movies.",
@@ -65,7 +65,7 @@
       "parent_id": 2
     },
     {
-      "id": 9,
+      "id": 8,
       "name": "Basketball",
       "slug": "basketball",
       "desc": "A game with a ball, included NBA, NCAA, ect",
@@ -73,7 +73,7 @@
       "parent_id": 0
     },
     {
-      "id": 10,
+      "id": 9,
       "name": "Baseball",
       "slug": "baseball",
       "desc": "Bats, balls, and the diamond.",
@@ -81,7 +81,7 @@
       "parent_id": 0
     },
     {
-      "id": 11,
+      "id": 10,
       "name": "American Football",
       "slug": "american-football",
       "desc": "NFL, college, and other gridiron leagues.",
@@ -89,7 +89,7 @@
       "parent_id": 0
     },
     {
-      "id": 12,
+      "id": 11,
       "name": "Tennis",
       "slug": "tennis",
       "desc": "Grand Slams and tour matches.",
@@ -97,7 +97,7 @@
       "parent_id": 0
     },
     {
-      "id": 13,
+      "id": 12,
       "name": "Action",
       "slug": "action",
       "desc": "Action-packed films.",
@@ -105,7 +105,7 @@
       "parent_id": 2
     },
     {
-      "id": 14,
+      "id": 13,
       "name": "Drama",
       "slug": "drama",
       "desc": "Story-driven cinema.",
@@ -113,7 +113,7 @@
       "parent_id": 2
     },
     {
-      "id": 15,
+      "id": 14,
       "name": "Documentary",
       "slug": "documentary",
       "desc": "Non-fiction movies.",
@@ -121,7 +121,7 @@
       "parent_id": 2
     },
     {
-      "id": 16,
+      "id": 15,
       "name": "Reality TV",
       "slug": "reality-tv",
       "desc": "Competition and lifestyle shows.",
@@ -129,7 +129,7 @@
       "parent_id": 3
     },
     {
-      "id": 17,
+      "id": 16,
       "name": "Crime & Mystery",
       "slug": "crime-mystery",
       "desc": "Detectives, thrillers, and procedurals.",
@@ -137,7 +137,7 @@
       "parent_id": 3
     },
     {
-      "id": 18,
+      "id": 17,
       "name": "Sci-Fi & Fantasy",
       "slug": "sci-fi-fantasy",
       "desc": "Futuristic and fantastical series.",
@@ -145,7 +145,7 @@
       "parent_id": 3
     },
     {
-      "id": 19,
+      "id": 18,
       "name": "Talk Shows",
       "slug": "talk-shows",
       "desc": "Interviews, panels, and late-night.",
@@ -153,7 +153,7 @@
       "parent_id": 3
     },
     {
-      "id": 20,
+      "id": 19,
       "name": "Game Shows",
       "slug": "game-shows",
       "desc": "Trivia, challenges, and contestants.",
@@ -161,7 +161,7 @@
       "parent_id": 3
     },
     {
-      "id": 21,
+      "id": 20,
       "name": "FPS",
       "slug": "fps",
       "desc": "First-person shooter streams.",
@@ -169,7 +169,7 @@
       "parent_id": 4
     },
     {
-      "id": 22,
+      "id": 21,
       "name": "MOBA",
       "slug": "moba",
       "desc": "Multiplayer online battle arenas.",
@@ -177,7 +177,7 @@
       "parent_id": 4
     },
     {
-      "id": 23,
+      "id": 22,
       "name": "RPG",
       "slug": "rpg",
       "desc": "Role-playing game streams.",
@@ -185,7 +185,7 @@
       "parent_id": 4
     },
     {
-      "id": 24,
+      "id": 23,
       "name": "Speedruns",
       "slug": "speedruns",
       "desc": "Any% and challenge runs.",
@@ -193,7 +193,7 @@
       "parent_id": 4
     },
     {
-      "id": 25,
+      "id": 24,
       "name": "Fighting Games",
       "slug": "fighting-games",
       "desc": "FGC tournaments and streams.",
@@ -201,7 +201,7 @@
       "parent_id": 4
     },
     {
-      "id": 26,
+      "id": 25,
       "name": "U.S. News",
       "slug": "us-news",
       "desc": "Domestic news coverage.",
@@ -209,7 +209,7 @@
       "parent_id": 5
     },
     {
-      "id": 27,
+      "id": 26,
       "name": "World News",
       "slug": "world-news",
       "desc": "International headlines and events.",
@@ -217,7 +217,7 @@
       "parent_id": 5
     },
     {
-      "id": 28,
+      "id": 27,
       "name": "Tech News",
       "slug": "tech-news",
       "desc": "Technology and industry updates.",
@@ -225,7 +225,7 @@
       "parent_id": 5
     },
     {
-      "id": 29,
+      "id": 28,
       "name": "Finance & Markets",
       "slug": "finance-markets",
       "desc": "Business, stocks, and economy.",
@@ -233,7 +233,7 @@
       "parent_id": 5
     },
     {
-      "id": 30,
+      "id": 29,
       "name": "Weather",
       "slug": "weather",
       "desc": "Forecasts and severe weather coverage.",
