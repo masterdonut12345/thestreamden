@@ -30,6 +30,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 import embed_streams
 from cleanup_expired import cleanup_expired_threads
 from db_models import Category, Post, SessionLocal, Thread, User, init_db
+from pathlib import Path
 
 app = Flask(__name__)
 
@@ -48,6 +49,7 @@ app.config.update(
 
 # Ensure database tables exist on startup
 init_db()
+ensure_seed_categories()
 
 
 # -----------------------------
@@ -80,12 +82,6 @@ def generate_csrf_token() -> str:
         session["csrf_token"] = token
     return token
 
-def generate_csrf_token() -> str:
-    token = session.get("csrf_token")
-    if not token:
-        token = secrets.token_urlsafe(32)
-        session["csrf_token"] = token
-    return token
 
 def require_csrf():
     token = session.get("csrf_token")
@@ -93,19 +89,21 @@ def require_csrf():
     if not token or not submitted or not hmac.compare_digest(token, submitted):
         abort(400)
 
-def require_csrf():
-    token = session.get("csrf_token")
-    submitted = request.form.get("csrf_token") or request.headers.get("X-CSRF-Token")
-    if not token or not submitted or not hmac.compare_digest(token, submitted):
-        abort(400)
+@app.teardown_appcontext
+def shutdown_session(exception=None):
+    db = g.pop("db", None)
+    if db is not None:
+        if exception:
+            db.rollback()
+        db.close()
 
 @app.context_processor
 def inject_csrf():
     return {"csrf_token": generate_csrf_token()}
 
-@app.context_processor
-def inject_csrf():
-    return {"csrf_token": generate_csrf_token()}
+# -----------------------------
+# Auth + CSRF helpers
+# -----------------------------
 
 def get_current_user(db):
     uid = session.get("user_id")
@@ -113,6 +111,11 @@ def get_current_user(db):
         return None
     return db.get(User, uid)
 
+def require_csrf():
+    token = session.get("csrf_token")
+    submitted = request.form.get("csrf_token") or request.headers.get("X-CSRF-Token")
+    if not token or not submitted or not hmac.compare_digest(token, submitted):
+        abort(400)
 
 def require_login(next_url: str = "/forum"):
     db = get_db()
@@ -121,22 +124,97 @@ def require_login(next_url: str = "/forum"):
         return redirect(f"/login?next={next_url}")
     return user
 
+@app.context_processor
+def inject_csrf():
+    return {"csrf_token": generate_csrf_token()}
 
 # -----------------------------
 # Utility helpers
 # -----------------------------
 
-def slugify(name: str) -> str:
-    s = (name or "").strip().lower()
-    s = re.sub(r"[^a-z0-9]+", "-", s)
-    s = s.strip("-")
-    return s or "item"
+def ensure_seed_categories():
+    """Ensure DB categories match the seed hierarchy in data/categories.json."""
+    seed_path = Path("data/categories.json")
+    if not seed_path.exists():
+        return
+
+    try:
+        seed = json.loads(seed_path.read_text(encoding="utf-8")).get("categories", [])
+    except Exception as exc:
+        print(f"[seed] Failed to read categories.json: {exc}")
+        return
+
+    # Map seed id -> seed entry and seed slug -> seed entry
+    seed_by_id = {c["id"]: c for c in seed if "id" in c}
+    seed_by_slug = {c["slug"]: c for c in seed if "slug" in c}
+
+    def parent_slug(c):
+        pid = c.get("parent_id")
+        if pid is None:
+            return None
+        parent = seed_by_id.get(pid)
+        return parent.get("slug") if parent else None
+
+    remaining = list(seed)
+    slug_to_db_obj: dict[str, Category] = {}
+
+    db = SessionLocal()
+    try:
+        while remaining:
+            progressed = False
+            next_round = []
+            for c in remaining:
+                p_slug = parent_slug(c)
+                if p_slug and p_slug not in seed_by_slug:
+                    # parent missing from seed; skip this entry
+                    continue
+                if p_slug and p_slug not in slug_to_db_obj:
+                    next_round.append(c)
+                    continue
+
+                parent_obj = slug_to_db_obj.get(p_slug)
+                parent_id = parent_obj.id if parent_obj else None
+
+                existing = (
+                    db.execute(select(Category).where(Category.slug == c["slug"])).scalar_one_or_none()
+                )
+                if existing:
+                    existing.name = c.get("name", existing.name)
+                    existing.desc = c.get("desc", existing.desc)
+                    existing.parent_id = parent_id
+                    obj = existing
+                else:
+                    obj = Category(
+                        name=c.get("name", "Category"),
+                        slug=c.get("slug", "category"),
+                        desc=c.get("desc", ""),
+                        parent_id=parent_id,
+                    )
+                    db.add(obj)
+
+                db.flush()
+                slug_to_db_obj[c["slug"]] = obj
+                progressed = True
+
+            if not progressed:
+                # Avoid infinite loop if there are inconsistent seed entries
+                break
+            remaining = next_round
+
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        print(f"[seed] Failed to ensure seed categories: {exc}")
+    finally:
+        db.close()
+
 
 def slugify(name: str) -> str:
     s = (name or "").strip().lower()
     s = re.sub(r"[^a-z0-9]+", "-", s)
     s = s.strip("-")
     return s or "item"
+
 
 def parse_expiration_choice(choice: str) -> Optional[timedelta]:
     mapping = {
@@ -147,14 +225,6 @@ def parse_expiration_choice(choice: str) -> Optional[timedelta]:
     }
     return mapping.get(choice)
 
-def parse_expiration_choice(choice: str) -> Optional[timedelta]:
-    mapping = {
-        "1 day": timedelta(days=1),
-        "3 days": timedelta(days=3),
-        "1 week": timedelta(weeks=1),
-        "1 month": timedelta(days=30),
-    }
-    return mapping.get(choice)
 
 def serialize_category(cat: Category) -> dict:
     return {
@@ -167,16 +237,6 @@ def serialize_category(cat: Category) -> dict:
         "updated_at": cat.updated_at.isoformat() if cat.updated_at else "",
     }
 
-def serialize_category(cat: Category) -> dict:
-    return {
-        "id": cat.id,
-        "name": cat.name,
-        "slug": cat.slug,
-        "desc": cat.desc,
-        "parent_id": cat.parent_id,
-        "created_at": cat.created_at.isoformat() if cat.created_at else "",
-        "updated_at": cat.updated_at.isoformat() if cat.updated_at else "",
-    }
 
 def serialize_thread(thread: Thread) -> dict:
     return {
@@ -193,20 +253,6 @@ def serialize_thread(thread: Thread) -> dict:
         "user": thread.user.username if thread.user else "Anonymous",
     }
 
-def serialize_thread(thread: Thread) -> dict:
-    return {
-        "id": thread.id,
-        "category_id": thread.category_id,
-        "title": thread.title,
-        "slug": thread.slug,
-        "stream_link": thread.stream_link,
-        "created_at": thread.created_at.isoformat() if thread.created_at else "",
-        "expires_at": thread.expires_at.isoformat() if thread.expires_at else "",
-        "expires_choice": thread.expires_choice,
-        "reply_count": thread.reply_count or 0,
-        "clicks": thread.clicks or 0,
-        "user": thread.user.username if thread.user else "Anonymous",
-    }
 
 def serialize_post(post: Post) -> dict:
     return {
@@ -218,6 +264,14 @@ def serialize_post(post: Post) -> dict:
         "user": post.user.username if post.user else "Anonymous",
     }
 
+def load_category_indexes(db):
+    categories = db.execute(select(Category)).scalars().all()
+    serialized = [serialize_category(c) for c in categories]
+    cat_by_id = {c["id"]: c for c in serialized}
+    children_by_parent = defaultdict(list)
+    for c in serialized:
+        children_by_parent[c["parent_id"]].append(c)
+    return serialized, cat_by_id, children_by_parent
 
 def load_category_indexes(db):
     categories = db.execute(select(Category)).scalars().all()
