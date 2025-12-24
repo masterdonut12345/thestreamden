@@ -709,44 +709,6 @@
             {% endif %}
           </div>
         </div>
-
-        <div class="auth-panel panel stats-panel">
-          <h3>Forum stats</h3>
-          <div class="stat-badges">
-            <div class="stat-pill">
-              <div class="stat-label">Categories</div>
-              <div class="stat-value">{{ forum_stats.categories }}</div>
-            </div>
-            <div class="stat-pill">
-              <div class="stat-label">Threads</div>
-              <div class="stat-value">{{ forum_stats.threads }}</div>
-            </div>
-            <div class="stat-pill">
-              <div class="stat-label">Replies</div>
-              <div class="stat-value">{{ forum_stats.posts }}</div>
-            </div>
-          </div>
-          <div class="board-subtext" style="margin:6px 0 8px 0;">Top posters</div>
-          {% if forum_stats.leaderboard|length == 0 %}
-            <div class="empty-row">No activity yet.</div>
-          {% else %}
-            <ul class="leaderboard-list">
-              {% for lb in forum_stats.leaderboard %}
-                <li class="leader-item">
-                  <div class="leader-name">{{ lb.username }}</div>
-                  <div class="leader-meta">
-                    <span class="chip">Total {{ lb.total }}</span>
-                    <span class="chip">{{ lb.threads }} threads</span>
-                    <span class="chip">{{ lb.posts }} replies</span>
-                    {% if lb.link %}
-                      <a class="small-link" href="{{ lb.link }}">View posts »</a>
-                    {% endif %}
-                  </div>
-                </li>
-              {% endfor %}
-            </ul>
-          {% endif %}
-        </div>
       </div>
   </body>
 </html>
