@@ -169,6 +169,7 @@
         </summary>
 
         <form method="POST" action="/embed_stream?return_to={{ return_to }}&category_path={{ category_path }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
           <p>
             <label for="source">Source</label><br>
             <select id="source" name="source">
@@ -226,6 +227,7 @@
           {% endfor %}
 
           <form method="POST" action="/choose_stream">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
             <input type="hidden" name="return_to" value="{{ return_to }}">
             <input type="hidden" name="chosen_value" id="chosen_value" value="">
             <button class="btn" id="choose_btn" type="submit"><span id="choose_label">[choose stream]</span></button>
