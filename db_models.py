@@ -29,8 +29,20 @@ if DATABASE_URL.startswith("sqlite:"):
     if DATABASE_URL.startswith("sqlite:///"):
         db_path = Path(DATABASE_URL.replace("sqlite:///", ""))
         db_path.parent.mkdir(parents=True, exist_ok=True)
+else:
+    # For Postgres, allow enforcing SSL when not explicitly present in the URL
+    if DATABASE_URL.startswith("postgres://") or DATABASE_URL.startswith("postgresql://"):
+        if "sslmode=" not in DATABASE_URL:
+            connect_args["sslmode"] = "require"
 
-engine = create_engine(DATABASE_URL, future=True, echo=False, connect_args=connect_args)
+engine = create_engine(
+    DATABASE_URL,
+    future=True,
+    echo=False,
+    connect_args=connect_args,
+    pool_pre_ping=True,
+    pool_recycle=300,
+)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
 Base = declarative_base()
 

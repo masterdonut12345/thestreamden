@@ -4,6 +4,8 @@ import hmac
 import os
 import re
 import secrets
+import threading
+import time
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from typing import Optional
@@ -26,6 +28,7 @@ from sqlalchemy.orm import joinedload
 from werkzeug.security import check_password_hash, generate_password_hash
 
 import embed_streams
+from cleanup_expired import cleanup_expired_threads
 from db_models import Category, Post, SessionLocal, Thread, User, init_db
 
 app = Flask(__name__)
@@ -33,6 +36,8 @@ app = Flask(__name__)
 EXP_CHOICES = ["1 day", "3 days", "1 week", "1 month"]
 ADMIN_TOKEN = os.environ.get("ADMIN_TOKEN")
 TWITCH_PARENT_HOST = "thestreamden.com"
+CLEANUP_INTERVAL_SECONDS = int(os.environ.get("CLEANUP_INTERVAL_SECONDS", "3600"))
+_cleanup_thread_started = False
 
 app.secret_key = os.environ.get("APP_SECRET", "dev-secret-key")
 app.config.update(
@@ -75,6 +80,12 @@ def generate_csrf_token() -> str:
         session["csrf_token"] = token
     return token
 
+def generate_csrf_token() -> str:
+    token = session.get("csrf_token")
+    if not token:
+        token = secrets.token_urlsafe(32)
+        session["csrf_token"] = token
+    return token
 
 def require_csrf():
     token = session.get("csrf_token")
@@ -82,11 +93,19 @@ def require_csrf():
     if not token or not submitted or not hmac.compare_digest(token, submitted):
         abort(400)
 
+def require_csrf():
+    token = session.get("csrf_token")
+    submitted = request.form.get("csrf_token") or request.headers.get("X-CSRF-Token")
+    if not token or not submitted or not hmac.compare_digest(token, submitted):
+        abort(400)
 
 @app.context_processor
 def inject_csrf():
     return {"csrf_token": generate_csrf_token()}
 
+@app.context_processor
+def inject_csrf():
+    return {"csrf_token": generate_csrf_token()}
 
 def get_current_user(db):
     uid = session.get("user_id")
@@ -113,6 +132,11 @@ def slugify(name: str) -> str:
     s = s.strip("-")
     return s or "item"
 
+def slugify(name: str) -> str:
+    s = (name or "").strip().lower()
+    s = re.sub(r"[^a-z0-9]+", "-", s)
+    s = s.strip("-")
+    return s or "item"
 
 def parse_expiration_choice(choice: str) -> Optional[timedelta]:
     mapping = {
@@ -123,6 +147,14 @@ def parse_expiration_choice(choice: str) -> Optional[timedelta]:
     }
     return mapping.get(choice)
 
+def parse_expiration_choice(choice: str) -> Optional[timedelta]:
+    mapping = {
+        "1 day": timedelta(days=1),
+        "3 days": timedelta(days=3),
+        "1 week": timedelta(weeks=1),
+        "1 month": timedelta(days=30),
+    }
+    return mapping.get(choice)
 
 def serialize_category(cat: Category) -> dict:
     return {
@@ -135,6 +167,16 @@ def serialize_category(cat: Category) -> dict:
         "updated_at": cat.updated_at.isoformat() if cat.updated_at else "",
     }
 
+def serialize_category(cat: Category) -> dict:
+    return {
+        "id": cat.id,
+        "name": cat.name,
+        "slug": cat.slug,
+        "desc": cat.desc,
+        "parent_id": cat.parent_id,
+        "created_at": cat.created_at.isoformat() if cat.created_at else "",
+        "updated_at": cat.updated_at.isoformat() if cat.updated_at else "",
+    }
 
 def serialize_thread(thread: Thread) -> dict:
     return {
@@ -151,6 +193,20 @@ def serialize_thread(thread: Thread) -> dict:
         "user": thread.user.username if thread.user else "Anonymous",
     }
 
+def serialize_thread(thread: Thread) -> dict:
+    return {
+        "id": thread.id,
+        "category_id": thread.category_id,
+        "title": thread.title,
+        "slug": thread.slug,
+        "stream_link": thread.stream_link,
+        "created_at": thread.created_at.isoformat() if thread.created_at else "",
+        "expires_at": thread.expires_at.isoformat() if thread.expires_at else "",
+        "expires_choice": thread.expires_choice,
+        "reply_count": thread.reply_count or 0,
+        "clicks": thread.clicks or 0,
+        "user": thread.user.username if thread.user else "Anonymous",
+    }
 
 def serialize_post(post: Post) -> dict:
     return {
@@ -731,6 +787,31 @@ def build_breadcrumbs(current_path: str, cat_lookup: dict[int, dict]):
 
 
 # -----------------------------
+# Background cleanup worker
+# -----------------------------
+
+
+def _start_cleanup_worker():
+    global _cleanup_thread_started
+    if _cleanup_thread_started:
+        return
+
+    def _loop():
+        while True:
+            try:
+                deleted = cleanup_expired_threads()
+                if deleted:
+                    print(f"[cleanup] Removed {deleted} expired threads")
+            except Exception as exc:
+                print(f"[cleanup] Error during cleanup: {exc}")
+            time.sleep(CLEANUP_INTERVAL_SECONDS)
+
+    t = threading.Thread(target=_loop, daemon=True, name="expired-cleanup")
+    t.start()
+    _cleanup_thread_started = True
+
+
+# -----------------------------
 # Routes
 # -----------------------------
 
@@ -740,6 +821,7 @@ def attach_user():
     db = get_db()
     g.current_user = get_current_user(db)
     generate_csrf_token()
+    _start_cleanup_worker()
 
 
 @app.route("/")
