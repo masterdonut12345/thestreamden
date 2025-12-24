@@ -292,6 +292,15 @@ def load_category_indexes(db):
         children_by_parent[c["parent_id"]].append(c)
     return serialized, cat_by_id, children_by_parent
 
+def load_category_indexes(db):
+    categories = db.execute(select(Category)).scalars().all()
+    serialized = [serialize_category(c) for c in categories]
+    cat_by_id = {c["id"]: c for c in serialized}
+    children_by_parent = defaultdict(list)
+    for c in serialized:
+        children_by_parent[c["parent_id"]].append(c)
+    return serialized, cat_by_id, children_by_parent
+
 
 def build_category_path(cat: dict, cat_by_id: dict[int, dict]) -> str:
     slugs = []

@@ -4,7 +4,7 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
-from sqlalchemy import select, text
+from sqlalchemy import func, select, text
 from werkzeug.security import generate_password_hash
 
 from db_models import Category, Post, SessionLocal, Thread, User, init_db
@@ -35,10 +35,9 @@ def main():
     init_db()
     session = SessionLocal()
 
-    # Avoid duplicate imports
-    existing_users = session.scalar(select(User.id))
-    if existing_users:
-        print("Database already has data; aborting import to avoid duplicates.")
+    existing_categories = session.scalar(select(func.count(Category.id))) or 0
+    if existing_categories > 0:
+        print("Database already has categories; aborting import to avoid duplicates.")
         session.close()
         return
 
@@ -49,20 +48,31 @@ def main():
 
     # ---- users ----
     user_lookup = {}
-    for u in users:
-        username = u.get("username") or "Anonymous"
-        password = u.get("password") or "changeme"
-        user = User(username=username, password_hash=generate_password_hash(password))
-        session.add(user)
-        session.flush()
-        user_lookup[username] = user.id
+    existing_users = session.scalar(select(func.count(User.id))) or 0
+    if existing_users == 0:
+        for u in users:
+            username = u.get("username") or "Anonymous"
+            password = u.get("password") or "changeme"
+            user = User(username=username, password_hash=generate_password_hash(password))
+            session.add(user)
+            session.flush()
+            user_lookup[username] = user.id
 
-    # Ensure an Anonymous placeholder exists for missing lookups
-    if "Anonymous" not in user_lookup:
-        anon = User(username="Anonymous", password_hash=generate_password_hash("changeme"))
-        session.add(anon)
-        session.flush()
-        user_lookup["Anonymous"] = anon.id
+        # Ensure an Anonymous placeholder exists for missing lookups
+        if "Anonymous" not in user_lookup:
+            anon = User(username="Anonymous", password_hash=generate_password_hash("changeme"))
+            session.add(anon)
+            session.flush()
+            user_lookup["Anonymous"] = anon.id
+    else:
+        # Reuse existing users; map by username
+        for user in session.execute(select(User)).scalars().all():
+            user_lookup[user.username] = user.id
+        if "Anonymous" not in user_lookup:
+            anon = User(username="Anonymous", password_hash=generate_password_hash("changeme"))
+            session.add(anon)
+            session.flush()
+            user_lookup["Anonymous"] = anon.id
 
     # ---- categories ----
     cat_lookup = {}
