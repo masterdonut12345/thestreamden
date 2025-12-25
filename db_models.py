@@ -54,6 +54,7 @@ class User(Base):
     id = Column(Integer, primary_key=True)
     username = Column(String(64), unique=True, nullable=False, index=True)
     password_hash = Column(String(256), nullable=False)
+    is_banned = Column(Boolean, nullable=False, default=False, server_default=text("FALSE"))
     is_admin = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
     updated_at = Column(
@@ -143,6 +144,7 @@ def init_db() -> None:
     """Create tables if they do not exist."""
     Base.metadata.create_all(engine)
     ensure_thread_tag_column()
+    ensure_user_ban_column()
 
 
 def ensure_thread_tag_column() -> None:
@@ -154,6 +156,17 @@ def ensure_thread_tag_column() -> None:
 
     with engine.begin() as conn:
         conn.execute(text("ALTER TABLE threads ADD COLUMN tag VARCHAR(64) NOT NULL DEFAULT 'general'"))
+
+
+def ensure_user_ban_column() -> None:
+    """Add the users.is_banned column for existing databases without migrations."""
+    inspector = inspect(engine)
+    columns = [col["name"] for col in inspector.get_columns("users")]
+    if "is_banned" in columns:
+        return
+
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE users ADD COLUMN is_banned BOOLEAN NOT NULL DEFAULT FALSE"))
 
 
 def get_session() -> Generator:
