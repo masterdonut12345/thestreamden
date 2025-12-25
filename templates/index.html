@@ -386,31 +386,61 @@
         }
       }
 
+      function setCategorySelection(path, label) {
+        var select = document.getElementById("sidebar-thread-category");
+        var display = document.getElementById("sidebar-category-selected");
+        var submitBtn = document.getElementById("sidebar-thread-submit");
+        if (!select) return;
+        select.innerHTML = "";
+        if (!path) {
+          if (submitBtn) submitBtn.disabled = true;
+          if (display) display.textContent = "No category selected";
+          return;
+        }
+        var opt = document.createElement("option");
+        opt.value = path;
+        opt.textContent = label;
+        opt.selected = true;
+        select.appendChild(opt);
+        if (display) display.textContent = label;
+        if (submitBtn) submitBtn.disabled = false;
+      }
+
       function filterPostableCategories() {
         var input = document.getElementById("sidebar-category-search");
-        var select = document.getElementById("sidebar-thread-category");
-        if (!input || !select || !window.postableCategories) return;
+        var list = document.getElementById("sidebar-category-suggestions");
+        if (!input || !list || !window.postableCategories) return;
         var term = input.value.toLowerCase();
-        select.innerHTML = "";
+        list.innerHTML = "";
         var matches = window.postableCategories.filter(function(opt) {
           if (!term) return true;
           return opt.label.toLowerCase().includes(term) || opt.path.toLowerCase().includes(term);
         });
         if (matches.length === 0) {
-          var opt = document.createElement("option");
-          opt.textContent = "No category matches";
-          opt.disabled = true;
-          select.appendChild(opt);
+          var empty = document.createElement("div");
+          empty.className = "hint";
+          empty.textContent = "No category matches";
+          list.appendChild(empty);
+          setCategorySelection("", "");
           return;
         }
-        matches.forEach(function(opt) {
-          var o = document.createElement("option");
-          o.value = opt.path;
-          o.textContent = opt.label;
-          if ("{{ default_category_path }}" === opt.path) {
-            o.selected = true;
+        matches.forEach(function(opt, idx) {
+          var btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "link-btn";
+          btn.style.display = "block";
+          btn.style.width = "100%";
+          btn.style.marginTop = "6px";
+          btn.textContent = opt.label;
+          btn.dataset.path = opt.path;
+          btn.dataset.label = opt.label;
+          btn.onclick = function() {
+            setCategorySelection(opt.path, opt.label);
+          };
+          list.appendChild(btn);
+          if (idx === 0) {
+            setCategorySelection(opt.path, opt.label);
           }
-          select.appendChild(o);
         });
       }
 
@@ -500,13 +530,11 @@
                   <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                   <div class="form-row">
                     <label for="sidebar-thread-category">Category</label>
-                    <span class="hint">Choose where to post.</span><br>
-                    <input class="search-input" type="text" id="sidebar-category-search" placeholder="Search categories" oninput="filterPostableCategories();">
-                    <select id="sidebar-thread-category" name="category_path" required>
-                      {% for c in postable_categories %}
-                        <option value="{{ c.path }}" {% if default_category_path == c.path %}selected{% endif %}>{{ c.label }}</option>
-                      {% endfor %}
-                    </select>
+                    <span class="hint">Type to filter and pick a category.</span><br>
+                    <input class="search-input" type="text" id="sidebar-category-search" placeholder="Start typing…" oninput="filterPostableCategories();">
+                    <div id="sidebar-category-selected" class="hint" style="margin-top:4px;">Select a category</div>
+                    <div id="sidebar-category-suggestions" style="margin-top:6px;"></div>
+                    <select id="sidebar-thread-category" name="category_path" style="display:none;"></select>
                   </div>
 
                   <div class="form-row">
@@ -539,7 +567,7 @@
                   </div>
 
                   <div class="form-row">
-                    <input type="submit" value="Post stream">
+                    <input id="sidebar-thread-submit" type="submit" value="Post stream">
                   </div>
                 </form>
               </div>
