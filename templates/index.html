@@ -2,6 +2,7 @@
 <html>
   <head>
     <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>The Stream Den</title>
 
     <style>
@@ -309,6 +310,34 @@
       .dropdown-title { font-weight: 700; font-size: 13px; color: var(--accent-strong); }
       .dropdown-sub { font-size: 11px; color: var(--muted); }
       .dropdown-empty { font-size: 12px; color: var(--muted); padding: 4px 2px; }
+
+      .table-scroll {
+        overflow-x: auto;
+        border-radius: 4px;
+      }
+      .table-scroll .forum-table { min-width: 620px; }
+
+      @media (max-width: 1200px) {
+        .page { grid-template-columns: 280px 1fr; }
+        .auth-stack { order: 3; }
+      }
+      @media (max-width: 900px) {
+        body { padding: 22px 12px 32px; }
+        .page { grid-template-columns: 1fr; }
+        .forum-banner { flex-direction: column; align-items: flex-start; }
+        .nav-actions { width: 100%; justify-content: flex-start; }
+        .crumbs { overflow-x: auto; }
+        .search-actions { flex-wrap: wrap; }
+        .search-actions .search-btn, .search-actions .search-clear { flex: 1 1 140px; text-align: center; }
+      }
+      @media (max-width: 640px) {
+        .forum-banner { gap: 10px; }
+        .board-head { flex-direction: column; align-items: flex-start; }
+        .board-actions { width: 100%; justify-content: flex-start; flex-wrap: wrap; }
+        .nav-actions { flex-wrap: wrap; }
+        .nav-actions .nav-btn { width: 100%; text-align: center; }
+        .auth-stack { gap: 12px; }
+      }
     </style>
 
     <script>
@@ -518,53 +547,57 @@
               {% if search_results.threads|length == 0 %}
                 <div class="empty-row">No thread matches.</div>
               {% else %}
-                <table class="forum-table" style="font-size:12px;">
-                  <thead>
-                    <tr>
-                      <th>Title</th>
-                      <th class="col-click">Clicks</th>
-                      <th class="col-action">Open</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {% for t in search_results.threads %}
+                <div class="table-scroll">
+                  <table class="forum-table" style="font-size:12px;">
+                    <thead>
                       <tr>
-                        <td>
-                          <div class="thread-title"><a href="{{ t.thread_url }}">{{ t.title }}</a></div>
-                          <div class="search-meta"><a class="btn" href="{{ t.category_url }}">{{ t.category_name }}</a></div>
-                        </td>
-                        <td class="col-click">{{ t.clicks }}</td>
-                        <td class="col-action"><a class="link-btn" href="{{ t.thread_url }}">Open</a></td>
+                        <th>Title</th>
+                        <th class="col-click">Clicks</th>
+                        <th class="col-action">Open</th>
                       </tr>
-                    {% endfor %}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {% for t in search_results.threads %}
+                        <tr>
+                          <td>
+                            <div class="thread-title"><a href="{{ t.thread_url }}">{{ t.title }}</a></div>
+                            <div class="search-meta"><a class="btn" href="{{ t.category_url }}">{{ t.category_name }}</a></div>
+                          </td>
+                          <td class="col-click">{{ t.clicks }}</td>
+                          <td class="col-action"><a class="link-btn" href="{{ t.thread_url }}">Open</a></td>
+                        </tr>
+                      {% endfor %}
+                    </tbody>
+                  </table>
+                </div>
               {% endif %}
               <h4 style="margin:12px 0 6px 0;">Categories</h4>
               {% if search_results.categories|length == 0 %}
                 <div class="empty-row">No category matches.</div>
               {% else %}
-                <table class="forum-table" style="font-size:12px;">
-                  <thead>
-                    <tr>
-                      <th>Category</th>
-                      <th class="col-count">Threads</th>
-                      <th class="col-action">Open</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {% for c in search_results.categories %}
+                <div class="table-scroll">
+                  <table class="forum-table" style="font-size:12px;">
+                    <thead>
                       <tr>
-                        <td>
-                          <div class="cat-name">{{ c.name }}</div>
-                          <div class="search-meta">{{ c.desc }}</div>
-                        </td>
-                        <td class="col-count">{{ c.threads }}</td>
-                        <td class="col-action"><a class="link-btn" href="{{ c.url }}">Open</a></td>
+                        <th>Category</th>
+                        <th class="col-count">Threads</th>
+                        <th class="col-action">Open</th>
                       </tr>
-                    {% endfor %}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {% for c in search_results.categories %}
+                        <tr>
+                          <td>
+                            <div class="cat-name">{{ c.name }}</div>
+                            <div class="search-meta">{{ c.desc }}</div>
+                          </td>
+                          <td class="col-count">{{ c.threads }}</td>
+                          <td class="col-action"><a class="link-btn" href="{{ c.url }}">Open</a></td>
+                        </tr>
+                      {% endfor %}
+                    </tbody>
+                  </table>
+                </div>
               {% endif %}
             {% endif %}
           </div>
@@ -663,31 +696,33 @@
                 {% if categories|length == 0 %}
                   <div class="empty-row">No rooms yet.</div>
                 {% else %}
-                  <table class="forum-table">
-                    <thead>
-                      <tr>
-                        <th>{% if current_path %}Subcategory{% else %}Category{% endif %}</th>
-                        <th class="col-count">Threads</th>
-                        <th class="col-action">Action</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {% for cat in categories %}
-                      <tr>
-                        <td>
-                          <div class="cat-name">
-                            <a class="btn" href="/forum{% if current_path %}/{{ current_path }}{% endif %}/{{ cat.slug }}">{{ cat.name }}</a>
-                          </div>
-                          <div class="cat-desc">{{ cat.desc }}</div>
-                        </td>
-                          <td class="col-count">{{ thread_counts.get(cat.id, 0) }}</td>
-                          <td class="col-action">
-                            <a class="link-btn" href="/forum{% if current_path %}/{{ current_path }}{% endif %}/{{ cat.slug }}">Enter »</a>
-                          </td>
+                  <div class="table-scroll">
+                    <table class="forum-table">
+                      <thead>
+                        <tr>
+                          <th>{% if current_path %}Subcategory{% else %}Category{% endif %}</th>
+                          <th class="col-count">Threads</th>
+                          <th class="col-action">Action</th>
                         </tr>
-                      {% endfor %}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {% for cat in categories %}
+                        <tr>
+                          <td>
+                            <div class="cat-name">
+                              <a class="btn" href="/forum{% if current_path %}/{{ current_path }}{% endif %}/{{ cat.slug }}">{{ cat.name }}</a>
+                            </div>
+                            <div class="cat-desc">{{ cat.desc }}</div>
+                          </td>
+                            <td class="col-count">{{ thread_counts.get(cat.id, 0) }}</td>
+                            <td class="col-action">
+                              <a class="link-btn" href="/forum{% if current_path %}/{{ current_path }}{% endif %}/{{ cat.slug }}">Enter »</a>
+                            </td>
+                          </tr>
+                        {% endfor %}
+                      </tbody>
+                    </table>
+                  </div>
                 {% endif %}
               </div>
 
@@ -712,42 +747,44 @@
 
             <div id="thread-list" class="board-body">
               {% if show_top_threads %}
-                {% if threads_flat|length == 0 %}
-                  <div class="empty-row">No streams yet.</div>
-                {% else %}
-                  <table class="forum-table thread-table">
-                    <thead>
-                    <tr>
-                      <th>Stream Thread</th>
-                      <th class="col-user">User</th>
-                      <th class="col-time">Added (UTC)</th>
-                      <th class="col-count">Replies</th>
-                      <th class="col-click">Clicks</th>
-                      <th class="col-action">Link</th>
-                    </tr>
-                    </thead>
-                    <tbody>
-                    {% for t in threads_flat %}
+              {% if threads_flat|length == 0 %}
+                <div class="empty-row">No streams yet.</div>
+              {% else %}
+                  <div class="table-scroll">
+                    <table class="forum-table thread-table">
+                      <thead>
                       <tr>
-                        <td>
-                          <div class="thread-title"><a href="/thread/{{ t.id }}">{{ t.title }}</a></div>
-                          <div class="thread-meta">
-                            {% set cat = cat_lookup.get(t.category_id) %}
-                            {% if cat %}In {{ cat.name }}{% endif %}
-                            {% if t.tag %} • #{{ t.tag }}{% endif %}
-                          </div>
-                        </td>
-                          <td class="col-user">{{ t.user or 'Anonymous' }}</td>
-                          <td class="col-time"><span class="mono">{{ t.created_at }}</span></td>
-                          <td class="col-count">{{ t.reply_count }}</td>
-                          <td class="col-click">{{ t.clicks or 0 }}</td>
-                          <td class="col-action">
-                            <a class="link-btn" href="/thread/{{ t.id }}">Open</a>
+                        <th>Stream Thread</th>
+                        <th class="col-user">User</th>
+                        <th class="col-time">Added (UTC)</th>
+                        <th class="col-count">Replies</th>
+                        <th class="col-click">Clicks</th>
+                        <th class="col-action">Link</th>
+                      </tr>
+                      </thead>
+                      <tbody>
+                      {% for t in threads_flat %}
+                        <tr>
+                          <td>
+                            <div class="thread-title"><a href="/thread/{{ t.id }}">{{ t.title }}</a></div>
+                            <div class="thread-meta">
+                              {% set cat = cat_lookup.get(t.category_id) %}
+                              {% if cat %}In {{ cat.name }}{% endif %}
+                              {% if t.tag %} • #{{ t.tag }}{% endif %}
+                            </div>
                           </td>
-                        </tr>
-                      {% endfor %}
-                    </tbody>
-                  </table>
+                            <td class="col-user">{{ t.user or 'Anonymous' }}</td>
+                            <td class="col-time"><span class="mono">{{ t.created_at }}</span></td>
+                            <td class="col-count">{{ t.reply_count }}</td>
+                            <td class="col-click">{{ t.clicks or 0 }}</td>
+                            <td class="col-action">
+                              <a class="link-btn" href="/thread/{{ t.id }}">Open</a>
+                            </td>
+                          </tr>
+                        {% endfor %}
+                      </tbody>
+                    </table>
+                  </div>
                 {% endif %}
               {% else %}
                 {% for tag in tag_buckets %}
@@ -760,41 +797,43 @@
                     {% if threads_grouped[tag]|length == 0 %}
                       <div class="empty-row">No streams in this tag.</div>
                     {% else %}
-                      <table class="forum-table thread-table">
-                        <thead>
-                          <tr>
-                            <th>Stream Thread</th>
-                            <th class="col-user">User</th>
-                            <th class="col-time">Added (UTC)</th>
-                            <th class="col-count">Replies</th>
-                            <th class="col-click">Clicks</th>
-                            <th class="col-action">Link</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {% for t in threads_grouped[tag] %}
+                      <div class="table-scroll">
+                        <table class="forum-table thread-table">
+                          <thead>
                             <tr>
-                              <td>
-                                <div class="thread-title"><a href="/thread/{{ t.id }}">{{ t.title }}</a></div>
-                                <div class="thread-meta">
-                                  Tag: #{{ t.tag }}
-                                  {% if show_top_threads %}
-                                    {% set cat = cat_lookup.get(t.category_id) %}
-                                    {% if cat %}&mdash; in {{ cat.name }}{% endif %}
-                                  {% endif %}
-                                </div>
-                              </td>
-                              <td class="col-user">{{ t.user or 'Anonymous' }}</td>
-                              <td class="col-time"><span class="mono">{{ t.created_at }}</span></td>
-                              <td class="col-count">{{ t.reply_count }}</td>
-                              <td class="col-click">{{ t.clicks or 0 }}</td>
-                              <td class="col-action">
-                                <a class="link-btn" href="/thread/{{ t.id }}">Open</a>
-                              </td>
+                              <th>Stream Thread</th>
+                              <th class="col-user">User</th>
+                              <th class="col-time">Added (UTC)</th>
+                              <th class="col-count">Replies</th>
+                              <th class="col-click">Clicks</th>
+                              <th class="col-action">Link</th>
                             </tr>
-                          {% endfor %}
-                        </tbody>
-                      </table>
+                          </thead>
+                          <tbody>
+                            {% for t in threads_grouped[tag] %}
+                              <tr>
+                                <td>
+                                  <div class="thread-title"><a href="/thread/{{ t.id }}">{{ t.title }}</a></div>
+                                  <div class="thread-meta">
+                                    Tag: #{{ t.tag }}
+                                    {% if show_top_threads %}
+                                      {% set cat = cat_lookup.get(t.category_id) %}
+                                      {% if cat %}&mdash; in {{ cat.name }}{% endif %}
+                                    {% endif %}
+                                  </div>
+                                </td>
+                                <td class="col-user">{{ t.user or 'Anonymous' }}</td>
+                                <td class="col-time"><span class="mono">{{ t.created_at }}</span></td>
+                                <td class="col-count">{{ t.reply_count }}</td>
+                                <td class="col-click">{{ t.clicks or 0 }}</td>
+                                <td class="col-action">
+                                  <a class="link-btn" href="/thread/{{ t.id }}">Open</a>
+                                </td>
+                              </tr>
+                            {% endfor %}
+                          </tbody>
+                        </table>
+                      </div>
                     {% endif %}
                   </div>
                 {% endfor %}

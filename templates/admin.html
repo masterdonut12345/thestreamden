@@ -2,6 +2,7 @@
 <html>
   <head>
     <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Admin Panel</title>
     <style>
       :root {
@@ -69,6 +70,14 @@
       th { background: #f0f3fb; }
       .notice { padding: 10px; border: 1px solid var(--border); background: #f7f9ff; margin-bottom: 12px; }
       .error { padding: 10px; border: 1px solid #c94141; background: #ffecec; margin-bottom: 12px; color: #7a1f1f; }
+
+      .table-scroll { overflow-x: auto; border-radius: 4px; }
+      .table-scroll table { min-width: 620px; }
+
+      @media (max-width: 760px) {
+        body { padding: 18px 12px; }
+        .shell h1 { word-break: break-word; }
+      }
     </style>
   </head>
   <body>
@@ -108,33 +117,35 @@
             </form>
             <div>
               <h3>Existing Categories</h3>
-              <table>
-                <thead>
-                  <tr>
-                    <th>Path</th>
-                    <th>Name</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {% for cat in categories %}
+              <div class="table-scroll">
+                <table>
+                  <thead>
                     <tr>
-                      <td><code>{{ category_paths.get(cat.id, cat_lookup[cat.id]["slug"]) }}</code></td>
-                      <td>{{ cat.name }}</td>
-                      <td>
-                        <form method="post" action="/admin/categories/{{ cat.id }}/update">
-                          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-                          <label>Name</label>
-                          <input name="name" type="text" value="{{ cat.name }}" maxlength="120" required />
-                          <label>Description</label>
-                          <textarea name="desc" maxlength="2000" required>{{ cat.desc }}</textarea>
-                          <button class="btn secondary" type="submit">Save</button>
-                        </form>
-                      </td>
+                      <th>Path</th>
+                      <th>Name</th>
+                      <th>Actions</th>
                     </tr>
-                  {% endfor %}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {% for cat in categories %}
+                      <tr>
+                        <td><code>{{ category_paths.get(cat.id, cat_lookup[cat.id]["slug"]) }}</code></td>
+                        <td>{{ cat.name }}</td>
+                        <td>
+                          <form method="post" action="/admin/categories/{{ cat.id }}/update">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                            <label>Name</label>
+                            <input name="name" type="text" value="{{ cat.name }}" maxlength="120" required />
+                            <label>Description</label>
+                            <textarea name="desc" maxlength="2000" required>{{ cat.desc }}</textarea>
+                            <button class="btn secondary" type="submit">Save</button>
+                          </form>
+                        </td>
+                      </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         </div>
