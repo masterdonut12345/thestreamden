@@ -10,7 +10,7 @@ import json
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from typing import Optional
-from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit, quote
 
 from flask import (
     Flask,
@@ -395,6 +395,7 @@ def build_forum_stats(db, limit: int = 5) -> dict:
         key = name or "Anonymous"
         if key not in user_totals:
             user_totals[key] = {
+                "user_id": None,
                 "threads": 0,
                 "posts": 0,
                 "latest_post": None,
@@ -411,6 +412,8 @@ def build_forum_stats(db, limit: int = 5) -> dict:
     )
     for t in threads:
         info = ensure_user(t.user.username if t.user else "Anonymous")
+        if t.user:
+            info["user_id"] = t.user.id
         info["threads"] += 1
         dt = t.created_at or datetime.min.replace(tzinfo=timezone.utc)
         if dt.tzinfo is None:
@@ -426,6 +429,8 @@ def build_forum_stats(db, limit: int = 5) -> dict:
     )
     for p in posts:
         info = ensure_user(p.user.username if p.user else "Anonymous")
+        if p.user:
+            info["user_id"] = p.user.id
         info["posts"] += 1
         dt = p.created_at or datetime.min.replace(tzinfo=timezone.utc)
         if dt.tzinfo is None:
@@ -438,11 +443,8 @@ def build_forum_stats(db, limit: int = 5) -> dict:
     for username, details in user_totals.items():
         total = details["threads"] + details["posts"]
         link = None
-        if details["latest_post"]:
-            lp = details["latest_post"]
-            link = f"/thread/{lp.get('thread_id')}#post-{lp.get('id')}"
-        elif details["latest_thread"]:
-            link = f"/thread/{details['latest_thread'].get('id')}"
+        if details.get("user_id"):
+            link = f"/users/{quote(username)}"
         leaderboard.append(
             {
                 "username": username,
@@ -1074,6 +1076,34 @@ def account():
         thread_lookup=thread_lookup,
         cat_lookup=cat_lookup,
         build_category_path=build_category_path,
+    )
+
+
+@app.route("/users/<username>")
+def user_profile(username):
+    db = get_db()
+    user_obj = db.execute(select(User).where(User.username == username)).scalar_one_or_none()
+    if user_obj is None:
+        abort(404)
+
+    threads, posts = user_threads_and_posts(db, user_obj)
+    _, cat_lookup, _ = load_category_indexes(db)
+    all_threads = (
+        db.execute(select(Thread).options(joinedload(Thread.user)))
+        .scalars()
+        .all()
+    )
+    thread_lookup = {t.id: serialize_thread(t) for t in all_threads}
+    return render_template(
+        "user_profile.html",
+        profile_user=user_obj,
+        threads=threads,
+        posts=posts,
+        cat_lookup=cat_lookup,
+        thread_lookup=thread_lookup,
+        build_category_path=build_category_path,
+        current_user=g.current_user.username if g.current_user else None,
+        is_self=g.current_user.id == user_obj.id if g.current_user else False,
     )
 
 
