@@ -492,56 +492,58 @@
             {% endif %}
           </div>
 
-          {% if allow_posting and current_user %}
-            <div class="panel form-body" style="margin-top:12px;">
-              <h3>Post a stream</h3>
-              <form action="/add_thread" method="POST" class="forum-form">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-                <div class="form-row">
-                  <label for="sidebar-thread-category">Category</label>
-                  <span class="hint">Choose where to post.</span><br>
-                  <input class="search-input" type="text" id="sidebar-category-search" placeholder="Search categories" oninput="filterPostableCategories();">
-                  <select id="sidebar-thread-category" name="category_path" required>
-                    {% for c in postable_categories %}
-                      <option value="{{ c.path }}" {% if default_category_path == c.path %}selected{% endif %}>{{ c.label }}</option>
-                    {% endfor %}
-                  </select>
-                </div>
-
-                <div class="form-row">
-                  <label for="sidebar-thread-title">Stream title</label><br>
-                  <input type="text" id="sidebar-thread-title" name="thread-title" maxlength="80" value="{{ prefill_title }}" required>
-                </div>
-
-                <div class="form-row">
-                  <label for="sidebar-thread-stream-link">Stream link</label>
-                  <span class="hint">Prefer “embed stream” to auto-fill.</span><br>
-                  <input type="text" id="sidebar-thread-stream-link" name="thread-stream-link" value="{{ prefill_stream }}" maxlength="500" required>
-                  <div class="tip-line">
-                    <button type="button" class="link-btn" onclick="launchEmbedSidebar();">Embed stream</button>
+          {% if allow_posting and current_user and not show_top_threads %}
+            <details class="panel form-body" style="margin-top:12px;">
+              <summary style="cursor:pointer; font-weight:700; color:var(--accent-strong);">Post a stream</summary>
+              <div style="margin-top:8px;">
+                <form action="/add_thread" method="POST" class="forum-form">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                  <div class="form-row">
+                    <label for="sidebar-thread-category">Category</label>
+                    <span class="hint">Choose where to post.</span><br>
+                    <input class="search-input" type="text" id="sidebar-category-search" placeholder="Search categories" oninput="filterPostableCategories();">
+                    <select id="sidebar-thread-category" name="category_path" required>
+                      {% for c in postable_categories %}
+                        <option value="{{ c.path }}" {% if default_category_path == c.path %}selected{% endif %}>{{ c.label }}</option>
+                      {% endfor %}
+                    </select>
                   </div>
-                </div>
 
-                <div class="form-row">
-                  <label for="sidebar-thread-tag">Tag</label>
-                  <span class="hint">Group threads by topic. Defaults to #general.</span><br>
-                  <input type="text" id="sidebar-thread-tag" name="thread-tag" maxlength="64" value="{{ prefill_tag or default_tag }}" placeholder="{{ default_tag }}">
-                </div>
+                  <div class="form-row">
+                    <label for="sidebar-thread-title">Stream title</label><br>
+                    <input type="text" id="sidebar-thread-title" name="thread-title" maxlength="80" value="{{ prefill_title }}" required>
+                  </div>
 
-                <div class="form-row">
-                  <label for="sidebar-thread-expiration">Expiration</label><br>
-                  <select id="sidebar-thread-expiration" name="thread-expiration" required>
-                    {% for opt in exp_choices %}
-                      <option value="{{ opt }}" {% if prefill_exp == opt %}selected{% endif %}>{{ opt }}</option>
-                    {% endfor %}
-                  </select>
-                </div>
+                  <div class="form-row">
+                    <label for="sidebar-thread-stream-link">Stream link</label>
+                    <span class="hint">Prefer “embed stream” to auto-fill.</span><br>
+                    <input type="text" id="sidebar-thread-stream-link" name="thread-stream-link" value="{{ prefill_stream }}" maxlength="500" required>
+                    <div class="tip-line">
+                      <button type="button" class="link-btn" onclick="launchEmbedSidebar();">Embed stream</button>
+                    </div>
+                  </div>
 
-                <div class="form-row">
-                  <input type="submit" value="Post stream">
-                </div>
-              </form>
-            </div>
+                  <div class="form-row">
+                    <label for="sidebar-thread-tag">Tag</label>
+                    <span class="hint">Group threads by topic. Defaults to #general.</span><br>
+                    <input type="text" id="sidebar-thread-tag" name="thread-tag" maxlength="64" value="{{ prefill_tag or default_tag }}" placeholder="{{ default_tag }}">
+                  </div>
+
+                  <div class="form-row">
+                    <label for="sidebar-thread-expiration">Expiration</label><br>
+                    <select id="sidebar-thread-expiration" name="thread-expiration" required>
+                      {% for opt in exp_choices %}
+                        <option value="{{ opt }}" {% if prefill_exp == opt %}selected{% endif %}>{{ opt }}</option>
+                      {% endfor %}
+                    </select>
+                  </div>
+
+                  <div class="form-row">
+                    <input type="submit" value="Post stream">
+                  </div>
+                </form>
+              </div>
+            </details>
           {% endif %}
         </aside>
 
