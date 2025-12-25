@@ -862,6 +862,7 @@ def render_forum_page(
         prefill_title=prefill_title,
         prefill_exp=prefill_exp,
         forum_stats=forum_stats,
+        exp_choices=EXP_CHOICES,
     )
 
 

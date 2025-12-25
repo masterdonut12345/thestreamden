@@ -155,7 +155,7 @@
                           <input style="flex:2; min-width:140px;" type="text" name="title" value="{{ t.title }}" maxlength="80" aria-label="Thread title for {{ t.title }}">
                           <input style="flex:1; min-width:90px;" type="text" name="tag" value="{{ t.tag }}" maxlength="64" aria-label="Tag for {{ t.title }}">
                         </div>
-                        <button class="danger-btn" type="submit" style="border-color:#2d6a2f; background:linear-gradient(180deg, #e6ffed, #c8f5d2); color:#184d1b;">Save</button>
+                        <button class="danger-btn" type="submit" style="border-color:#2d6a2f; background:linear-gradient(180deg, #e6ffed, #c8f5d2); color:#184d1b; padding:6px 10px;">Save</button>
                       </form>
                       <form action="/account/delete_thread/{{ t.id }}" method="POST" style="margin:0;">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
