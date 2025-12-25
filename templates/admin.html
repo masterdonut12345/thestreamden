@@ -1,0 +1,206 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Admin Panel</title>
+    <style>
+      :root {
+        --ink: #1b2432;
+        --muted: #4f5b73;
+        --paper: #f2f4fb;
+        --panel: #ffffff;
+        --border: #c8d0dd;
+        --accent: #2f4f9c;
+      }
+      body {
+        font-family: "Helvetica Neue", Arial, sans-serif;
+        background: var(--paper);
+        color: var(--ink);
+        margin: 0;
+        padding: 20px;
+      }
+      a { color: var(--accent); }
+      .shell {
+        max-width: 1100px;
+        margin: 0 auto;
+        background: var(--panel);
+        border: 1px solid var(--border);
+        box-shadow: 0 8px 24px rgba(22, 39, 75, 0.15);
+        padding: 18px 20px 30px;
+      }
+      h1 { margin: 0 0 12px 0; }
+      .muted { color: var(--muted); }
+      .panel {
+        border: 1px solid var(--border);
+        padding: 14px;
+        margin-top: 14px;
+        background: #fff;
+      }
+      .panel h2 { margin: 0 0 8px 0; }
+      .panel h3 { margin: 12px 0 8px 0; }
+      .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; }
+      label { display: block; margin: 6px 0 2px; font-weight: 600; }
+      input[type="text"], textarea, select {
+        width: 100%;
+        padding: 8px;
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        font-size: 14px;
+      }
+      textarea { min-height: 90px; }
+      .btn {
+        display: inline-block;
+        padding: 10px 14px;
+        background: linear-gradient(180deg, #2f4f9c, #253e7c);
+        color: #fff;
+        border: 1px solid #1f2f55;
+        border-radius: 4px;
+        cursor: pointer;
+        font-weight: 700;
+        margin-top: 8px;
+      }
+      .btn.secondary {
+        background: linear-gradient(180deg, #f7f9ff, #e8edf7);
+        color: #1b2432;
+        border-color: var(--border);
+      }
+      table { border-collapse: collapse; width: 100%; margin-top: 6px; }
+      th, td { border: 1px solid var(--border); padding: 8px; text-align: left; }
+      th { background: #f0f3fb; }
+      .notice { padding: 10px; border: 1px solid var(--border); background: #f7f9ff; margin-bottom: 12px; }
+      .error { padding: 10px; border: 1px solid #c94141; background: #ffecec; margin-bottom: 12px; color: #7a1f1f; }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <h1>Admin Panel</h1>
+      <p class="muted">Restricted access with the admin key.</p>
+
+      {% if message %}
+        <div class="notice">{{ message }}</div>
+      {% endif %}
+
+      {% if not admin_authed %}
+        {% if login_error %}
+          <div class="error">{{ login_error }}</div>
+        {% endif %}
+        <form method="post">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <label for="admin_token">Admin Key</label>
+          <input id="admin_token" name="admin_token" type="text" autocomplete="off" required />
+          <button class="btn" type="submit">Enter Admin Panel</button>
+        </form>
+      {% else %}
+        <p><a href="/admin/logout">Log out</a></p>
+        <div class="panel">
+          <h2>Categories</h2>
+          <div class="grid">
+            <form method="post" action="/admin/categories/add">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+              <h3>Add Category</h3>
+              <label for="parent_path">Parent Path (optional)</label>
+              <input id="parent_path" name="parent_path" type="text" placeholder="e.g. games/fps" />
+              <label for="name">Name</label>
+              <input id="name" name="name" type="text" maxlength="120" required />
+              <label for="desc">Description</label>
+              <textarea id="desc" name="desc" maxlength="2000" required></textarea>
+              <button class="btn" type="submit">Create Category</button>
+            </form>
+            <div>
+              <h3>Existing Categories</h3>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Path</th>
+                    <th>Name</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for cat in categories %}
+                    <tr>
+                      <td><code>{{ category_paths.get(cat.id, cat_lookup[cat.id]["slug"]) }}</code></td>
+                      <td>{{ cat.name }}</td>
+                      <td>
+                        <form method="post" action="/admin/categories/{{ cat.id }}/update">
+                          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                          <label>Name</label>
+                          <input name="name" type="text" value="{{ cat.name }}" maxlength="120" required />
+                          <label>Description</label>
+                          <textarea name="desc" maxlength="2000" required>{{ cat.desc }}</textarea>
+                          <button class="btn secondary" type="submit">Save</button>
+                        </form>
+                      </td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h2>Threads</h2>
+          <form method="get" action="/admin">
+            <label for="thread_id">Load Thread by ID</label>
+            <input id="thread_id" name="thread_id" type="text" value="{{ thread_detail.id if thread_detail else '' }}" />
+            <button class="btn secondary" type="submit">Load</button>
+          </form>
+
+          {% if thread_detail %}
+            <div class="grid">
+              <div>
+                <h3>Current Details</h3>
+                <p><strong>Title:</strong> {{ thread_detail.title }}</p>
+                <p><strong>Stream:</strong> <a href="{{ thread_detail.stream_link }}">{{ thread_detail.stream_link }}</a></p>
+                <p><strong>Tag:</strong> {{ thread_detail.tag }}</p>
+                <p><strong>Category:</strong> {{ thread_detail.category_path or 'N/A' }}</p>
+                <p><strong>User:</strong> {{ thread_detail.user }}</p>
+              </div>
+              <form method="post" action="/admin/threads/{{ thread_detail.id }}/update">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <h3>Edit Thread</h3>
+                <label for="title">Title</label>
+                <input id="title" name="title" type="text" value="{{ thread_detail.title }}" maxlength="200" required />
+                <label for="stream_link">Stream Link</label>
+                <input id="stream_link" name="stream_link" type="text" value="{{ thread_detail.stream_link }}" maxlength="1024" required />
+                <label for="tag">Tag</label>
+                <input id="tag" name="tag" type="text" value="{{ thread_detail.tag or default_tag }}" maxlength="64" required />
+                <button class="btn" type="submit">Save Thread</button>
+              </form>
+            </div>
+          {% else %}
+            <p class="muted">Load a thread by ID to manage its details.</p>
+          {% endif %}
+        </div>
+
+        <div class="panel">
+          <h2>Users</h2>
+          <form method="get" action="/admin">
+            <label for="user_search">Lookup by username or ID</label>
+            <input id="user_search" name="user_search" type="text" value="{{ user_lookup.username if user_lookup else '' }}" />
+            <button class="btn secondary" type="submit">Find User</button>
+          </form>
+
+          {% if user_lookup %}
+            <div class="grid">
+              <div>
+                <p><strong>ID:</strong> {{ user_lookup.id }}</p>
+                <p><strong>Username:</strong> {{ user_lookup.username }}</p>
+                <p><strong>Status:</strong> {{ 'Banned' if user_lookup.is_banned else 'Active' }}</p>
+              </div>
+              <form method="post" action="/admin/users/ban">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <input type="hidden" name="user_id" value="{{ user_lookup.id }}" />
+                <input type="hidden" name="action" value="{{ 'unban' if user_lookup.is_banned else 'ban' }}">
+                <button class="btn" type="submit">{{ 'Unban User' if user_lookup.is_banned else 'Ban User' }}</button>
+              </form>
+            </div>
+          {% else %}
+            <p class="muted">Lookup a user to ban or unban them.</p>
+          {% endif %}
+        </div>
+      {% endif %}
+    </div>
+  </body>
+</html>

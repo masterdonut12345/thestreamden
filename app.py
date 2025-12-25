@@ -124,11 +124,22 @@ def require_login(next_url: str = "/forum"):
     user = get_current_user(db)
     if not user:
         return redirect(f"/login?next={next_url}")
+    if getattr(user, "is_banned", False):
+        abort(403)
     return user
 
 @app.context_processor
 def inject_csrf():
     return {"csrf_token": generate_csrf_token()}
+
+
+def is_admin_authed() -> bool:
+    return bool(session.get("admin_authed"))
+
+
+def require_admin():
+    if not is_admin_authed():
+        abort(403)
 
 # -----------------------------
 # Utility helpers
@@ -1098,7 +1109,9 @@ def login():
         username = (request.form.get("username") or "").strip()
         password = (request.form.get("password") or "").strip()
         user = db.execute(select(User).where(User.username == username)).scalar_one_or_none()
-        if user and check_password_hash(user.password_hash, password):
+        if user and user.is_banned:
+            error = "This account has been banned."
+        elif user and check_password_hash(user.password_hash, password):
             session["user_id"] = user.id
             session["username"] = user.username
             return redirect(next_url)
@@ -1138,6 +1151,203 @@ def signup():
                 session["username"] = new_user.username
                 return redirect(next_url)
     return render_template("signup.html", error=error, next_url=next_url)
+
+
+@app.route("/admin", methods=["GET", "POST"])
+def admin_panel():
+    db = get_db()
+    login_error = None
+    message = request.args.get("message", "")
+    user_lookup = None
+    thread_detail = None
+
+    if not ADMIN_TOKEN:
+        login_error = "Admin token is not configured on the server."
+
+    if not is_admin_authed():
+        if request.method == "POST":
+            require_csrf()
+            token = (request.form.get("admin_token") or "").strip()
+            if login_error:
+                pass
+            elif token and hmac.compare_digest(token, ADMIN_TOKEN):
+                session["admin_authed"] = True
+                return redirect("/admin")
+            else:
+                login_error = "Invalid admin token."
+        return render_template(
+            "admin.html",
+            admin_authed=False,
+            login_error=login_error,
+            message=message,
+            csrf_token=generate_csrf_token(),
+        )
+
+    categories, cat_lookup, _ = load_category_indexes(db)
+    categories = sorted(categories, key=lambda c: build_category_path(c, cat_lookup))
+    category_paths = {c["id"]: build_category_path(c, cat_lookup) for c in categories}
+
+    thread_id_param = request.args.get("thread_id")
+    if thread_id_param:
+        try:
+            tid = int(thread_id_param)
+        except ValueError:
+            tid = None
+        if tid:
+            thread_obj = (
+                db.execute(
+                    select(Thread)
+                    .where(Thread.id == tid)
+                    .options(joinedload(Thread.user), joinedload(Thread.category))
+                )
+                .scalars()
+                .first()
+            )
+            if thread_obj:
+                thread_detail = serialize_thread(thread_obj)
+                if thread_obj.category:
+                    thread_detail["category_path"] = build_category_path(
+                        serialize_category(thread_obj.category), cat_lookup
+                    )
+                thread_detail["user"] = thread_obj.user.username if thread_obj.user else "Anonymous"
+
+    user_query = (request.args.get("user_search") or "").strip()
+    if user_query:
+        filters = [User.username == user_query]
+        if user_query.isdigit():
+            filters.append(User.id == int(user_query))
+        user_lookup = (
+            db.execute(
+                select(User).where(or_(*filters))
+            )
+            .scalars()
+            .first()
+        )
+
+    return render_template(
+        "admin.html",
+        admin_authed=True,
+        categories=categories,
+        cat_lookup=cat_lookup,
+        category_paths=category_paths,
+        thread_detail=thread_detail,
+        user_lookup=user_lookup,
+        message=message,
+        exp_choices=EXP_CHOICES,
+        default_tag=DEFAULT_TAG,
+        csrf_token=generate_csrf_token(),
+    )
+
+
+@app.route("/admin/logout")
+def admin_logout():
+    session.pop("admin_authed", None)
+    return redirect("/admin")
+
+
+@app.route("/admin/categories/add", methods=["POST"])
+def admin_add_category_form():
+    require_csrf()
+    require_admin()
+    db = get_db()
+
+    parent_path = (request.form.get("parent_path") or "").strip("/")
+    name = (request.form.get("name") or "").strip()
+    desc = (request.form.get("desc") or "").strip()
+
+    if not name or len(name) > 120 or not desc or len(desc) > 2000:
+        abort(400)
+
+    append_category(db, parent_path, name, desc)
+    return redirect("/admin?message=Category%20added")
+
+
+@app.route("/admin/categories/<int:cat_id>/update", methods=["POST"])
+def admin_update_category(cat_id: int):
+    require_csrf()
+    require_admin()
+    db = get_db()
+
+    name = (request.form.get("name") or "").strip()
+    desc = (request.form.get("desc") or "").strip()
+    if not name or len(name) > 120 or not desc or len(desc) > 2000:
+        abort(400)
+
+    cat = db.get(Category, cat_id)
+    if cat is None:
+        abort(404)
+
+    cat.name = name
+    cat.desc = desc
+    db.commit()
+    return redirect("/admin?message=Category%20updated")
+
+
+@app.route("/admin/users/ban", methods=["POST"])
+def admin_ban_user():
+    require_csrf()
+    require_admin()
+    db = get_db()
+    user_id_raw = request.form.get("user_id")
+    action = (request.form.get("action") or "ban").strip().lower()
+    try:
+        user_id = int(user_id_raw)
+    except Exception:
+        abort(400)
+
+    user = db.get(User, user_id)
+    if user is None:
+        abort(404)
+
+    user.is_banned = action == "ban"
+    db.commit()
+
+    qs = urlencode({"user_search": user.username, "message": "User updated"})
+    return redirect(f"/admin?{qs}")
+
+
+@app.route("/admin/threads/<int:thread_id>/update", methods=["POST"])
+def admin_update_thread(thread_id: int):
+    require_csrf()
+    require_admin()
+    db = get_db()
+
+    title = (request.form.get("title") or "").strip()
+    stream_link = (request.form.get("stream_link") or "").strip()
+    tag_raw = (request.form.get("tag") or DEFAULT_TAG).strip()
+
+    if not title or len(title) > 200 or not stream_link or len(stream_link) > 1024:
+        abort(400)
+    if len(tag_raw) > 64:
+        abort(400)
+
+    thread = db.get(Thread, thread_id)
+    if thread is None:
+        abort(404)
+
+    new_slug = slugify(title)
+    existing = (
+        db.execute(
+            select(Thread).where(
+                Thread.category_id == thread.category_id,
+                Thread.slug == new_slug,
+                Thread.id != thread_id,
+            )
+        )
+        .scalars()
+        .first()
+    )
+    if existing:
+        abort(409)
+
+    thread.title = title
+    thread.slug = new_slug
+    thread.stream_link = stream_link
+    thread.tag = normalize_tag(tag_raw)
+    db.commit()
+
+    qs = urlencode({"thread_id": thread_id, "message": "Thread updated"})
+    return redirect(f"/admin?{qs}")
 
 
 @app.route("/api/admin/categories", methods=["POST"])
