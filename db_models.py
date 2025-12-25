@@ -54,7 +54,7 @@ class User(Base):
     id = Column(Integer, primary_key=True)
     username = Column(String(64), unique=True, nullable=False, index=True)
     password_hash = Column(String(256), nullable=False)
-    is_banned = Column(Boolean, nullable=False, default=False, server_default=text("0"))
+    is_banned = Column(Boolean, nullable=False, default=False, server_default=text("FALSE"))
     is_admin = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
     updated_at = Column(
@@ -166,7 +166,7 @@ def ensure_user_ban_column() -> None:
         return
 
     with engine.begin() as conn:
-        conn.execute(text("ALTER TABLE users ADD COLUMN is_banned BOOLEAN NOT NULL DEFAULT 0"))
+        conn.execute(text("ALTER TABLE users ADD COLUMN is_banned BOOLEAN NOT NULL DEFAULT FALSE"))
 
 
 def get_session() -> Generator:
