@@ -35,6 +35,7 @@ from pathlib import Path
 
 app = Flask(__name__)
 
+ADMIN_GATE = os.environ.get("ADMIN_GATE")
 EXP_CHOICES = ["1 day", "3 days", "1 week", "1 month"]
 DEFAULT_TAG = "general"
 ADMIN_TOKEN = os.environ.get("ADMIN_TOKEN")
@@ -1240,6 +1241,12 @@ def signup():
                 return redirect(next_url)
     return render_template("signup.html", error=error, next_url=next_url)
 
+@app.before_request
+def admin_gate():
+    if request.path.startswith('/admin'):
+        gate = request.args.get('gate')
+        if not gate or not hmac.compare_digest(gate, ADMIN_GATE):
+            abort(404)
 
 @app.route("/admin", methods=["GET", "POST"])
 def admin_panel():
