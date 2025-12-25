@@ -420,6 +420,7 @@
         if (!path) {
           if (submitBtn) submitBtn.disabled = true;
           if (display) display.textContent = "No category selected";
+          syncSidebarCategoryValidity();
           return;
         }
         var opt = document.createElement("option");
@@ -429,6 +430,18 @@
         select.appendChild(opt);
         if (display) display.textContent = label;
         if (submitBtn) submitBtn.disabled = false;
+        syncSidebarCategoryValidity();
+      }
+
+      function syncSidebarCategoryValidity() {
+        var select = document.getElementById("sidebar-thread-category");
+        var search = document.getElementById("sidebar-category-search");
+        if (!select || !search) return;
+        if (select.value) {
+          search.setCustomValidity("");
+        } else {
+          search.setCustomValidity("Please fill out this field");
+        }
       }
 
       function filterPostableCategories() {
@@ -474,6 +487,7 @@
       }
 
       window.addEventListener("DOMContentLoaded", autoOpenThreadForm);
+      window.addEventListener("DOMContentLoaded", syncSidebarCategoryValidity);
       {% if show_post_panel and postable_categories %}
         window.postableCategories = {{ postable_categories | tojson }};
         window.addEventListener("DOMContentLoaded", filterPostableCategories);
@@ -561,13 +575,13 @@
                     <label for="sidebar-thread-category">Category</label>
                     <span class="hint">Type to filter and pick a category.</span><br>
                     <div class="dropdown-shell">
-                      <input class="search-input" type="text" id="sidebar-category-search" placeholder="Search categories…" oninput="filterPostableCategories();" autocomplete="off">
+                      <input class="search-input" type="text" id="sidebar-category-search" placeholder="Search categories…" oninput="filterPostableCategories();" autocomplete="off" required>
                       <div id="sidebar-category-dropdown" class="dropdown-panel" style="display:none;">
                         <div id="sidebar-category-suggestions"></div>
                       </div>
                     </div>
                     <div id="sidebar-category-selected" class="hint" style="margin-top:4px;">Select a category</div>
-                    <select id="sidebar-thread-category" name="category_path" style="display:none;"></select>
+                    <select id="sidebar-thread-category" name="category_path" style="display:none;" required></select>
                   </div>
 
                   <div class="form-row">
