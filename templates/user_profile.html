@@ -2,7 +2,7 @@
 <html>
   <head>
     <meta charset="utf-8" />
-    <title>Your account - The Stream Den</title>
+    <title>{{ profile_user.username }} - Profile - The Stream Den</title>
     <style>
       :root {
         --ink: #1b2432;
@@ -86,16 +86,7 @@
         color: var(--muted);
         background: var(--panel-soft);
       }
-      .danger-btn {
-        display: inline-block;
-        padding: 6px 10px;
-        border: 1px solid #c21f1f;
-        background: linear-gradient(180deg, #ffecec, #ffd9d9);
-        color: #7a0f0f;
-        border-radius: 3px;
-        cursor: pointer;
-      }
-      .danger-btn:hover { background: linear-gradient(180deg, #ffd9d9, #ffc9c9); }
+      .muted { color: var(--muted); }
     </style>
   </head>
   <body>
@@ -103,22 +94,25 @@
       <div class="shell">
         <div class="header">
           <div>
-            <h1>Your account</h1>
-            <div style="font-size:13px;">Signed in as <strong>{{ current_user }}</strong></div>
+            <h1>{{ profile_user.username }}</h1>
+            <div style="font-size:13px;">Viewing all threads and replies{% if is_self %} (you){% endif %}</div>
           </div>
           <div>
             <a class="nav-btn" href="/forum">← Back to forum</a>
+            {% if is_self %}
+              <a class="nav-btn" href="/account">Account</a>
+            {% endif %}
           </div>
         </div>
 
         <div class="content">
           <div class="panel">
             <div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
-              <h3>Your threads</h3>
+              <h3>Threads</h3>
               <span class="chip">{{ threads|length }} total</span>
             </div>
             {% if threads|length == 0 %}
-              <div style="font-size:13px; color:var(--muted);">You have not posted any threads yet.</div>
+              <div style="font-size:13px;" class="muted">No threads yet.</div>
             {% else %}
               <table>
                 <thead>
@@ -129,7 +123,6 @@
                     <th>Created</th>
                     <th>Replies</th>
                     <th>Clicks</th>
-                    <th style="width:220px;">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -145,25 +138,11 @@
                           Unknown
                         {% endif %}
                       </td>
-                    <td class="mono">{{ t.created_at }}</td>
-                    <td>{{ t.reply_count or 0 }}</td>
-                    <td>{{ t.clicks or 0 }}</td>
-                    <td>
-                      <form action="/account/edit_thread/{{ t.id }}" method="POST" style="margin:0 0 8px 0; display:flex; flex-direction:column; gap:6px;">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-                        <div style="display:flex; gap:6px; flex-wrap:wrap;">
-                          <input style="flex:2; min-width:140px;" type="text" name="title" value="{{ t.title }}" maxlength="80" aria-label="Thread title for {{ t.title }}">
-                          <input style="flex:1; min-width:90px;" type="text" name="tag" value="{{ t.tag }}" maxlength="64" aria-label="Tag for {{ t.title }}">
-                        </div>
-                        <button class="danger-btn" type="submit" style="border-color:#2d6a2f; background:linear-gradient(180deg, #e6ffed, #c8f5d2); color:#184d1b; padding:6px 10px;">Save</button>
-                      </form>
-                      <form action="/account/delete_thread/{{ t.id }}" method="POST" style="margin:0;">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-                        <button class="danger-btn" type="submit">Delete</button>
-                      </form>
-                    </td>
-                  </tr>
-                {% endfor %}
+                      <td class="mono">{{ t.created_at }}</td>
+                      <td>{{ t.reply_count or 0 }}</td>
+                      <td>{{ t.clicks or 0 }}</td>
+                    </tr>
+                  {% endfor %}
                 </tbody>
               </table>
             {% endif %}
@@ -171,11 +150,11 @@
 
           <div class="panel">
             <div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
-              <h3>Your replies</h3>
+              <h3>Replies</h3>
               <span class="chip">{{ posts|length }} total</span>
             </div>
             {% if posts|length == 0 %}
-              <div style="font-size:13px; color:var(--muted);">You have not posted any replies yet.</div>
+              <div style="font-size:13px;" class="muted">No replies yet.</div>
             {% else %}
               <table>
                 <thead>
@@ -183,7 +162,6 @@
                     <th>Thread</th>
                     <th>Posted</th>
                     <th>Preview</th>
-                    <th style="width:120px;">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -197,16 +175,10 @@
                           Unknown thread
                         {% endif %}
                       </td>
-                    <td class="mono">{{ p.created_at }}</td>
-                    <td>{{ p.body[:120] }}{% if p.body|length > 120 %}…{% endif %}</td>
-                    <td>
-                      <form action="/account/delete_post/{{ p.id }}" method="POST" style="margin:0;">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-                        <button class="danger-btn" type="submit">Delete</button>
-                      </form>
-                    </td>
-                  </tr>
-                {% endfor %}
+                      <td class="mono">{{ p.created_at }}</td>
+                      <td>{{ p.body[:180] }}{% if p.body|length > 180 %}…{% endif %}</td>
+                    </tr>
+                  {% endfor %}
                 </tbody>
               </table>
             {% endif %}

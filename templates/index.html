@@ -284,6 +284,31 @@
       .leader-meta { margin-top: 4px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 12px; }
       .small-link { font-size: 12px; text-decoration: none; font-weight: 700; color: var(--accent-strong); }
       .auth-stack { display: flex; flex-direction: column; gap: 12px; }
+      .dropdown-shell { position: relative; }
+      .dropdown-panel {
+        position: absolute;
+        top: calc(100% + 4px);
+        left: 0;
+        right: 0;
+        background: #fff;
+        border: 1px solid var(--border);
+        box-shadow: 0 8px 18px rgba(18, 31, 59, 0.12);
+        border-radius: 4px;
+        max-height: 220px;
+        overflow-y: auto;
+        z-index: 10;
+        padding: 6px;
+      }
+      .dropdown-item {
+        padding: 8px;
+        border: 1px solid transparent;
+        border-radius: 4px;
+        cursor: pointer;
+      }
+      .dropdown-item:hover { border-color: var(--border); background: var(--panel-soft); }
+      .dropdown-title { font-weight: 700; font-size: 13px; color: var(--accent-strong); }
+      .dropdown-sub { font-size: 11px; color: var(--muted); }
+      .dropdown-empty { font-size: 12px; color: var(--muted); padding: 4px 2px; }
     </style>
 
     <script>
@@ -338,6 +363,42 @@
         window.location.href = "/embed_stream?" + params.toString();
       }
 
+      function launchEmbedSidebar() {
+        var titleField = document.getElementById("sidebar-thread-title");
+        var expField = document.getElementById("sidebar-thread-expiration");
+        var linkField = document.getElementById("sidebar-thread-stream-link");
+        var catField = document.getElementById("sidebar-thread-category");
+
+        var titleVal = titleField ? titleField.value : "";
+        var expVal = expField ? expField.value : "";
+        var linkVal = linkField ? linkField.value : "";
+        var catVal = catField ? catField.value : "";
+
+        var catPath = "{{ current_path }}";
+        if (catVal) {
+          catPath = catVal;
+        }
+        var base = "/forum" + (catPath ? "/" + catPath : "");
+
+        var retParams = new URLSearchParams();
+        retParams.set("open_thread_form", "1");
+        if (titleVal) retParams.set("prefill_title", titleVal);
+        if (expVal) retParams.set("prefill_exp", expVal);
+        if (linkVal) retParams.set("prefill_stream", linkVal);
+        if (catPath) retParams.set("category_path", catPath);
+        var returnTo = base + "?" + retParams.toString();
+
+        var params = new URLSearchParams();
+        params.set("return_to", returnTo);
+        params.set("category_path", catPath);
+        if (titleVal) params.set("prefill_title", titleVal);
+        if (expVal) params.set("prefill_exp", expVal);
+        if (linkVal) params.set("prefill_stream", linkVal);
+        if (catPath) params.set("category_path", catPath);
+
+        window.location.href = "/embed_stream?" + params.toString();
+      }
+
       // auto-open add-thread form when redirected back from choose_stream
       function autoOpenThreadForm() {
         var canPost = "{{ '1' if allow_posting else '0' }}";
@@ -350,7 +411,73 @@
         }
       }
 
+      function setCategorySelection(path, label) {
+        var select = document.getElementById("sidebar-thread-category");
+        var display = document.getElementById("sidebar-category-selected");
+        var submitBtn = document.getElementById("sidebar-thread-submit");
+        if (!select) return;
+        select.innerHTML = "";
+        if (!path) {
+          if (submitBtn) submitBtn.disabled = true;
+          if (display) display.textContent = "No category selected";
+          return;
+        }
+        var opt = document.createElement("option");
+        opt.value = path;
+        opt.textContent = label;
+        opt.selected = true;
+        select.appendChild(opt);
+        if (display) display.textContent = label;
+        if (submitBtn) submitBtn.disabled = false;
+      }
+
+      function filterPostableCategories() {
+        var input = document.getElementById("sidebar-category-search");
+        var list = document.getElementById("sidebar-category-suggestions");
+        var dropdown = document.getElementById("sidebar-category-dropdown");
+        if (!input || !list || !dropdown || !window.postableCategories) return;
+        var term = input.value.toLowerCase();
+        list.innerHTML = "";
+        if (!term) {
+          dropdown.style.display = "none";
+          setCategorySelection("", "");
+          return;
+        }
+        var matches = window.postableCategories.filter(function(opt) {
+          if (!term) return true;
+          return opt.label.toLowerCase().includes(term) || opt.path.toLowerCase().includes(term);
+        });
+        dropdown.style.display = "block";
+        if (matches.length === 0) {
+          var empty = document.createElement("div");
+          empty.className = "dropdown-empty";
+          empty.textContent = "No category matches";
+          list.appendChild(empty);
+          setCategorySelection("", "");
+          return;
+        }
+        matches.forEach(function(opt, idx) {
+          var item = document.createElement("div");
+          item.className = "dropdown-item";
+          item.dataset.path = opt.path;
+          item.dataset.label = opt.label;
+          item.innerHTML = "<div class='dropdown-title'>" + opt.name + "</div><div class='dropdown-sub'>" + opt.path + "</div>";
+          item.onclick = function() {
+            setCategorySelection(opt.path, opt.label);
+            dropdown.style.display = "none";
+          };
+          list.appendChild(item);
+          if (idx === 0) {
+            setCategorySelection(opt.path, opt.label);
+          }
+        });
+      }
+
       window.addEventListener("DOMContentLoaded", autoOpenThreadForm);
+      {% if show_post_panel and postable_categories %}
+        window.postableCategories = {{ postable_categories | tojson }};
+        window.addEventListener("DOMContentLoaded", filterPostableCategories);
+      {% endif %}
     </script>
   </head>
 
@@ -423,6 +550,62 @@
               {% endif %}
             {% endif %}
           </div>
+
+          {% if show_post_panel and current_user %}
+            <details class="panel form-body" style="margin-top:12px;">
+              <summary style="cursor:pointer; font-weight:700; color:var(--accent-strong);">Post a stream</summary>
+              <div style="margin-top:8px;">
+                <form action="/add_thread" method="POST" class="forum-form">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                  <div class="form-row">
+                    <label for="sidebar-thread-category">Category</label>
+                    <span class="hint">Type to filter and pick a category.</span><br>
+                    <div class="dropdown-shell">
+                      <input class="search-input" type="text" id="sidebar-category-search" placeholder="Search categories…" oninput="filterPostableCategories();" autocomplete="off">
+                      <div id="sidebar-category-dropdown" class="dropdown-panel" style="display:none;">
+                        <div id="sidebar-category-suggestions"></div>
+                      </div>
+                    </div>
+                    <div id="sidebar-category-selected" class="hint" style="margin-top:4px;">Select a category</div>
+                    <select id="sidebar-thread-category" name="category_path" style="display:none;"></select>
+                  </div>
+
+                  <div class="form-row">
+                    <label for="sidebar-thread-title">Stream title</label><br>
+                    <input type="text" id="sidebar-thread-title" name="thread-title" maxlength="80" value="{{ prefill_title }}" required>
+                  </div>
+
+                  <div class="form-row">
+                    <label for="sidebar-thread-stream-link">Stream link</label>
+                    <span class="hint">Prefer “embed stream” to auto-fill.</span><br>
+                    <input type="text" id="sidebar-thread-stream-link" name="thread-stream-link" value="{{ prefill_stream }}" maxlength="500" required>
+                    <div class="tip-line">
+                      <button type="button" class="link-btn" onclick="launchEmbedSidebar();">Embed stream</button>
+                    </div>
+                  </div>
+
+                  <div class="form-row">
+                    <label for="sidebar-thread-tag">Tag</label>
+                    <span class="hint">Group threads by topic. Defaults to #general.</span><br>
+                    <input type="text" id="sidebar-thread-tag" name="thread-tag" maxlength="64" value="{{ prefill_tag or default_tag }}" placeholder="{{ default_tag }}">
+                  </div>
+
+                  <div class="form-row">
+                    <label for="sidebar-thread-expiration">Expiration</label><br>
+                    <select id="sidebar-thread-expiration" name="thread-expiration" required>
+                      {% for opt in exp_choices %}
+                        <option value="{{ opt }}" {% if prefill_exp == opt %}selected{% endif %}>{{ opt }}</option>
+                      {% endfor %}
+                    </select>
+                  </div>
+
+                  <div class="form-row">
+                    <input id="sidebar-thread-submit" type="submit" value="Post stream">
+                  </div>
+                </form>
+              </div>
+            </details>
+          {% endif %}
         </aside>
 
         <div class="main-wrap">
@@ -631,10 +814,10 @@
                   </div>
 
                   <div class="form-row">
-                    <label for="thread-tag">Tag</label>
-                    <span class="hint">Group threads by topic. Defaults to #general.</span><br>
-                    <input type="text" id="thread-tag" name="thread-tag" maxlength="64" value="general" placeholder="general">
-                  </div>
+                  <label for="thread-tag">Tag</label>
+                  <span class="hint">Group threads by topic. Defaults to #general.</span><br>
+                  <input type="text" id="thread-tag" name="thread-tag" maxlength="64" value="{{ prefill_tag or default_tag }}" placeholder="{{ default_tag }}">
+                </div>
 
                   <div class="form-row">
                     <label for="thread-expiration">Expiration</label><br>
