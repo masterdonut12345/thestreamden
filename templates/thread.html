@@ -2,6 +2,7 @@
 <html>
   <head>
     <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{{ thread.title }} - The Stream Den</title>
     <style>
       :root {
@@ -102,6 +103,13 @@
         color: var(--accent-strong);
         cursor: pointer;
         border-radius: 3px;
+      }
+
+      @media (max-width: 760px) {
+        body { padding: 18px 12px 28px; }
+        .header { flex-direction: column; align-items: flex-start; }
+        .crumbs { overflow-x: auto; }
+        .player iframe { min-height: 220px; }
       }
     </style>
   </head>

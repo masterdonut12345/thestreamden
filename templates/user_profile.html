@@ -2,6 +2,7 @@
 <html>
   <head>
     <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{{ profile_user.username }} - Profile - The Stream Den</title>
     <style>
       :root {
@@ -87,6 +88,18 @@
         background: var(--panel-soft);
       }
       .muted { color: var(--muted); }
+
+      .table-scroll {
+        overflow-x: auto;
+        border-radius: 4px;
+      }
+      .table-scroll table { min-width: 620px; }
+
+      @media (max-width: 760px) {
+        body { padding: 18px 12px 28px; }
+        .header { flex-direction: column; align-items: flex-start; }
+        .header .nav-btn { width: 100%; text-align: center; }
+      }
     </style>
   </head>
   <body>
@@ -114,37 +127,39 @@
             {% if threads|length == 0 %}
               <div style="font-size:13px;" class="muted">No threads yet.</div>
             {% else %}
-              <table>
-                <thead>
-                  <tr>
-                    <th>Title</th>
-                    <th>Tag</th>
-                    <th>Category</th>
-                    <th>Created</th>
-                    <th>Replies</th>
-                    <th>Clicks</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {% for t in threads %}
-                    {% set cat = cat_lookup.get(t.category_id) %}
+              <div class="table-scroll">
+                <table>
+                  <thead>
                     <tr>
-                      <td><a href="/thread/{{ t.id }}">{{ t.title }}</a></td>
-                      <td>#{{ t.tag }}</td>
-                      <td>
-                        {% if cat %}
-                          <a href="/forum/{{ build_category_path(cat, cat_lookup) }}">{{ cat.name }}</a>
-                        {% else %}
-                          Unknown
-                        {% endif %}
-                      </td>
-                      <td class="mono">{{ t.created_at }}</td>
-                      <td>{{ t.reply_count or 0 }}</td>
-                      <td>{{ t.clicks or 0 }}</td>
+                      <th>Title</th>
+                      <th>Tag</th>
+                      <th>Category</th>
+                      <th>Created</th>
+                      <th>Replies</th>
+                      <th>Clicks</th>
                     </tr>
-                  {% endfor %}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {% for t in threads %}
+                      {% set cat = cat_lookup.get(t.category_id) %}
+                      <tr>
+                        <td><a href="/thread/{{ t.id }}">{{ t.title }}</a></td>
+                        <td>#{{ t.tag }}</td>
+                        <td>
+                          {% if cat %}
+                            <a href="/forum/{{ build_category_path(cat, cat_lookup) }}">{{ cat.name }}</a>
+                          {% else %}
+                            Unknown
+                          {% endif %}
+                        </td>
+                        <td class="mono">{{ t.created_at }}</td>
+                        <td>{{ t.reply_count or 0 }}</td>
+                        <td>{{ t.clicks or 0 }}</td>
+                      </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
             {% endif %}
           </div>
 
@@ -156,31 +171,33 @@
             {% if posts|length == 0 %}
               <div style="font-size:13px;" class="muted">No replies yet.</div>
             {% else %}
-              <table>
-                <thead>
-                  <tr>
-                    <th>Thread</th>
-                    <th>Posted</th>
-                    <th>Preview</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {% for p in posts %}
-                    {% set thread = thread_lookup.get(p.thread_id) %}
+              <div class="table-scroll">
+                <table>
+                  <thead>
                     <tr>
-                      <td>
-                        {% if thread %}
-                          <a href="/thread/{{ thread.id }}">#{{ thread.id }} {{ thread.title }}</a>
-                        {% else %}
-                          Unknown thread
-                        {% endif %}
-                      </td>
-                      <td class="mono">{{ p.created_at }}</td>
-                      <td>{{ p.body[:180] }}{% if p.body|length > 180 %}…{% endif %}</td>
+                      <th>Thread</th>
+                      <th>Posted</th>
+                      <th>Preview</th>
                     </tr>
-                  {% endfor %}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {% for p in posts %}
+                      {% set thread = thread_lookup.get(p.thread_id) %}
+                      <tr>
+                        <td>
+                          {% if thread %}
+                            <a href="/thread/{{ thread.id }}">#{{ thread.id }} {{ thread.title }}</a>
+                          {% else %}
+                            Unknown thread
+                          {% endif %}
+                        </td>
+                        <td class="mono">{{ p.created_at }}</td>
+                        <td>{{ p.body[:180] }}{% if p.body|length > 180 %}…{% endif %}</td>
+                      </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
             {% endif %}
           </div>
         </div>
