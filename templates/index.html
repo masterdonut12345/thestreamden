@@ -415,7 +415,7 @@
       }
 
       window.addEventListener("DOMContentLoaded", autoOpenThreadForm);
-      {% if allow_posting and postable_categories %}
+      {% if show_post_panel and postable_categories %}
         window.postableCategories = {{ postable_categories | tojson }};
         window.addEventListener("DOMContentLoaded", filterPostableCategories);
       {% endif %}
@@ -492,7 +492,7 @@
             {% endif %}
           </div>
 
-          {% if allow_posting and current_user and not show_top_threads %}
+          {% if show_post_panel and current_user %}
             <details class="panel form-body" style="margin-top:12px;">
               <summary style="cursor:pointer; font-weight:700; color:var(--accent-strong);">Post a stream</summary>
               <div style="margin-top:8px;">

@@ -838,12 +838,12 @@ def render_forum_page(
     prefill_tag = request.args.get("prefill_tag", DEFAULT_TAG)
     open_thread_form = request.args.get("open_thread_form", "") == "1"
     forum_stats = build_forum_stats(get_db())
+    show_post_panel = show_categories_section
     postable_categories = []
-    if allow_posting:
-        postable_categories = []
+    if show_post_panel:
         for cat in cat_lookup.values():
             path = build_category_path(cat, cat_lookup)
-            if "/" not in path:
+            if not path:
                 continue
             postable_categories.append(
                 {
@@ -883,6 +883,7 @@ def render_forum_page(
         default_tag=DEFAULT_TAG,
         postable_categories=postable_categories,
         default_category_path=category_path,
+        show_post_panel=show_post_panel,
     )
 
 
