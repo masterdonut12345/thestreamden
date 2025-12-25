@@ -124,6 +124,7 @@
                 <thead>
                   <tr>
                     <th>Title</th>
+                    <th>Tag</th>
                     <th>Category</th>
                     <th>Created</th>
                     <th>Replies</th>
@@ -136,6 +137,7 @@
                     {% set cat = cat_lookup.get(t.category_id) %}
                     <tr>
                       <td><a href="/thread/{{ t.id }}">{{ t.title }}</a></td>
+                      <td>#{{ t.tag }}</td>
                       <td>
                         {% if cat %}
                           <a href="/forum/{{ build_category_path(cat, cat_lookup) }}">{{ cat.name }}</a>
