@@ -14,6 +14,8 @@ from sqlalchemy import (
     UniqueConstraint,
     create_engine,
     func,
+    inspect,
+    text,
 )
 from sqlalchemy.orm import declarative_base, relationship, sessionmaker
 
@@ -100,6 +102,7 @@ class Thread(Base):
     stream_link = Column(String(1024), nullable=False)
     expires_at = Column(DateTime(timezone=True), nullable=True)
     expires_choice = Column(String(32), nullable=True)
+    tag = Column(String(64), nullable=False, default="general", server_default="general")
     reply_count = Column(Integer, nullable=False, default=0)
     clicks = Column(Integer, nullable=False, default=0)
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
@@ -139,6 +142,18 @@ class Post(Base):
 def init_db() -> None:
     """Create tables if they do not exist."""
     Base.metadata.create_all(engine)
+    ensure_thread_tag_column()
+
+
+def ensure_thread_tag_column() -> None:
+    """Add the thread.tag column for existing databases without migrations."""
+    inspector = inspect(engine)
+    columns = [col["name"] for col in inspector.get_columns("threads")]
+    if "tag" in columns:
+        return
+
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE threads ADD COLUMN tag VARCHAR(64) NOT NULL DEFAULT 'general'"))
 
 
 def get_session() -> Generator:

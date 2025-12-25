@@ -36,6 +36,7 @@ from pathlib import Path
 app = Flask(__name__)
 
 EXP_CHOICES = ["1 day", "3 days", "1 week", "1 month"]
+DEFAULT_TAG = "general"
 ADMIN_TOKEN = os.environ.get("ADMIN_TOKEN")
 TWITCH_PARENT_HOST = "thestreamden.com"
 CLEANUP_INTERVAL_SECONDS = int(os.environ.get("CLEANUP_INTERVAL_SECONDS", "3600"))
@@ -249,6 +250,7 @@ def serialize_thread(thread: Thread) -> dict:
         "created_at": thread.created_at.isoformat() if thread.created_at else "",
         "expires_at": thread.expires_at.isoformat() if thread.expires_at else "",
         "expires_choice": thread.expires_choice,
+        "tag": thread.tag or DEFAULT_TAG,
         "reply_count": thread.reply_count or 0,
         "clicks": thread.clicks or 0,
         "user": thread.user.username if thread.user else "Anonymous",
@@ -509,44 +511,28 @@ def search_items(db, query: str, thread_counts: dict[int, int], cat_lookup: dict
     return {"categories": cat_results, "threads": out_threads}
 
 
-def group_threads_by_choice(threads: list[dict]) -> dict[str, list[dict]]:
-    out = {k: [] for k in EXP_CHOICES}
-    now = datetime.now(timezone.utc)
+def normalize_tag(tag: str) -> str:
+    cleaned = slugify(tag)
+    return cleaned or DEFAULT_TAG
 
+
+def group_threads_by_tag(threads: list[dict]) -> tuple[dict[str, list[dict]], list[str]]:
+    grouped: dict[str, list[dict]] = defaultdict(list)
     for t in threads:
-        choice = t.get("expires_choice")
-        if choice in out:
-            out[choice].append(t)
-            continue
+        tag = normalize_tag(t.get("tag") or DEFAULT_TAG)
+        grouped[tag].append(t)
 
-        exp_s = t.get("expires_at") or ""
-        try:
-            exp_dt = datetime.fromisoformat(exp_s)
-            if exp_dt.tzinfo is None:
-                exp_dt = exp_dt.replace(tzinfo=timezone.utc)
-        except Exception:
-            out["1 month"].append(t)
-            continue
+    # Sort threads newest first within each tag
+    def created_key(td):
+        return td.get("created_at") or ""
 
-        delta = exp_dt - now
-        secs = delta.total_seconds()
-        if secs <= 0:
-            out["1 day"].append(t)
-        elif secs <= 24 * 3600:
-            out["1 day"].append(t)
-        elif secs <= 3 * 24 * 3600:
-            out["3 days"].append(t)
-        elif secs <= 7 * 24 * 3600:
-            out["1 week"].append(t)
-        else:
-            out["1 month"].append(t)
+    for tag in grouped:
+        grouped[tag].sort(key=created_key, reverse=True)
 
-    def exp_key(td):
-        return td.get("expires_at") or ""
-
-    for k in out:
-        out[k].sort(key=exp_key)
-    return out
+    tag_list = sorted(grouped.keys())
+    if DEFAULT_TAG in tag_list:
+        tag_list = [DEFAULT_TAG] + [t for t in tag_list if t != DEFAULT_TAG]
+    return grouped, tag_list
 
 
 def build_post_tree(db, thread_id: int) -> list[dict]:
@@ -628,13 +614,24 @@ def append_category(db, parent_path_str, name, desc):
     return serialize_category(new_category)
 
 
-def append_thread(db, category_path_str: str, title: str, stream_link: str, expires_choice: str, user: User):
+def append_thread(
+    db,
+    category_path_str: str,
+    title: str,
+    stream_link: str,
+    expires_choice: str,
+    user: User,
+    tag: str | None = None,
+):
     category_path_str = (category_path_str or "").strip("/")
     cat = get_category_by_path(db, category_path_str)
     if cat is None:
         abort(400)
     expires_delta = parse_expiration_choice(expires_choice)
     if expires_delta is None:
+        abort(400)
+    normalized_tag = normalize_tag(tag or DEFAULT_TAG)
+    if len(normalized_tag) > 64:
         abort(400)
 
     now = datetime.now(timezone.utc)
@@ -649,6 +646,7 @@ def append_thread(db, category_path_str: str, title: str, stream_link: str, expi
         created_at=now,
         expires_at=expires_at,
         expires_choice=expires_choice,
+        tag=normalized_tag,
         reply_count=0,
         clicks=0,
     )
@@ -819,7 +817,7 @@ def render_forum_page(
     cat_lookup: dict[int, dict],
     current_user: str | None = None,
 ):
-    grouped = group_threads_by_choice(threads) if allow_posting else {}
+    grouped, tags = group_threads_by_tag(threads) if allow_posting else ({}, [])
 
     prefill_stream = request.args.get("prefill_stream", "")
     prefill_title = request.args.get("prefill_title", "")
@@ -834,7 +832,7 @@ def render_forum_page(
         parent_path=parent_path,
         breadcrumbs=build_breadcrumbs(category_path, cat_lookup),
         threads_grouped=grouped,
-        exp_choices=EXP_CHOICES,
+        tag_buckets=tags,
         prefill_stream=prefill_stream,
         open_thread_form=open_thread_form and allow_posting,
         show_top_threads=not allow_posting,
@@ -1025,6 +1023,7 @@ def add_thread():
     title = (request.form.get("thread-title") or "").strip()
     stream_link = (request.form.get("thread-stream-link") or "").strip()
     expires_choice = (request.form.get("thread-expiration") or "").strip()
+    tag = (request.form.get("thread-tag") or DEFAULT_TAG).strip()
 
     if not category_path:
         abort(400)
@@ -1034,8 +1033,10 @@ def add_thread():
         abort(400)
     if expires_choice not in EXP_CHOICES:
         abort(400)
+    if len(tag) > 64:
+        abort(400)
 
-    append_thread(db, category_path, title, stream_link, expires_choice, user)
+    append_thread(db, category_path, title, stream_link, expires_choice, user, tag=tag)
     return redirect(f"/forum/{category_path}")
 
 

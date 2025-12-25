@@ -533,6 +533,7 @@
                           <div class="thread-meta">
                             {% set cat = cat_lookup.get(t.category_id) %}
                             {% if cat %}In {{ cat.name }}{% endif %}
+                            {% if t.tag %} • #{{ t.tag }}{% endif %}
                           </div>
                         </td>
                           <td class="col-user">{{ t.user or 'Anonymous' }}</td>
@@ -548,15 +549,15 @@
                   </table>
                 {% endif %}
               {% else %}
-                {% for bucket in exp_choices %}
+                {% for tag in tag_buckets %}
                   <div class="bucket">
                     <div class="bucket-head">
-                      <div class="bucket-name">Expires: {{ bucket }}</div>
-                      <span class="chip">{{ threads_grouped[bucket]|length }} listed</span>
+                      <div class="bucket-name">#{{ tag }}</div>
+                      <span class="chip">{{ threads_grouped[tag]|length }} listed</span>
                     </div>
 
-                    {% if threads_grouped[bucket]|length == 0 %}
-                      <div class="empty-row">No streams in this window.</div>
+                    {% if threads_grouped[tag]|length == 0 %}
+                      <div class="empty-row">No streams in this tag.</div>
                     {% else %}
                       <table class="forum-table thread-table">
                         <thead>
@@ -570,12 +571,12 @@
                           </tr>
                         </thead>
                         <tbody>
-                          {% for t in threads_grouped[bucket] %}
+                          {% for t in threads_grouped[tag] %}
                             <tr>
                               <td>
                                 <div class="thread-title"><a href="/thread/{{ t.id }}">{{ t.title }}</a></div>
                                 <div class="thread-meta">
-                                  Expires in {{ bucket }}
+                                  Tag: #{{ t.tag }}
                                   {% if show_top_threads %}
                                     {% set cat = cat_lookup.get(t.category_id) %}
                                     {% if cat %}&mdash; in {{ cat.name }}{% endif %}
@@ -627,6 +628,12 @@
                     <div class="tip-line">
                       <button type="button" class="link-btn" onclick="launchEmbed();">Embed stream</button>
                     </div>
+                  </div>
+
+                  <div class="form-row">
+                    <label for="thread-tag">Tag</label>
+                    <span class="hint">Group threads by topic. Defaults to #general.</span><br>
+                    <input type="text" id="thread-tag" name="thread-tag" maxlength="64" value="general" placeholder="general">
                   </div>
 
                   <div class="form-row">

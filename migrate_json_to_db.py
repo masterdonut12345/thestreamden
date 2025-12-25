@@ -105,6 +105,7 @@ def main():
             stream_link=t.get("stream_link") or "",
             expires_at=parse_dt(t.get("expires_at", "")),
             expires_choice=t.get("expires_choice"),
+            tag=t.get("tag") or "general",
             reply_count=t.get("reply_count") or 0,
             clicks=t.get("clicks") or 0,
             created_at=parse_dt(t.get("created_at", "")),
