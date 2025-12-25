@@ -136,6 +136,10 @@
           {% if embed_info.type == "iframe" %}
             <iframe src="{{ embed_info.src }}" title="{{ embed_info.title or 'Stream' }}" allowfullscreen></iframe>
             <div style="margin-top:6px;"><a href="{{ thread.stream_link }}" target="_blank" rel="noopener">Open stream link</a></div>
+          {% elif embed_info.type == "x" %}
+            <div class="embed-html">{{ embed_info.html | safe }}</div>
+            <script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
+            <div style="margin-top:6px;"><a href="{{ thread.stream_link }}" target="_blank" rel="noopener">Open stream link</a></div>
           {% elif embed_info.type == "html" %}
             <div class="embed-html">{{ embed_info.html | safe }}</div>
             <div style="margin-top:6px;"><a href="{{ thread.stream_link }}" target="_blank" rel="noopener">Open stream link</a></div>

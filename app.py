@@ -11,7 +11,7 @@ from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit, quote
-
+from markupsafe import Markup
 from flask import (
     Flask,
     abort,
@@ -762,7 +762,6 @@ def delete_post_owned(db, post_id: int, user: User):
         thread.reply_count = max((thread.reply_count or 1) - 1, 0)
         db.commit()
 
-
 def detect_stream_embed(url: str, parent_host: str) -> dict:
     from urllib.parse import urlparse, parse_qs
 
@@ -779,9 +778,8 @@ def detect_stream_embed(url: str, parent_host: str) -> dict:
             '<blockquote class="twitter-tweet">'
             f'<p lang="en" dir="ltr"><a href="{post_url}">View on X</a></p>'
             "</blockquote>"
-            '<script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>'
         )
-        return {"type": "html", "html": html, "title": "X post"}
+        return {"type": "x", "html": Markup(html), "title": "X post"}
 
     if path.endswith(".m3u8"):
         return {"type": "m3u8", "src": url}
@@ -796,23 +794,14 @@ def detect_stream_embed(url: str, parent_host: str) -> dict:
             qs = parse_qs(u.query)
             video_id = qs.get("v", [None])[0]
         if video_id:
-            return {
-                "type": "iframe",
-                "src": f"https://www.youtube.com/embed/{video_id}",
-                "title": "YouTube",
-            }
+            return {"type": "iframe", "src": f"https://www.youtube.com/embed/{video_id}", "title": "YouTube"}
 
     if "twitch.tv" in host:
         slug = u.path.strip("/")
         if slug:
-            return {
-                "type": "iframe",
-                "src": f"https://player.twitch.tv/?channel={slug}&parent={parent_host}",
-                "title": "Twitch",
-            }
+            return {"type": "iframe", "src": f"https://player.twitch.tv/?channel={slug}&parent={parent_host}", "title": "Twitch"}
 
     return {"type": "iframe", "src": url, "title": "Stream"}
-
 
 def render_forum_page(
     category_path: str,
