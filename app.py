@@ -1118,6 +1118,51 @@ def account_delete_thread(thread_id):
     return redirect("/account")
 
 
+@app.route("/account/edit_thread/<int:thread_id>", methods=["POST"])
+def account_edit_thread(thread_id: int):
+    require_csrf()
+    db = get_db()
+    user = require_login("/account")
+    if not isinstance(user, User):
+        return user
+
+    thread = db.get(Thread, thread_id)
+    if thread is None:
+        abort(404)
+    if thread.user_id != user.id:
+        abort(403)
+
+    title = (request.form.get("title") or "").strip()
+    tag_raw = (request.form.get("tag") or DEFAULT_TAG).strip()
+
+    if not title or len(title) > 80:
+        abort(400)
+    if len(tag_raw) > 64:
+        abort(400)
+
+    new_slug = slugify(title)
+    conflict = (
+        db.execute(
+            select(Thread).where(
+                Thread.category_id == thread.category_id,
+                Thread.slug == new_slug,
+                Thread.id != thread_id,
+            )
+        )
+        .scalars()
+        .first()
+    )
+    if conflict:
+        abort(409)
+
+    thread.title = title
+    thread.slug = new_slug
+    thread.tag = normalize_tag(tag_raw)
+    db.commit()
+
+    return redirect("/account")
+
+
 @app.route("/account/delete_post/<int:post_id>", methods=["POST"])
 def account_delete_post(post_id):
     require_csrf()
