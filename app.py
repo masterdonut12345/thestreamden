@@ -835,8 +835,24 @@ def render_forum_page(
     prefill_stream = request.args.get("prefill_stream", "")
     prefill_title = request.args.get("prefill_title", "")
     prefill_exp = request.args.get("prefill_exp", "")
+    prefill_tag = request.args.get("prefill_tag", DEFAULT_TAG)
     open_thread_form = request.args.get("open_thread_form", "") == "1"
     forum_stats = build_forum_stats(get_db())
+    postable_categories = []
+    if allow_posting:
+        postable_categories = []
+        for cat in cat_lookup.values():
+            path = build_category_path(cat, cat_lookup)
+            if "/" not in path:
+                continue
+            postable_categories.append(
+                {
+                    "path": path,
+                    "name": cat.get("name", path),
+                    "label": f"{cat.get('name', path)} ({path})",
+                }
+            )
+        postable_categories.sort(key=lambda c: c["label"].lower())
 
     return render_template(
         "index.html",
@@ -861,8 +877,12 @@ def render_forum_page(
         current_user=current_user,
         prefill_title=prefill_title,
         prefill_exp=prefill_exp,
+        prefill_tag=prefill_tag,
         forum_stats=forum_stats,
         exp_choices=EXP_CHOICES,
+        default_tag=DEFAULT_TAG,
+        postable_categories=postable_categories,
+        default_category_path=category_path,
     )
 
 
