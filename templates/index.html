@@ -338,6 +338,42 @@
         window.location.href = "/embed_stream?" + params.toString();
       }
 
+      function launchEmbedSidebar() {
+        var titleField = document.getElementById("sidebar-thread-title");
+        var expField = document.getElementById("sidebar-thread-expiration");
+        var linkField = document.getElementById("sidebar-thread-stream-link");
+        var catField = document.getElementById("sidebar-thread-category");
+
+        var titleVal = titleField ? titleField.value : "";
+        var expVal = expField ? expField.value : "";
+        var linkVal = linkField ? linkField.value : "";
+        var catVal = catField ? catField.value : "";
+
+        var catPath = "{{ current_path }}";
+        if (catVal) {
+          catPath = catVal;
+        }
+        var base = "/forum" + (catPath ? "/" + catPath : "");
+
+        var retParams = new URLSearchParams();
+        retParams.set("open_thread_form", "1");
+        if (titleVal) retParams.set("prefill_title", titleVal);
+        if (expVal) retParams.set("prefill_exp", expVal);
+        if (linkVal) retParams.set("prefill_stream", linkVal);
+        if (catPath) retParams.set("category_path", catPath);
+        var returnTo = base + "?" + retParams.toString();
+
+        var params = new URLSearchParams();
+        params.set("return_to", returnTo);
+        params.set("category_path", catPath);
+        if (titleVal) params.set("prefill_title", titleVal);
+        if (expVal) params.set("prefill_exp", expVal);
+        if (linkVal) params.set("prefill_stream", linkVal);
+        if (catPath) params.set("category_path", catPath);
+
+        window.location.href = "/embed_stream?" + params.toString();
+      }
+
       // auto-open add-thread form when redirected back from choose_stream
       function autoOpenThreadForm() {
         var canPost = "{{ '1' if allow_posting else '0' }}";
@@ -350,7 +386,39 @@
         }
       }
 
+      function filterPostableCategories() {
+        var input = document.getElementById("sidebar-category-search");
+        var select = document.getElementById("sidebar-thread-category");
+        if (!input || !select || !window.postableCategories) return;
+        var term = input.value.toLowerCase();
+        select.innerHTML = "";
+        var matches = window.postableCategories.filter(function(opt) {
+          if (!term) return true;
+          return opt.label.toLowerCase().includes(term) || opt.path.toLowerCase().includes(term);
+        });
+        if (matches.length === 0) {
+          var opt = document.createElement("option");
+          opt.textContent = "No category matches";
+          opt.disabled = true;
+          select.appendChild(opt);
+          return;
+        }
+        matches.forEach(function(opt) {
+          var o = document.createElement("option");
+          o.value = opt.path;
+          o.textContent = opt.label;
+          if ("{{ default_category_path }}" === opt.path) {
+            o.selected = true;
+          }
+          select.appendChild(o);
+        });
+      }
+
       window.addEventListener("DOMContentLoaded", autoOpenThreadForm);
+      {% if allow_posting and postable_categories %}
+        window.postableCategories = {{ postable_categories | tojson }};
+        window.addEventListener("DOMContentLoaded", filterPostableCategories);
+      {% endif %}
     </script>
   </head>
 
@@ -423,6 +491,58 @@
               {% endif %}
             {% endif %}
           </div>
+
+          {% if allow_posting and current_user %}
+            <div class="panel form-body" style="margin-top:12px;">
+              <h3>Post a stream</h3>
+              <form action="/add_thread" method="POST" class="forum-form">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <div class="form-row">
+                  <label for="sidebar-thread-category">Category</label>
+                  <span class="hint">Choose where to post.</span><br>
+                  <input class="search-input" type="text" id="sidebar-category-search" placeholder="Search categories" oninput="filterPostableCategories();">
+                  <select id="sidebar-thread-category" name="category_path" required>
+                    {% for c in postable_categories %}
+                      <option value="{{ c.path }}" {% if default_category_path == c.path %}selected{% endif %}>{{ c.label }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+
+                <div class="form-row">
+                  <label for="sidebar-thread-title">Stream title</label><br>
+                  <input type="text" id="sidebar-thread-title" name="thread-title" maxlength="80" value="{{ prefill_title }}" required>
+                </div>
+
+                <div class="form-row">
+                  <label for="sidebar-thread-stream-link">Stream link</label>
+                  <span class="hint">Prefer “embed stream” to auto-fill.</span><br>
+                  <input type="text" id="sidebar-thread-stream-link" name="thread-stream-link" value="{{ prefill_stream }}" maxlength="500" required>
+                  <div class="tip-line">
+                    <button type="button" class="link-btn" onclick="launchEmbedSidebar();">Embed stream</button>
+                  </div>
+                </div>
+
+                <div class="form-row">
+                  <label for="sidebar-thread-tag">Tag</label>
+                  <span class="hint">Group threads by topic. Defaults to #general.</span><br>
+                  <input type="text" id="sidebar-thread-tag" name="thread-tag" maxlength="64" value="{{ prefill_tag or default_tag }}" placeholder="{{ default_tag }}">
+                </div>
+
+                <div class="form-row">
+                  <label for="sidebar-thread-expiration">Expiration</label><br>
+                  <select id="sidebar-thread-expiration" name="thread-expiration" required>
+                    {% for opt in exp_choices %}
+                      <option value="{{ opt }}" {% if prefill_exp == opt %}selected{% endif %}>{{ opt }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+
+                <div class="form-row">
+                  <input type="submit" value="Post stream">
+                </div>
+              </form>
+            </div>
+          {% endif %}
         </aside>
 
         <div class="main-wrap">
@@ -631,10 +751,10 @@
                   </div>
 
                   <div class="form-row">
-                    <label for="thread-tag">Tag</label>
-                    <span class="hint">Group threads by topic. Defaults to #general.</span><br>
-                    <input type="text" id="thread-tag" name="thread-tag" maxlength="64" value="general" placeholder="general">
-                  </div>
+                  <label for="thread-tag">Tag</label>
+                  <span class="hint">Group threads by topic. Defaults to #general.</span><br>
+                  <input type="text" id="thread-tag" name="thread-tag" maxlength="64" value="{{ prefill_tag or default_tag }}" placeholder="{{ default_tag }}">
+                </div>
 
                   <div class="form-row">
                     <label for="thread-expiration">Expiration</label><br>
