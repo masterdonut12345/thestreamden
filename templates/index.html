@@ -411,10 +411,11 @@
         }
       }
 
-      function setCategorySelection(path, label) {
+      function setCategorySelection(path, label, updateSearchField) {
         var select = document.getElementById("sidebar-thread-category");
         var display = document.getElementById("sidebar-category-selected");
         var submitBtn = document.getElementById("sidebar-thread-submit");
+        var searchInput = document.getElementById("sidebar-category-search");
         if (!select) return;
         select.innerHTML = "";
         if (!path) {
@@ -430,6 +431,9 @@
         select.appendChild(opt);
         if (display) display.textContent = label;
         if (submitBtn) submitBtn.disabled = false;
+        if (updateSearchField && searchInput) {
+          searchInput.value = label;
+        }
         syncSidebarCategoryValidity();
       }
 
@@ -476,7 +480,7 @@
           item.dataset.label = opt.label;
           item.innerHTML = "<div class='dropdown-title'>" + opt.name + "</div><div class='dropdown-sub'>" + opt.path + "</div>";
           item.onclick = function() {
-            setCategorySelection(opt.path, opt.label);
+            setCategorySelection(opt.path, opt.label, true);
             dropdown.style.display = "none";
           };
           list.appendChild(item);
