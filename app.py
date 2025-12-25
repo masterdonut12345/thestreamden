@@ -842,6 +842,8 @@ def render_forum_page(
     postable_categories = []
     if show_post_panel:
         for cat in cat_lookup.values():
+            if cat.get('parent_id') is None:
+                continue
             path = build_category_path(cat, cat_lookup)
             if not path:
                 continue
