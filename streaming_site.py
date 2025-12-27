@@ -26,7 +26,7 @@ import pandas as pd
 import pytz
 from apscheduler.schedulers.background import BackgroundScheduler
 from bs4 import BeautifulSoup
-from flask import Blueprint, abort, jsonify, make_response, render_template, request, session, url_for
+from flask import Blueprint, abort, jsonify, make_response, redirect, render_template, request, session, url_for
 import requests
 
 import scrape_games
@@ -725,6 +725,18 @@ def _build_games_from_df(df: pd.DataFrame):
     for _, row in df.iterrows():
         rowd = row.to_dict()
         streams = parse_streams_cell(rowd.get("streams"))
+        embed_url = (rowd.get("embed_url") or "").strip()
+
+        # Fallback: if the scraper populated embed_url but streams is empty,
+        # expose a single stream so the UI renders an iframe instead of "no stream".
+        if not streams and embed_url:
+            streams = [
+                {
+                    "label": "Stream",
+                    "embed_url": embed_url,
+                    "watch_url": rowd.get("watch_url") or embed_url,
+                }
+            ]
         game_id = make_stable_id(rowd)
 
         raw_sport = rowd.get("sport")
