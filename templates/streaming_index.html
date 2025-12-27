@@ -917,13 +917,13 @@
                     autocomplete="off"
                 >
                 <div class="search-actions">
-                    <button type="submit">🔍 Search</button>
+                    <button type="submit">Search</button>
 
                     <button
                         type="button"
                         class="live-filter-button {% if live_only %}active{% endif %}"
                         onclick="toggleLiveOnly({{ 'true' if live_only else 'false' }})">
-                        🔴 Live only
+                        Live only
                     </button>
 
                     {% if search_query %}
@@ -943,11 +943,11 @@
 
             <div class="quick-filters">
                 <span class="quick-filters-label">Quick filters:</span>
-                <button class="filter-chip" type="button" onclick="applyFilterChip('NFL')"><span class="emoji">🏈</span> NFL</button>
-                <button class="filter-chip" type="button" onclick="applyFilterChip('Basketball')"><span class="emoji">🏀</span> Basketball</button>
-                <button class="filter-chip" type="button" onclick="applyFilterChip('ICE HOCKEY')"><span class="emoji">🏒</span> ICE HOCKEY</button>
-                <button class="filter-chip" type="button" onclick="applyFilterChip('MLB')"><span class="emoji">⚾</span> MLB</button>
-                <button class="filter-chip" type="button" onclick="applyFilterChip('Soccer')"><span class="emoji">⚽</span> Soccer</button>
+                <button class="filter-chip" type="button" onclick="applyFilterChip('NFL')">NFL</button>
+                <button class="filter-chip" type="button" onclick="applyFilterChip('Basketball')">Basketball</button>
+                <button class="filter-chip" type="button" onclick="applyFilterChip('ICE HOCKEY')">Ice Hockey</button>
+                <button class="filter-chip" type="button" onclick="applyFilterChip('MLB')">MLB</button>
+                <button class="filter-chip" type="button" onclick="applyFilterChip('Soccer')">Soccer</button>
                 <button class="filter-chip" type="button" onclick="applyFilterChip('')">Clear</button>
             </div>
         </div>
