@@ -18,6 +18,7 @@ import threading
 import time
 import uuid
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Any
 from urllib.parse import urljoin
 
@@ -33,7 +34,12 @@ import scrape_games
 streaming_bp = Blueprint("streaming", __name__)
 
 
-DATA_PATH = "today_games_with_all_streams.csv"
+DATA_PATH = Path(
+    os.environ.get(
+        "GAMES_CSV_PATH",
+        Path(__file__).parent / "data" / "today_games_with_all_streams.csv",
+    )
+)
 
 
 # ====================== PERFORMANCE CONTROLS ======================
@@ -292,7 +298,8 @@ def streams_to_cell(streams_list: list[dict[str, Any]]) -> str:
 
 
 def ensure_csv_exists_with_header() -> None:
-    if os.path.exists(DATA_PATH):
+    DATA_PATH.parent.mkdir(parents=True, exist_ok=True)
+    if DATA_PATH.exists():
         return
     cols = [
         "source",
@@ -313,11 +320,11 @@ def ensure_csv_exists_with_header() -> None:
     print(f"[csv] Created empty CSV at {DATA_PATH}")
 
 
-def _read_csv_shared_locked(path: str) -> pd.DataFrame:
+def _read_csv_shared_locked(path: Path) -> pd.DataFrame:
     """Fast read path with shared lock."""
 
     ensure_csv_exists_with_header()
-    with open(path, "r", encoding="utf-8") as fh:
+    with path.open("r", encoding="utf-8") as fh:
         try:
             import fcntl
 
@@ -356,7 +363,7 @@ def read_csv_locked_for_write():
     """Exclusive lock to safely modify CSV."""
 
     ensure_csv_exists_with_header()
-    fh = open(DATA_PATH, "r+", encoding="utf-8")
+    fh = DATA_PATH.open("r+", encoding="utf-8")
     fcntl.flock(fh.fileno(), fcntl.LOCK_EX)
 
     fh.seek(0)

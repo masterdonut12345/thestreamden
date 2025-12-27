@@ -17,6 +17,7 @@ Guarantees:
 import requests
 from bs4 import BeautifulSoup
 from datetime import datetime, timedelta
+from pathlib import Path
 import pandas as pd
 import pytz
 import re
@@ -51,7 +52,12 @@ def _get_session():
 EST = pytz.timezone("US/Eastern")
 UTC = pytz.UTC
 
-OUTPUT_FILE = "today_games_with_all_streams.csv"
+OUTPUT_FILE = Path(
+    os.environ.get(
+        "GAMES_CSV_PATH",
+        Path(__file__).parent / "data" / "today_games_with_all_streams.csv",
+    )
+)
 
 MAX_STREAMS_PER_GAME = 8
 
@@ -604,10 +610,11 @@ def main():
         print("[scraper] No games found.")
         return
 
-    if not os.path.exists(OUTPUT_FILE):
+    OUTPUT_FILE.parent.mkdir(parents=True, exist_ok=True)
+    if not OUTPUT_FILE.exists():
         pd.DataFrame(columns=CSV_COLS).to_csv(OUTPUT_FILE, index=False)
 
-    with open(OUTPUT_FILE, "r+", encoding="utf-8") as fh:
+    with OUTPUT_FILE.open("r+", encoding="utf-8") as fh:
         fcntl.flock(fh, fcntl.LOCK_EX)
         df_old = _ensure_cols(pd.read_csv(fh))
         df_new = _ensure_cols(df_new)
