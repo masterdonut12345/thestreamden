@@ -32,6 +32,7 @@ import embed_streams
 from cleanup_expired import cleanup_expired_threads
 from db_models import Category, Post, SessionLocal, Thread, User, init_db
 from pathlib import Path
+from streaming_site import streaming_bp
 
 app = Flask(__name__)
 
@@ -50,6 +51,8 @@ app.config.update(
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE="Lax",
 )
+
+app.register_blueprint(streaming_bp)
 
 # Ensure database tables exist on startup
 init_db()
@@ -946,11 +949,6 @@ def attach_user():
         _seed_started = True
     generate_csrf_token()
     _start_cleanup_worker()
-
-
-@app.route("/")
-def home():
-    return redirect("/forum")
 
 
 @app.route("/forum")

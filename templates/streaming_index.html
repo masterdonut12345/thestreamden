@@ -1,0 +1,1170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+
+    <!-- ✅ Mobile friendly viewport -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+
+    <title>The Stream Den</title>
+
+    <!-- Open Graph (link preview) -->
+    <meta property="og:title" content="The Stream Den – Free Sports Streaming" />
+    <meta property="og:description" content="Watch live sports with fewer ads." />
+    <meta property="og:image" content="{{ url_for('static', filename='preview.svg', _external=True) }}" />
+    <meta property="og:url" content="{{ request.url_root.rstrip('/') }}" />
+    <meta property="og:type" content="website" />
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="The Stream Den – Free Sports Streaming" />
+    <meta name="twitter:description" content="Watch live sports with fewer ads." />
+    <meta name="twitter:image" content="{{ url_for('static', filename='preview.svg', _external=True) }}" />
+
+    <!-- Modern font -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap"
+      rel="stylesheet"
+    >
+
+    <style>
+        :root {
+            --bg: #050508;
+            --bg-alt: #050509;
+            --text: #f5f5f5;
+            --muted: #b8b8b8;
+
+            --accent: #7aa2ff;
+            --accent-soft: rgba(122, 162, 255, 0.16);
+
+            --navy-0: rgba(6, 8, 18, 0.92);
+            --navy-1: rgba(10, 14, 30, 0.78);
+            --navy-2: rgba(18, 26, 55, 0.28);
+            --navy-border: rgba(110, 145, 255, 0.14);
+            --navy-border-hover: rgba(110, 145, 255, 0.28);
+
+            --border: #222;
+            --surface-2: #12121a;
+            --input-bg: #0f0f15;
+            --shadow-soft: 0 18px 40px rgba(0, 0, 0, 0.65);
+            --live: #ff4d6a;
+
+            --surface: #0b0b12;
+        }
+
+        * { box-sizing: border-box; }
+
+        /* ✅ Better tap behavior */
+        button, a, input, .sport-header { -webkit-tap-highlight-color: transparent; }
+        button { touch-action: manipulation; }
+
+        html, body {
+            height: 100%;
+            min-height: 100%;
+            background: transparent;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+            color: var(--text);
+            position: relative;
+            overflow-x: hidden;
+            isolation: isolate;
+        }
+
+        body::before {
+            content: "";
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            z-index: 0;
+            background:
+                radial-gradient(1200px 700px at 35% 0%, rgba(122, 162, 255, 0.28), transparent 62%),
+                radial-gradient(1000px 650px at 85% 0%, rgba(255, 77, 106, 0.14), transparent 60%),
+                radial-gradient(900px 700px at 50% 55%, rgba(122, 162, 255, 0.10), transparent 70%),
+                linear-gradient(180deg, #080816 0%, #05050c 45%, #000 100%);
+        }
+
+        .page-wrapper {
+            position: relative;
+            z-index: 1;
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 24px 20px 40px;
+        }
+
+        @media (min-width: 1100px) {
+            .page-wrapper { margin-right: 220px; }
+        }
+
+        /* === TOP NAV / BRAND BAR === */
+        .top-nav {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 12px;
+            color: var(--muted);
+            font-size: 0.85rem;
+            opacity: 0.9;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 600;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            font-size: 0.82rem;
+            color: #e5e9ff;
+        }
+
+        .brand-logo {
+            width: 18px;
+            height: 18px;
+            border-radius: 6px;
+            background: radial-gradient(circle at 30% 10%, #a1b5ff, #4f7cff 45%, #111321 100%);
+            box-shadow: 0 0 0 1px rgba(122, 162, 255, 0.55);
+        }
+
+        .top-nav-right {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .pill-label {
+            padding: 4px 10px;
+            border-radius: 999px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            background: rgba(5, 5, 12, 0.85);
+        }
+
+        .forum-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            border-radius: 10px;
+            border: 1px solid rgba(122, 162, 255, 0.55);
+            background: rgba(122, 162, 255, 0.14);
+            color: #eef2ff;
+            text-decoration: none;
+            font-weight: 600;
+            transition: transform 0.12s ease, background 0.15s ease, border-color 0.15s ease;
+        }
+        .forum-link:hover {
+            transform: translateY(-1px);
+            background: rgba(122, 162, 255, 0.22);
+            border-color: rgba(122, 162, 255, 0.9);
+        }
+
+        /* === HEADER === */
+        header {
+            border-radius: 20px;
+            padding: 18px 20px 14px;
+            margin-bottom: 18px;
+            background: radial-gradient(circle at top left, rgba(64, 117, 255, 0.38), rgba(5, 7, 18, 0.94));
+            border: 1px solid rgba(122, 162, 255, 0.5);
+            box-shadow: 0 22px 55px rgba(0, 0, 0, 0.9);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+        }
+
+        .header-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .header-text { flex: 1 1 auto; }
+
+        h1 {
+            margin: 0 0 4px 0;
+            font-size: 2.1rem;
+            letter-spacing: 0.03em;
+        }
+
+        .header-subline {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            align-items: center;
+            font-size: 0.85rem;
+            color: var(--muted);
+        }
+
+        .tagline { margin: 0; color: var(--muted); }
+
+        .live-counter-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 10px;
+            border-radius: 999px;
+            border: 1px solid rgba(255, 255, 255, 0.16);
+            background: rgba(4, 6, 18, 0.9);
+            font-size: 0.75rem;
+        }
+
+        .live-counter-pill::before {
+            content: "";
+            width: 7px;
+            height: 7px;
+            border-radius: 999px;
+            background: var(--live);
+            box-shadow: 0 0 8px rgba(255, 77, 106, 0.7);
+        }
+
+        .ad-slot-top-right {
+            flex: 0 0 auto;
+            text-align: right;
+            max-width: 728px;
+        }
+
+        @media (max-width: 900px) {
+            .header-container { flex-direction: column; align-items: flex-start; }
+            .ad-slot-top-right { text-align: left; width: 100%; overflow-x: auto; }
+        }
+
+        /* === Cross-promo banner === */
+        .promo-strip {
+            margin: 14px 0 14px 0;
+            padding: 12px 14px;
+            border-radius: 16px;
+            background: radial-gradient(circle at top left, rgba(122, 162, 255, 0.22), rgba(5, 5, 18, 0.96));
+            border: 1px solid rgba(122, 162, 255, 0.45);
+            box-shadow: 0 14px 34px rgba(0, 0, 0, 0.75);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+        }
+
+        .promo-left { display: flex; flex-direction: column; gap: 3px; }
+        .promo-title { font-size: 0.95rem; font-weight: 700; letter-spacing: 0.02em; color: #e8ecff; }
+        .promo-subtitle { font-size: 0.82rem; color: var(--muted); }
+
+        .promo-cta {
+            flex: 0 0 auto;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 9px 14px;
+            border-radius: 999px;
+            border: 1px solid rgba(122, 162, 255, 0.65);
+            background: rgba(122, 162, 255, 0.14);
+            color: #eef2ff;
+            text-decoration: none;
+            font-size: 0.85rem;
+            font-weight: 600;
+            transition: transform 0.12s ease, background 0.15s ease, border-color 0.15s ease;
+            min-height: 40px; /* ✅ nicer tap target */
+        }
+
+        .promo-cta:hover {
+            transform: translateY(-1px);
+            background: rgba(122, 162, 255, 0.22);
+            border-color: rgba(122, 162, 255, 0.9);
+        }
+
+        .promo-cta .pill {
+            font-size: 0.72rem;
+            padding: 2px 8px;
+            border-radius: 999px;
+            border: 1px solid rgba(255, 255, 255, 0.14);
+            background: rgba(0, 0, 0, 0.18);
+            color: #dbe4ff;
+        }
+
+        @media (max-width: 650px) {
+            .promo-strip { flex-direction: column; align-items: flex-start; }
+            .promo-cta { width: 100%; justify-content: center; }
+        }
+
+        /* search bar */
+        .search-shell {
+            margin: 18px 0 10px 0;
+            position: sticky;
+            top: 12px;
+            z-index: 5;
+        }
+
+        @media (max-width: 900px) { .search-shell { position: static; } }
+
+        .search-bar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            align-items: center;
+            padding: 10px 12px;
+            border-radius: 14px;
+            background: rgba(5, 5, 12, 0.96);
+            border: 1px solid rgba(255, 255, 255, 0.04);
+            box-shadow: 0 10px 24px rgba(0, 0, 0, 0.6);
+        }
+
+        .search-bar input[type="text"] {
+            flex: 1 1 220px;
+            padding: 10px 12px;           /* ✅ bigger tap */
+            font-size: 1rem;              /* ✅ readable */
+            background: var(--input-bg);
+            color: var(--text);
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            outline: none;
+            transition: border 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+            min-height: 44px;             /* ✅ iOS tap target */
+        }
+
+        .search-bar input[type="text"]::placeholder { color: #8a8a8a; }
+
+        .search-bar input[type="text"]:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 1px rgba(122, 162, 255, 0.7);
+            background: #11111b;
+        }
+
+        .search-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
+        .search-bar button {
+            padding: 10px 14px;          /* ✅ bigger tap */
+            font-size: 0.95rem;
+            cursor: pointer;
+            border-radius: 999px;
+            border: 1px solid var(--border);
+            background: var(--surface-2);
+            color: var(--text);
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            transition: background 0.15s ease, transform 0.1s ease, border-color 0.15s ease;
+            min-height: 44px;            /* ✅ iOS tap target */
+        }
+
+        .search-bar button:hover {
+            background: #191925;
+            border-color: rgba(122, 162, 255, 0.7);
+            transform: translateY(-1px);
+        }
+
+        .search-bar button[type="button"].secondary-btn {
+            background: transparent;
+            color: var(--muted);
+        }
+
+        .search-bar button[type="button"].secondary-btn:hover {
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .live-filter-button {
+            border-radius: 999px;
+            border: 1px solid rgba(255, 77, 106, 0.6);
+            background: rgba(255, 77, 106, 0.12);
+            color: #ffdfe7;
+        }
+
+        .live-filter-button::before {
+            content: "";
+            width: 7px;
+            height: 7px;
+            border-radius: 999px;
+            background: var(--live);
+            box-shadow: 0 0 8px rgba(255, 77, 106, 0.7);
+        }
+
+        .live-filter-button.active {
+            background: rgba(255, 77, 106, 0.25);
+            border-color: rgba(255, 77, 106, 0.9);
+            color: #ffeef2;
+        }
+
+        /* QUICK FILTER CHIPS */
+        .quick-filters {
+            margin: 6px 0 18px 0;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            font-size: 0.85rem;
+        }
+
+        .quick-filters-label { color: var(--muted); margin-right: 4px; }
+
+        .filter-chip {
+            border-radius: 999px;
+            padding: 10px 12px;          /* ✅ bigger tap */
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            background: rgba(9, 9, 16, 0.9);
+            color: var(--text);
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease, color 0.15s ease;
+            min-height: 42px;
+        }
+
+        .filter-chip span.emoji { font-size: 1rem; }
+
+        .filter-chip:hover {
+            background: rgba(20, 22, 40, 0.96);
+            border-color: rgba(122, 162, 255, 0.7);
+            transform: translateY(-1px);
+        }
+
+        .filter-chip.active {
+            background: var(--accent-soft);
+            border-color: rgba(122, 162, 255, 0.85);
+            color: #e2e8ff;
+        }
+
+        /* NOW PLAYING */
+        .now-playing {
+            margin-bottom: 24px;
+            padding: 12px 14px;
+            border-radius: 16px;
+            background: radial-gradient(circle at top left, rgba(64, 117, 255, 0.3), rgba(5, 5, 18, 0.96));
+            border: 1px solid rgba(122, 162, 255, 0.5);
+            box-shadow: 0 18px 40px rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+        }
+
+        .now-playing-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            margin-bottom: 6px;
+        }
+
+        .now-playing-title {
+            font-size: 0.95rem;
+            font-weight: 600;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: #e0e7ff;
+        }
+
+        .now-playing-subtitle { font-size: 0.8rem; color: var(--muted); }
+
+        .now-playing-list { display: flex; flex-wrap: wrap; gap: 8px; }
+
+        .now-playing-item {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 12px; /* ✅ bigger tap */
+            border-radius: 999px;
+            background: rgba(6, 10, 22, 0.88);
+            border: 1px solid rgba(110, 145, 255, 0.22);
+            color: #e2e7ff;
+            font-size: 0.86rem; /* ✅ slightly larger */
+            text-decoration: none;
+            max-width: 100%;
+            overflow: hidden;
+            min-height: 40px;
+        }
+
+        .now-playing-item:hover {
+            background: rgba(10, 16, 34, 0.92);
+            transform: translateY(-1px);
+            box-shadow: 0 14px 30px rgba(0, 0, 0, 0.7);
+            border-color: rgba(110, 145, 255, 0.35);
+        }
+
+        .now-playing-matchup {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 210px;
+        }
+
+        .now-playing-meta { font-size: 0.75rem; color: #c7cffc; opacity: 0.9; }
+
+        /* SPORT SECTIONS */
+        .sport-section {
+            margin-bottom: 16px;
+            border-radius: 14px;
+            background: rgba(5, 5, 12, 0.92);
+            border: 1px solid rgba(255, 255, 255, 0.04);
+            overflow: hidden;
+        }
+
+        .sport-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 12px; /* ✅ bigger tap */
+            cursor: pointer;
+            background: linear-gradient(135deg, rgba(48, 88, 210, 0.45), rgba(3, 5, 18, 0.95));
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border-bottom: 1px solid rgba(122, 162, 255, 0.35);
+        }
+
+        .sport-header-left { display: flex; align-items: center; gap: 10px; }
+
+        .sport-pill {
+            width: 8px;
+            height: 32px;
+            border-radius: 999px;
+            background: linear-gradient(to bottom, var(--accent), transparent);
+            opacity: 0.9;
+        }
+
+        .sport-title-text { display: flex; flex-direction: column; }
+
+        .sport-title-text h2 {
+            margin: 0;
+            font-size: 1rem;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+        }
+
+        .sport-subtitle { font-size: 0.8rem; color: var(--muted); margin-top: 2px; }
+
+        .sport-toggle-icon {
+            font-size: 1rem;
+            color: var(--muted);
+            transition: transform 0.15s ease, color 0.15s ease;
+            padding: 6px; /* ✅ easy tap */
+        }
+
+        .sport-section.open .sport-toggle-icon {
+            transform: rotate(90deg);
+            color: var(--accent);
+        }
+
+        .sport-body { padding: 8px 10px 12px; display: none; }
+        .sport-section.open .sport-body { display: block; }
+
+        /* GRID OF GAME CARDS */
+        .sport-games-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(270px, 1fr));
+            gap: 10px;
+        }
+
+        .game-card {
+            border: 1px solid rgba(255, 255, 255, 0.04);
+            background:
+                radial-gradient(900px 260px at 20% 0%, var(--navy-2), transparent 62%),
+                linear-gradient(180deg, var(--navy-1), var(--navy-0));
+            padding: 12px 13px;
+            border-radius: 14px;
+            box-shadow:
+                0 10px 22px rgba(0, 0, 0, 0.62),
+                inset 0 1px 0 rgba(255, 255, 255, 0.03);
+            transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease, background 0.2s ease;
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+        }
+
+        .game-card:hover {
+            transform: translateY(-2px);
+            background:
+                radial-gradient(900px 260px at 20% 0%, rgba(110, 145, 255, 0.20), transparent 62%),
+                linear-gradient(180deg, rgba(14, 20, 44, 0.82), rgba(6, 8, 18, 0.92));
+            border-color: var(--navy-border-hover);
+            box-shadow:
+                0 16px 34px rgba(0, 0, 0, 0.82),
+                inset 0 1px 0 rgba(255, 255, 255, 0.04);
+        }
+
+        .game-title-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            margin-bottom: 6px;
+            flex-wrap: wrap;
+        }
+
+        .game-title { font-weight: 600; font-size: 1.02em; flex: 1 1 auto; min-width: 0; }
+        .game-title a { color: #e5e9ff; text-decoration: none; }
+
+        .game-tags-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 6px;
+        }
+
+        .game-tags { display: flex; flex-wrap: wrap; gap: 6px; font-size: 0.72rem; }
+
+        .tag-pill {
+            padding: 6px 10px; /* ✅ bigger tap */
+            border-radius: 999px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            background: rgba(8, 10, 20, 0.78);
+            color: #d7ddff;
+            white-space: nowrap;
+        }
+
+        .tag-pill.outline { border-style: dashed; opacity: 0.85; }
+
+        .game-time {
+            font-size: 0.86rem; /* ✅ more readable */
+            color: var(--muted);
+            text-align: right;
+            white-space: nowrap;
+        }
+
+        .meta { font-size: 0.85rem; color: var(--muted); margin-top: 6px; line-height: 1.45; }
+        .meta strong { color: #d0d0d0; font-weight: 500; }
+
+        .live-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 9px;
+            border-radius: 999px;
+            border: 1px solid rgba(255, 77, 106, 0.6);
+            background: rgba(255, 77, 106, 0.14);
+            color: #ffeef2;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            font-size: 0.74rem;
+            font-weight: 700;
+            position: relative;
+            overflow: hidden;
+            flex-shrink: 0;
+            cursor: default;
+        }
+
+        .live-pill::before {
+            content: "";
+            width: 7px;
+            height: 7px;
+            border-radius: 999px;
+            background: var(--live);
+            box-shadow: 0 0 0 0 rgba(255, 77, 106, 0.6);
+            animation: livePulse 1.6s ease-out infinite;
+        }
+
+        @keyframes livePulse {
+            0% { box-shadow: 0 0 0 0 rgba(255, 77, 106, 0.6); }
+            100% { box-shadow: 0 0 0 10px rgba(255, 77, 106, 0); }
+        }
+
+        a {
+            text-decoration: none;
+            color: var(--accent);
+            transition: color 0.15s ease, text-shadow 0.18s ease;
+        }
+        a:hover { color: #a4bcff; text-shadow: 0 0 8px rgba(122, 162, 255, 0.25); }
+
+        .empty-state {
+            margin-top: 40px;
+            padding: 18px 16px;
+            border-radius: 14px;
+            background: rgba(10, 10, 16, 0.9);
+            border: 1px dashed rgba(122, 162, 255, 0.4);
+            color: var(--muted);
+            text-align: center;
+            font-size: 0.95rem;
+        }
+
+        /* Right ad hidden under 1100 already */
+        .vertical-ad-fixed {
+            position: fixed;
+            top: 120px;
+            right: 20px;
+            width: 160px;
+            height: 600px;
+            z-index: 100;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 16px 36px rgba(0, 0, 0, 0.85);
+        }
+        @media (max-width: 1100px) { .vertical-ad-fixed { display: none; } }
+
+        /* Most viewed hidden under 1400 already */
+        .vertical-most-viewed-fixed {
+            position: fixed;
+            top: 120px;
+            left: 20px;
+            width: 220px;
+            z-index: 101;
+        }
+        @media (max-width: 1400px) { .vertical-most-viewed-fixed { display: none; } }
+
+        .most-viewed-box {
+            border-radius: 16px;
+            padding: 10px 11px 12px;
+            background: radial-gradient(circle at top left, rgba(64, 117, 255, 0.32), rgba(5, 5, 18, 0.98));
+            border: 1px solid rgba(122, 162, 255, 0.6);
+            box-shadow: 0 18px 40px rgba(0, 0, 0, 0.9);
+            font-size: 0.82rem;
+        }
+
+        .most-viewed-header {
+            font-size: 0.85rem;
+            font-weight: 600;
+            letter-spacing: 0.09em;
+            text-transform: uppercase;
+            margin-bottom: 6px;
+            color: #e3e8ff;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .most-viewed-header span.badge {
+            font-size: 0.7rem;
+            padding: 2px 7px;
+            border-radius: 999px;
+            border: 1px solid rgba(255, 255, 255, 0.25);
+            background: rgba(5, 8, 24, 0.9);
+            color: var(--muted);
+        }
+
+        .most-viewed-list { display: flex; flex-direction: column; gap: 8px; }
+
+        .mv-item {
+            display: block;
+            padding: 10px 10px; /* ✅ bigger tap */
+            border-radius: 12px;
+            background: rgba(6, 10, 22, 0.92);
+            border: 1px solid rgba(110, 145, 255, 0.22);
+            color: #e4e8ff;
+            text-decoration: none;
+            transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease;
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+        }
+
+        .mv-title-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            justify-content: space-between;
+            flex-wrap: wrap;
+        }
+
+        .mv-title { font-size: 0.9rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 2px; flex: 1 1 auto; min-width: 0; }
+        .mv-meta { font-size: 0.78rem; color: #c7cffc; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .mv-viewers { font-size: 0.78rem; color: #ffdfe7; }
+
+        footer {
+            margin-top: 20px;
+            padding: 12px 20px 24px;
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+            background: rgba(3, 3, 8, 0.9);
+        }
+
+        footer .footer-inner { max-width: 1100px; margin: 0 auto; }
+
+        footer p { margin: 0 0 6px 0; font-size: 0.85rem; color: var(--muted); }
+
+        .social-row {
+            margin-top: 8px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .social-link {
+            font-size: 0.9rem;           /* ✅ readable */
+            padding: 10px 12px;          /* ✅ tap target */
+            border-radius: 999px;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            background: rgba(8, 8, 16, 0.9);
+            color: var(--text);
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            text-decoration: none;
+            transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+            min-height: 44px;
+        }
+
+        .social-link span.handle { color: var(--accent); }
+
+        /* ================= MOBILE PASSES ================= */
+        @media (max-width: 640px) {
+            .page-wrapper { padding: 16px 14px 28px; }
+
+            h1 { font-size: 1.6rem; }
+
+            .top-nav { font-size: 0.8rem; }
+            .pill-label { display: none; } /* ✅ declutter */
+
+            header { padding: 14px 14px 12px; border-radius: 18px; }
+
+            .search-shell { margin: 12px 0 8px; }
+            .search-bar { padding: 10px; gap: 10px; }
+
+            /* ✅ Stack actions nicely: input full width, buttons 2-column */
+            .search-bar input[type="text"] { flex: 1 1 100%; width: 100%; }
+            .search-actions { width: 100%; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+            .search-actions button { width: 100%; justify-content: center; }
+
+            /* ✅ Quick filters become horizontally scrollable (no wrap chaos) */
+            .quick-filters {
+                overflow-x: auto;
+                flex-wrap: nowrap;
+                -webkit-overflow-scrolling: touch;
+                padding-bottom: 6px;
+            }
+            .quick-filters-label { flex: 0 0 auto; }
+            .filter-chip { flex: 0 0 auto; }
+
+            /* ✅ Game grid becomes single column */
+            .sport-games-grid { grid-template-columns: 1fr; gap: 10px; }
+
+            /* ✅ Reduce heavy hover transforms on mobile */
+            .game-card:hover { transform: none; }
+            .now-playing-item:hover { transform: none; }
+
+            /* ✅ Now playing matchup fits narrower screens */
+            .now-playing-matchup { max-width: 150px; }
+
+            /* ✅ Remove sticky search on tiny screens to avoid “jumping” with browser UI */
+            .search-shell { position: static; top: auto; }
+        }
+
+        /* ✅ Respect reduced motion */
+        @media (prefers-reduced-motion: reduce) {
+            * { transition: none !important; scroll-behavior: auto !important; }
+            .live-pill::before { animation: none !important; box-shadow: 0 0 0 0 rgba(255, 77, 106, 0.6); }
+        }
+    </style>
+</head>
+<body>
+    <div class="page-wrapper">
+
+        <div class="top-nav">
+            <div class="brand">
+                <div class="brand-logo"></div>
+                <span>The Stream Den</span>
+            </div>
+            <div class="top-nav-right">
+                <a class="forum-link" href="/forum">Community Forum ↗</a>
+                <div class="pill-label">live sports</div>
+            </div>
+        </div>
+
+        <header>
+            <div class="header-container">
+                <div class="header-text">
+                    <h1>Today's Games</h1>
+                    <div class="header-subline">
+                        <p class="tagline">Browse live and upcoming streams in one place.</p>
+                        {% if sections %}
+                            {% set total_live = 0 %}
+                            {% for section in sections %}
+                                {% set live_count = section.games|selectattr('is_live')|list|length %}
+                                {% set total_live = total_live + live_count %}
+                            {% endfor %}
+                            {% if total_live > 0 %}
+                                <span class="live-counter-pill">
+                                    {{ total_live }} live game{% if total_live != 1 %}s{% endif %} right now
+                                </span>
+                            {% endif %}
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="ad-slot-top-right">
+                    <script type="text/javascript">
+                      atOptions = {
+                      	'key' : '404cd50590d1227fb3038749119d5034',
+                      	'format' : 'iframe',
+                      	'height' : 90,
+                      	'width' : 728,
+                      	'params' : {}
+                      };
+                    </script>
+                    <script
+                      type="text/javascript"
+                      src="https://broodbelongminiature.com/404cd50590d1227fb3038749119d5034/invoke.js"
+                    ></script>
+                </div>
+            </div>
+        </header>
+
+        <div class="promo-strip">
+            <div class="promo-left">
+              <div class="promo-title">Want the best sports betting casino?</div>
+                <div class="promo-subtitle">
+                    Bet on all of todays games on<strong> Stake</strong>.
+                </div>
+            </div>
+
+            <a class="promo-cta" href="https://stake.com/?c=thestreamden" target="_blank" rel="noopener">
+                Open Stake.com<span class="pill">↗</span>
+            </a>
+        </div>
+
+        <div class="search-shell">
+            <form class="search-bar" method="get" action="{{ url_for('streaming.index') }}">
+                <input
+                    id="searchInput"
+                    type="text"
+                    name="q"
+                    placeholder="Search by team, sport, or tournament..."
+                    value="{{ search_query or '' }}"
+                    inputmode="search"
+                    autocomplete="off"
+                >
+                <div class="search-actions">
+                    <button type="submit">🔍 Search</button>
+
+                    <button
+                        type="button"
+                        class="live-filter-button {% if live_only %}active{% endif %}"
+                        onclick="toggleLiveOnly({{ 'true' if live_only else 'false' }})">
+                        🔴 Live only
+                    </button>
+
+                    {% if search_query %}
+                        <button
+                            type="button"
+                            class="secondary-btn"
+                            onclick="window.location='{{ url_for('streaming.index') }}'">
+                            ✖ Clear
+                        </button>
+                    {% endif %}
+                </div>
+
+                {% if live_only %}
+                    <input type="hidden" name="live_only" value="1">
+                {% endif %}
+            </form>
+
+            <div class="quick-filters">
+                <span class="quick-filters-label">Quick filters:</span>
+                <button class="filter-chip" type="button" onclick="applyFilterChip('NFL')"><span class="emoji">🏈</span> NFL</button>
+                <button class="filter-chip" type="button" onclick="applyFilterChip('Basketball')"><span class="emoji">🏀</span> Basketball</button>
+                <button class="filter-chip" type="button" onclick="applyFilterChip('ICE HOCKEY')"><span class="emoji">🏒</span> ICE HOCKEY</button>
+                <button class="filter-chip" type="button" onclick="applyFilterChip('MLB')"><span class="emoji">⚾</span> MLB</button>
+                <button class="filter-chip" type="button" onclick="applyFilterChip('Soccer')"><span class="emoji">⚽</span> Soccer</button>
+                <button class="filter-chip" type="button" onclick="applyFilterChip('')">Clear</button>
+            </div>
+        </div>
+
+        {% if sections %}
+            {% set ns = namespace(live_games=[]) %}
+            {% for section in sections %}
+                {% for g in section.games %}
+                    {% if g.is_live %}
+                        {% set ns.live_games = ns.live_games + [g] %}
+                    {% endif %}
+                {% endfor %}
+            {% endfor %}
+
+            {% if ns.live_games %}
+                <section class="now-playing">
+                    <div class="now-playing-header">
+                        <div class="now-playing-title">Now Playing</div>
+                        <div class="now-playing-subtitle">
+                            Showing up to {{ [ns.live_games|length, 5]|min }} live games
+                        </div>
+                    </div>
+                    <div class="now-playing-list">
+                        {% for game in ns.live_games[:5] %}
+                            <a href="{{ url_for('streaming.game_detail', game_id=game.id) }}" class="now-playing-item">
+                                <span class="now-playing-matchup">{{ game.matchup }}</span>
+                                <span class="now-playing-meta">
+                                    • {{ game.sport or 'Sport' }}{% if game.time %} • {{ game.time }}{% endif %}
+                                </span>
+                            </a>
+                        {% endfor %}
+                    </div>
+                </section>
+            {% endif %}
+        {% endif %}
+
+        {% if sections %}
+            {% for section in sections %}
+                {% set live_count = section.games|selectattr('is_live')|list|length %}
+
+                <div class="sport-section">
+                    <div class="sport-header">
+                        <div class="sport-header-left">
+                            <div class="sport-pill"></div>
+                            <div class="sport-title-text">
+                                <h2>{{ section.sport }}</h2>
+                                <div class="sport-subtitle">
+                                    {{ section.games|length }} game{% if section.games|length != 1 %}s{% endif %}
+                                    {% if live_count > 0 %}
+                                        • {{ live_count }} live
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        <div class="sport-toggle-icon">▶</div>
+                    </div>
+
+                    <div class="sport-body">
+                        <div class="sport-games-grid">
+                            {% for game in section.games %}
+                                <div class="game-card">
+                                    <div class="game-title-row">
+                                        <div class="game-title">
+                                            <a href="{{ url_for('streaming.game_detail', game_id=game.id) }}">
+                                                {{ game.matchup }}
+                                            </a>
+                                        </div>
+                                        {% if game.is_live %}
+                                            <span class="live-pill" aria-label="Live now">LIVE</span>
+                                        {% endif %}
+                                    </div>
+
+                                    <div class="game-tags-row">
+                                        <div class="game-tags">
+                                            {% if game.sport %}
+                                                <span class="tag-pill">{{ game.sport }}</span>
+                                            {% endif %}
+                                            {% if game.tournament %}
+                                                <span class="tag-pill outline">{{ game.tournament }}</span>
+                                            {% endif %}
+                                        </div>
+                                        <div class="game-time">
+                                            {% if game.time %}
+                                                {{ game.time }}
+                                            {% elif game.time_unix %}
+                                                {{ game.time_unix }}
+                                            {% else %}
+                                                Time TBA
+                                            {% endif %}
+                                        </div>
+                                    </div>
+
+                                    <div class="meta">
+                                        <strong>Date:</strong> {{ game.date_header or 'Today' }}<br>
+                                        {% if game.tournament_url %}
+                                            <a href="{{ game.tournament_url }}" target="_blank">View tournament page ↗</a>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            {% endfor %}
+        {% else %}
+            <div class="empty-state">
+                No games found{% if search_query %} for "<strong>{{ search_query }}</strong>"{% endif %}.
+                Try another team, league, or tournament.
+            </div>
+        {% endif %}
+    </div>
+
+    <div class="vertical-ad-fixed">
+        <script type="text/javascript">
+          atOptions = {
+          	'key' : '29ef845582924216c628b8930841e3bb',
+          	'format' : 'iframe',
+          	'height' : 600,
+          	'width' : 160,
+          	'params' : {}
+          };
+        </script>
+        <script
+          type="text/javascript"
+          src="https://broodbelongminiature.com/29ef845582924216c628b8930841e3bb/invoke.js"
+        ></script>
+    </div>
+
+    {% if most_viewed_games %}
+        <div class="vertical-most-viewed-fixed">
+            <div class="most-viewed-box">
+                <div class="most-viewed-header">
+                    <span>Most Viewed</span>
+                    <span class="badge">{{ most_viewed_games|length }} game{% if most_viewed_games|length != 1 %}s{% endif %}</span>
+                </div>
+                <div class="most-viewed-list">
+                    {% for g in most_viewed_games %}
+                        <a href="{{ url_for('streaming.game_detail', game_id=g.id) }}" class="mv-item">
+                            <div class="mv-title-row">
+                                <div class="mv-title">{{ g.matchup }}</div>
+                                {% if g.is_live %}
+                                    <span class="live-pill" aria-label="Live now">LIVE</span>
+                                {% endif %}
+                            </div>
+                            <div class="mv-meta">
+                                {{ g.sport or 'Sport' }}{% if g.time %} • {{ g.time }}{% endif %}
+                            </div>
+                            <div class="mv-viewers">
+                                {{ g.active_viewers }} viewer{% if g.active_viewers != 1 %}s{% endif %}
+                            </div>
+                        </a>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    {% endif %}
+
+    <footer>
+        <div class="footer-inner">
+            <p>Follow TheStreamDen:</p>
+            <div class="social-row">
+                <a class="social-link" href="https://x.com/thestreamden" target="_blank" rel="noopener">
+                    𝕏 <span class="handle">@TheStreamDen</span>
+                </a>
+                <a class="social-link" href="https://x.com/CWILL18MVP" target="_blank" rel="noopener">
+                    Main social: <span class="handle">@CWILL18MVP</span>
+                </a>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        function toggleLiveOnly(currentlyOn) {
+            const url = new URL(window.location.href);
+            if (currentlyOn) url.searchParams.delete('live_only');
+            else url.searchParams.set('live_only', '1');
+            window.location.href = url.toString();
+        }
+
+        function applyFilterChip(term) {
+            const input = document.getElementById('searchInput');
+            if (!input) return;
+            input.value = term;
+            const form = input.closest('form');
+            if (form) form.submit();
+        }
+
+        document.addEventListener('DOMContentLoaded', function () {
+            const sections = document.querySelectorAll('.sport-section');
+            sections.forEach(function (sec, index) {
+                const header = sec.querySelector('.sport-header');
+                if (!header) return;
+
+                header.addEventListener('click', function () {
+                    sec.classList.toggle('open');
+                });
+
+                if (index === 0) sec.classList.add('open');
+            });
+        });
+    </script>
+
+    <!-- Cloudflare Web Analytics -->
+    <script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token": "643968b4db2b4d4c80a6f49718fcfcaa"}'></script>
+    <!-- End Cloudflare Web Analytics -->
+
+    <!-- Adsterra Social Bar -->
+    <script
+      type="text/javascript"
+      src="https://broodbelongminiature.com/0f/a2/4c/0fa24c36bd8ef534a07b2aebe1ba89c3.js"
+    ></script>
+
+    <!-- NEW: Adsterra ad unit (added) -->
+    <script
+      type="text/javascript"
+      defer
+      src="https://graduatedoutside.com/10/0b/5c/100b5c0f06c917d350ecd499f4f7fa16.js"
+    ></script>
+</body>
+</html>

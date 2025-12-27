@@ -1,0 +1,918 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ game.matchup }} - {{ game.sport }}</title>
+
+    <!-- ✅ Open Graph / Social Preview -->
+    <meta property="og:title" content="{{ (game.matchup or 'Live Game') ~ ' – ' ~ (game.sport or 'Stream') }}" />
+    <meta property="og:description" content="Watch {{ game.matchup or 'this game' }} live on The Stream Den. Multiple streams available." />
+    <meta property="og:image" content="{{ og_image_url }}" />
+    <meta property="og:url" content="{{ share_slug_url or share_id_url }}" />
+    <meta property="og:type" content="website" />
+
+    <!-- ✅ Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="{{ (game.matchup or 'Live Game') ~ ' – ' ~ (game.sport or 'Stream') }}" />
+    <meta name="twitter:description" content="Watch {{ game.matchup or 'this game' }} live on The Stream Den. Multiple streams available." />
+    <meta name="twitter:image" content="{{ og_image_url }}" />
+
+    <!-- Modern font -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    >
+
+    <style>
+        :root {
+            --bg: #050508;
+            --bg-alt: #050509;
+            --text: #f5f5f5;
+            --muted: #b8b8b8;
+            --accent: #7aa2ff;
+            --accent-soft: rgba(122, 162, 255, 0.16);
+            --border: #222;
+            --surface: #0b0b10;
+            --surface-2: #12121a;
+            --button-bg: #10101a;
+            --button-hover: #19192a;
+            --shadow-soft: 0 18px 40px rgba(0, 0, 0, 0.8);
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+            background: radial-gradient(circle at top, #151521 0, #050508 45%, #000 100%);
+            color: var(--text);
+        }
+
+        /* ✅ RESTORED: do NOT reserve space for the banner */
+        .page-wrapper {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 24px 20px 40px;
+        }
+
+        a {
+            text-decoration: none;
+            color: var(--accent);
+            transition: color 0.15s ease, text-shadow 0.18s ease;
+        }
+        a:hover {
+            color: #a4bcff;
+            text-shadow: 0 0 8px rgba(122, 162, 255, 0.4);
+        }
+
+        .live-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 9px;
+            border-radius: 999px;
+            border: 1px solid rgba(255, 77, 106, 0.6);
+            background: rgba(255, 77, 106, 0.14);
+            color: #ffeef2;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            font-size: 0.74rem;
+            font-weight: 700;
+            position: relative;
+            overflow: hidden;
+            flex-shrink: 0;
+            cursor: default;
+        }
+
+        .live-pill::before {
+            content: "";
+            width: 7px;
+            height: 7px;
+            border-radius: 999px;
+            background: #ff4d6a;
+            box-shadow: 0 0 0 0 rgba(255, 77, 106, 0.6);
+            animation: livePulse 1.6s ease-out infinite;
+        }
+
+        @keyframes livePulse {
+            0% { box-shadow: 0 0 0 0 rgba(255, 77, 106, 0.6); }
+            100% { box-shadow: 0 0 0 10px rgba(255, 77, 106, 0); }
+        }
+
+        .back-link {
+            margin-bottom: 12px;
+            font-size: 0.9rem;
+            color: var(--muted);
+        }
+        .back-link a { color: var(--muted); }
+        .back-link a:hover { color: var(--accent); }
+
+        header {
+            border-radius: 20px;
+            padding: 16px 18px;
+            margin-bottom: 18px;
+            background: linear-gradient(135deg, rgba(122, 162, 255, 0.09), rgba(0, 0, 0, 0.8));
+            border: 1px solid rgba(122, 162, 255, 0.25);
+            box-shadow: var(--shadow-soft);
+        }
+
+        .header-container {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        /* fixed 320x50 ad box on the left */
+        .ad-slot-left {
+            flex: 0 0 auto;
+            width: 320px;
+            height: 50px;
+            display: flex;
+            align-items: center;
+            justify-content: flex-start;
+            overflow: hidden;
+        }
+        .ad-slot-left iframe {
+            width: 100% !important;
+            height: 100% !important;
+            display: block;
+        }
+
+        .header-text {
+            flex: 1 1 auto;
+            padding-right: 10px;
+        }
+
+        h1 {
+            margin: 0;
+            font-size: 2.0rem;
+            letter-spacing: 0.02em;
+        }
+
+        h2 {
+            margin: 6px 0 10px 0;
+            font-size: 1.1rem;
+            font-weight: 500;
+            color: var(--muted);
+        }
+
+        .title-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin: 0 0 6px;
+        }
+
+        .meta {
+            margin-top: 4px;
+            margin-bottom: 2px;
+            font-size: 0.9em;
+            color: var(--muted);
+        }
+
+        .meta-row { margin: 2px 0; }
+        .meta strong { color: #dddddd; font-weight: 500; }
+
+        /* ✅ share link styling */
+        .share-links {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .share-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 10px;
+            border-radius: 999px;
+            border: 1px solid rgba(122, 162, 255, 0.35);
+            background: rgba(122, 162, 255, 0.08);
+            color: #dde5ff;
+            font-size: 0.84rem;
+            max-width: 100%;
+        }
+        .share-pill:hover {
+            border-color: rgba(122, 162, 255, 0.75);
+            background: rgba(122, 162, 255, 0.14);
+        }
+
+        .support-note-floating {
+            margin-top: 12px;
+            display: flex;
+            justify-content: flex-end;
+            font-size: 0.82rem;
+            color: var(--muted);
+        }
+        .support-note-floating a { font-weight: 600; color: var(--accent); }
+        .support-note-floating a:hover { color: #a4bcff; }
+
+        .meta-chips {
+            margin-top: 8px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        .chip {
+            font-size: 0.78rem;
+            padding: 4px 8px;
+            border-radius: 999px;
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            background: rgba(10, 10, 18, 0.95);
+            color: var(--muted);
+        }
+        .chip-accent {
+            border-color: rgba(122, 162, 255, 0.6);
+            background: rgba(122, 162, 255, 0.1);
+            color: #dde5ff;
+        }
+
+        @media (max-width: 700px) {
+            .header-container { flex-direction: column; align-items: flex-start; }
+            .ad-slot-left { text-align: left; width: 100%; max-width: 320px; margin-bottom: 8px; }
+        }
+
+        h3 { margin-top: 12px; margin-bottom: 8px; font-size: 1.1rem; }
+
+        .player-card {
+            margin-top: 4px;
+            border-radius: 18px;
+            padding: 14px 14px 18px;
+            background: radial-gradient(circle at top left, rgba(122, 162, 255, 0.1), var(--surface));
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            box-shadow: 0 18px 40px rgba(0, 0, 0, 0.9);
+        }
+
+        /* PLAYER LAYOUT: single vs 2x2 grid */
+        .player-layout {
+            position: relative;
+            width: 100%;
+        }
+
+        .player-slot {
+            background: #050508;
+            border-radius: 14px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            gap: 0;
+        }
+
+        .player-slot iframe {
+            width: 100%;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 14px;
+            background: #050508;
+        }
+
+        /* Single-view: one big iframe */
+        .player-layout.single { display: block; }
+        .player-layout.single .player-slot[data-slot="0"] iframe { height: 480px; }
+
+        /* Multi-view: 2x2 grid, all equal */
+        .player-layout.multi {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 8px;
+        }
+        .player-layout.multi .player-slot iframe {
+            height: auto;
+            aspect-ratio: 16 / 9;
+            border-radius: 0 0 14px 14px;
+        }
+
+        .player-layout.single .extra-slot { display: none; }
+        .player-layout.multi .extra-slot { display: flex; }
+
+        .multi-slot-header {
+            padding: 4px 8px;
+            background: rgba(0, 0, 0, 0.75);
+            font-size: 0.78rem;
+            color: var(--muted);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 8px;
+        }
+        .multi-slot-title {
+            flex: 1 1 auto;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .multi-slot-select {
+            max-width: 260px;
+            font-size: 0.78rem;
+            background: rgba(5, 5, 12, 0.95);
+            color: var(--text);
+            border-radius: 999px;
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            padding: 3px 8px;
+        }
+
+        @media (max-width: 700px) {
+            .player-layout.single .player-slot[data-slot="0"] iframe { height: 360px; }
+        }
+
+        .stream-picker {
+            margin-top: 12px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .stream-button {
+            padding: 7px 14px;
+            border-radius: 999px;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            background: var(--button-bg);
+            color: var(--text);
+            cursor: pointer;
+            font-size: 0.86rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            transition:
+                background 0.15s ease,
+                border-color 0.15s ease,
+                transform 0.1s ease,
+                box-shadow 0.15s ease;
+        }
+        .stream-button:hover {
+            background: var(--button-hover);
+            border-color: rgba(122, 162, 255, 0.7);
+            transform: translateY(-1px);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.7);
+        }
+        .stream-button.active {
+            background: var(--accent);
+            color: #050508;
+            border-color: var(--accent);
+            font-weight: 600;
+            box-shadow: 0 14px 30px rgba(122, 162, 255, 0.5);
+        }
+
+        .ad-slot {
+            margin: 16px 0 0;
+            text-align: center;
+        }
+
+        .no-stream {
+            margin-top: 30px;
+            padding: 16px 14px;
+            border-radius: 14px;
+            background: rgba(10, 10, 16, 0.95);
+            border: 1px dashed rgba(122, 162, 255, 0.4);
+            color: var(--muted);
+            font-size: 0.95rem;
+        }
+
+        /* MULTI-VIEW / VIEW CONTROLS */
+        .multi-view-title {
+            margin-top: 18px;
+            margin-bottom: 8px;
+            font-size: 0.95rem;
+            color: var(--muted);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            justify-content: space-between;
+            flex-wrap: wrap;
+        }
+
+        .multi-controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .multi-toggle-button {
+            padding: 6px 12px;
+            border-radius: 999px;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            background: var(--button-bg);
+            color: var(--text);
+            cursor: pointer;
+            font-size: 0.8rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .multi-toggle-button:hover {
+            background: var(--button-hover);
+            border-color: rgba(122, 162, 255, 0.7);
+        }
+
+        /* ========== FULL-PAGE PLAYER MODE FIXED ========== */
+        body.full-page-player {
+            overflow: hidden;
+            background: #000;
+        }
+
+        body.full-page-player .page-wrapper {
+            max-width: none;
+            padding: 0;
+            height: 100vh;
+        }
+
+        body.full-page-player header,
+        body.full-page-player .back-link,
+        body.full-page-player footer {
+            display: none;
+        }
+
+        body.full-page-player .player-card {
+            position: fixed;
+            inset: 0;
+            margin: 0;
+            border-radius: 0;
+            box-shadow: none;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            z-index: 9999;
+        }
+
+        body.full-page-player .player-card h3 { display: none; }
+
+        body.full-page-player .player-layout {
+            flex: 1 1 auto;
+            height: 100%;
+        }
+
+        body.full-page-player .player-layout.single .player-slot[data-slot="0"],
+        body.full-page-player .player-layout.single .player-slot[data-slot="0"] iframe {
+            height: 100%;
+        }
+
+        body.full-page-player .player-layout.multi {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            grid-template-rows: repeat(2, 1fr);
+            gap: 0;
+            height: 100%;
+        }
+
+        body.full-page-player .player-layout.multi .player-slot,
+        body.full-page-player .player-layout.multi .player-slot iframe {
+            height: 100%;
+            border-radius: 0;
+        }
+
+        body.full-page-player .ad-slot { display: none; }
+        body.full-page-player #stream-picker { display: none !important; }
+
+        body.full-page-player .multi-view-title {
+            position: fixed;
+            bottom: 12px;
+            left: 50%;
+            transform: translateX(-50%);
+            margin: 0;
+            z-index: 10001;
+        }
+
+        body.full-page-player .multi-view-title span:first-child { display: none; }
+
+        body.full-page-player .multi-controls {
+            background: rgba(0, 0, 0, 0.7);
+            padding: 6px 8px;
+            border-radius: 999px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.8);
+        }
+
+        /* ✅ FIXED RIGHT RAIL BANNER — OUTSIDE FLOW, DOES NOT RESIZE ANYTHING */
+        .stake-rail {
+            position: fixed;
+            right: 16px;
+            top: 140px;
+            width: 160px;
+            z-index: 2500;
+        }
+
+        .left-rail-ad {
+            position: fixed;
+            left: 16px;
+            top: 200px;
+            width: 160px;
+            z-index: 2500;
+        }
+        .left-rail-ad .box {
+            width: 160px;
+            height: 300px;
+            border-radius: 14px;
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: 0 14px 30px rgba(0, 0, 0, 0.8);
+            background: rgba(0,0,0,0.35);
+        }
+
+        .stake-rail .box {
+            width: 160px;
+            height: 600px;
+            border-radius: 14px;
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: 0 18px 40px rgba(0, 0, 0, 0.85);
+            background: rgba(0,0,0,0.35);
+        }
+
+        .stake-rail a,
+        .stake-rail img {
+            display: block;
+            width: 160px;
+            height: 600px;
+        }
+
+        /* hide on smaller screens to avoid overlap */
+        @media (max-width: 1280px) {
+            .stake-rail { display: none; }
+            .left-rail-ad { display: none; }
+        }
+
+        /* hide in full-page mode */
+        body.full-page-player .stake-rail { display: none; }
+        body.full-page-player .left-rail-ad { display: none; }
+
+        @media (prefers-reduced-motion: reduce) {
+            .live-pill::before { animation: none !important; box-shadow: 0 0 0 0 rgba(255, 77, 106, 0.6); }
+        }
+    </style>
+</head>
+
+<body>
+    {% set short_slug = (game.slug or '') %}
+
+    <div class="page-wrapper">
+        <div class="back-link">
+            <a href="{{ url_for('streaming.index') }}">&larr; Back to today’s games</a>
+        </div>
+
+        <header>
+            <div class="header-container">
+                <div class="ad-slot-left">
+                    <script type="text/javascript">
+                      atOptions = {
+                        'key' : '5478f94711ce55d9b858433d3c49812f',
+                        'format' : 'iframe',
+                        'height' : 50,
+                        'width' : 320,
+                        'params' : {}
+                      };
+                    </script>
+                    <script
+                      type="text/javascript"
+                      src="//www.highperformanceformat.com/5478f94711ce55d9b858433d3c49812f/invoke.js"
+                    ></script>
+                </div>
+
+                <div class="header-text">
+                    <div class="title-row">
+                        <h1>{{ game.matchup }}</h1>
+                        {% if game.is_live %}
+                            <span class="live-pill" aria-label="Live now">LIVE</span>
+                        {% endif %}
+                    </div>
+                    <h2>{{ game.sport }}</h2>
+
+                    <div class="meta">
+                        <div class="meta-row">
+                            <strong>Tournament:</strong>
+                            {{ game.tournament or 'N/A' }}
+                            {% if game.tournament_url %}
+                                &mdash; <a href="{{ game.tournament_url }}" target="_blank" rel="noopener">Tournament page ↗</a>
+                            {% endif %}
+                        </div>
+
+                        <div class="meta-row">
+                            <strong>Date:</strong> {{ game.date_header or 'Today' }}
+                            {% if game.time %}
+                                &mdash; <strong>Time:</strong> {{ game.time }}
+                            {% elif game.time_unix %}
+                                &mdash; <strong>Time (unix):</strong> {{ game.time_unix }}
+                            {% endif %}
+                        </div>
+
+                        <div class="meta-row">
+                            <strong>Share:</strong>
+                            <span class="share-links">
+                                <a class="share-pill"
+                                   href="{{ share_slug_url }}"
+                                   target="_blank" rel="noopener"
+                                   title="{{ share_slug_url }}">
+                                    Link 1
+                                </a>
+
+                                <a class="share-pill"
+                                   href="{{ share_id_url }}"
+                                   target="_blank" rel="noopener"
+                                   title="{{ share_id_url }}">
+                                    Link 2
+                                </a>
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="meta-chips">
+                        <span class="chip chip-accent">Live stream</span>
+                        {% if game.sport %}<span class="chip">{{ game.sport }}</span>{% endif %}
+                        {% if game.tournament %}<span class="chip">{{ game.tournament }}</span>{% endif %}
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        {% if game.streams and game.streams|length > 0 %}
+            {% set first_stream = game.streams[0] %}
+        {% else %}
+            {% set first_stream = None %}
+        {% endif %}
+
+        {% if first_stream %}
+            <div class="player-card">
+                <h3>Live Stream</h3>
+
+                <div class="player-layout single" id="player-layout">
+                    <div class="player-slot" data-slot="0">
+                        <iframe
+                            id="game-iframe"
+                            src="{{ first_stream.embed_url }}"
+                            allowfullscreen
+                            scrolling="no"
+                            allow="autoplay; encrypted-media; picture-in-picture; fullscreen">
+                        </iframe>
+                    </div>
+
+                    {% if other_games and other_games|length > 0 %}
+                        {% set options = [] %}
+                        {% for g in other_games %}
+                            {% if g.streams and g.streams|length > 0 %}
+                                {% set _ = options.append(g) %}
+                            {% endif %}
+                        {% endfor %}
+
+                        {% if options %}
+                            {% for slot_index in [1,2,3] %}
+                                <div class="player-slot extra-slot" data-slot="{{ slot_index }}">
+                                    <div class="multi-slot-header">
+                                        <span class="multi-slot-title">Empty slot</span>
+                                        <select class="multi-slot-select">
+                                            <option value="">Select a game...</option>
+                                            {% for g in options %}
+                                                <option value="{{ g.streams[0].embed_url }}"
+                                                        data-title="{{ (g.matchup or 'Game ' ~ g.id) ~ ' - ' ~ (g.sport or '') }}">
+                                                    {{ g.matchup or ('Game ' ~ g.id) }}{% if g.sport %} ({{ g.sport }}){% endif %}
+                                                </option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                    <iframe
+                                        allowfullscreen
+                                        scrolling="no"
+                                        allow="autoplay; encrypted-media; picture-in-picture; fullscreen">
+                                    </iframe>
+                                </div>
+                            {% endfor %}
+                        {% endif %}
+                    {% endif %}
+                </div>
+
+                {% if game.streams|length > 1 %}
+                    <div class="stream-picker" id="stream-picker">
+                        {% for s in game.streams %}
+                            <button
+                                type="button"
+                                class="stream-button {% if loop.first %}active{% endif %}"
+                                data-embed-url="{{ s.embed_url }}"
+                                data-stream-slug="{{ s.slug }}"
+                            >
+                                {{ s.label or ('Stream ' ~ loop.index) }}
+                            </button>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+
+                <!-- ✅ CONTROLS -->
+                <div class="multi-view-title">
+                    <span>
+                        {% if other_games and other_games|length > 0 %}
+                            Multi-view & size controls
+                        {% else %}
+                            View size controls
+                        {% endif %}
+                    </span>
+                    <div class="multi-controls">
+                        {% if other_games and other_games|length > 0 %}
+                            <button type="button" class="multi-toggle-button" id="multi-toggle">
+                                Enable multi-view
+                            </button>
+                        {% endif %}
+                        <button type="button" class="multi-toggle-button" id="fullscreen-toggle">
+                            Enter full-page
+                        </button>
+                    </div>
+                </div>
+
+                <div class="ad-slot">
+                    <script
+                      async="async"
+                      data-cfasync="false"
+                      src="//pl28213154.effectivegatecpm.com/ced6c8c8dbe2168bf17b0ffaa1cf5474/invoke.js"
+                    ></script>
+                    <div id="container-ced6c8c8dbe2168bf17b0ffaa1cf5474"></div>
+                </div>
+            </div>
+        {% else %}
+            <div class="no-stream">
+                <strong>No embed URL available for this game.</strong><br>
+                Check back closer to game time or try another stream.
+            </div>
+        {% endif %}
+    </div>
+
+    <div class="support-note-floating">
+        Having issues with streams? <a href="https://x.com/thestreamden" target="_blank" rel="noopener">@TheStreamDen</a>
+    </div>
+
+    <!-- ✅ FIXED banner OUTSIDE .page-wrapper so it never changes layout -->
+    <div class="left-rail-ad" aria-label="Left rail ad">
+        <div class="box">
+            <script type="text/javascript">
+              atOptions = {
+                'key' : '29ef845582924216c628b8930841e3bb',
+                'format' : 'iframe',
+                'height' : 300,
+                'width' : 160,
+                'params' : {}
+              };
+            </script>
+            <script
+              type="text/javascript"
+              src="https://broodbelongminiature.com/29ef845582924216c628b8930841e3bb/invoke.js"
+            ></script>
+        </div>
+    </div>
+
+    <div class="stake-rail" aria-label="Stake promo">
+        <div class="box">
+            <a href="https://stake.com/?c=thestreamden" target="_blank" rel="noopener noreferrer">
+                <img
+                    src="{{ url_for('static', filename='stake_vertical.svg') }}"
+                    width="160"
+                    height="600"
+                    alt="Stake promo"
+                    loading="lazy"
+                >
+            </a>
+        </div>
+    </div>
+
+    <script>
+        (function() {
+            const mainIframe       = document.getElementById('game-iframe');
+            const picker           = document.getElementById('stream-picker');
+            const playerLayout     = document.getElementById('player-layout');
+            const multiToggle      = document.getElementById('multi-toggle');
+            const fullscreenToggle = document.getElementById('fullscreen-toggle');
+
+            const requestedSlug = "{{ (requested_stream_slug or '')|e }}";
+
+            function setQueryParam(name, value) {
+                try {
+                    const url = new URL(window.location.href);
+                    if (value) url.searchParams.set(name, value);
+                    else url.searchParams.delete(name);
+                    window.history.replaceState({}, "", url.toString());
+                } catch (e) {}
+            }
+
+            function activateStreamButton(btn) {
+                if (!btn || !mainIframe || !picker) return false;
+                const url = btn.getAttribute('data-embed-url');
+                if (!url) return false;
+
+                mainIframe.src = url;
+
+                picker.querySelectorAll('.stream-button').forEach(b => {
+                    b.classList.toggle('active', b === btn);
+                });
+
+                const slug = btn.getAttribute('data-stream-slug');
+                if (slug) setQueryParam('stream', slug);
+
+                return true;
+            }
+
+            function activateStreamBySlug(slug) {
+                if (!picker || !slug) return false;
+                const safe = slug.replace(/"/g, '\\"');
+                const btn = picker.querySelector('.stream-button[data-stream-slug="' + safe + '"]');
+                if (!btn) return false;
+                return activateStreamButton(btn);
+            }
+
+            if (picker && mainIframe) {
+                picker.addEventListener('click', function (evt) {
+                    const btn = evt.target.closest('.stream-button');
+                    if (!btn) return;
+                    activateStreamButton(btn);
+                });
+
+                if (requestedSlug) {
+                    activateStreamBySlug(requestedSlug);
+                }
+            }
+
+            if (playerLayout && multiToggle) {
+                let multiOn = false;
+
+                multiToggle.addEventListener('click', function () {
+                    multiOn = !multiOn;
+                    if (multiOn) {
+                        playerLayout.classList.remove('single');
+                        playerLayout.classList.add('multi');
+                        multiToggle.textContent = 'Disable multi-view';
+                    } else {
+                        playerLayout.classList.remove('multi');
+                        playerLayout.classList.add('single');
+                        multiToggle.textContent = 'Enable multi-view';
+                    }
+                });
+
+                const extraSlots = playerLayout.querySelectorAll('.extra-slot');
+                extraSlots.forEach(slot => {
+                    const select = slot.querySelector('.multi-slot-select');
+                    const titleEl = slot.querySelector('.multi-slot-title');
+                    const iframe  = slot.querySelector('iframe');
+
+                    if (!select || !titleEl || !iframe) return;
+
+                    select.addEventListener('change', () => {
+                        const opt   = select.options[select.selectedIndex];
+                        const url   = opt.value;
+                        const title = opt.getAttribute('data-title') || 'Extra stream';
+
+                        if (url) {
+                            iframe.src = url;
+                            titleEl.textContent = title;
+                        } else {
+                            iframe.src = '';
+                            titleEl.textContent = 'Empty slot';
+                        }
+                    });
+                });
+            }
+
+            if (fullscreenToggle) {
+                let fullOn = false;
+
+                fullscreenToggle.addEventListener('click', function () {
+                    fullOn = !fullOn;
+                    document.body.classList.toggle('full-page-player', fullOn);
+                    fullscreenToggle.textContent = fullOn ? 'Exit full-page' : 'Enter full-page';
+                });
+            }
+        })();
+    </script>
+
+    <script>
+        (function () {
+            function sendHeartbeat() {
+                fetch("{{ url_for('streaming.heartbeat') }}", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ path: window.location.pathname })
+                }).catch(function (err) {
+                    if (window.console && console.debug) console.debug("heartbeat error", err);
+                });
+            }
+
+            sendHeartbeat();
+            setInterval(sendHeartbeat, 30000);
+        })();
+    </script>
+
+    <script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token": "643968b4db2b4d4c80a6f49718fcfcaa"}'></script>
+
+{% if open_ad %}
+<script>
+  window.addEventListener('load', function () {
+    try {
+      window.open(
+        'https://broodbelongminiature.com/d01t94kua?key=491dbdc350af1bf2b2f5c05ef1a574df',
+        '_blank'
+      );
+    } catch (e) {
+      if (window.console && console.debug) {
+        console.debug('Ad popunder blocked:', e);
+      }
+    }
+  });
+</script>
+{% endif %}
+</body>
+</html>
