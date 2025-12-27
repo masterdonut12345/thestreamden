@@ -61,7 +61,7 @@ HTML_CACHE_SECONDS = int(os.environ.get("HTML_CACHE_SECONDS", "30"))
 ENABLE_VIEWER_TRACKING = os.environ.get("ENABLE_VIEWER_TRACKING", "1") == "1"
 
 # IMPORTANT: do not run scraper in the web process unless explicitly enabled
-ENABLE_SCRAPER_IN_WEB = os.environ.get("ENABLE_SCRAPER_IN_WEB", "0") == "1"
+ENABLE_SCRAPER_IN_WEB = os.environ.get("ENABLE_SCRAPER_IN_WEB", "1") == "1"
 SCRAPE_INTERVAL_MINUTES = int(os.environ.get("SCRAPE_INTERVAL_MINUTES", "10"))
 
 
@@ -1202,7 +1202,24 @@ def trigger_startup_scrape():
     t.start()
 
 
-if ENABLE_SCRAPER_IN_WEB:
-    if os.environ.get("WERKZEUG_RUN_MAIN") == "true":
+_SCRAPER_STARTED = False
+
+
+def _maybe_start_scraper():
+    global _SCRAPER_STARTED
+    if _SCRAPER_STARTED:
+        return
+    should_start = True
+    # Avoid double-starting under Flask reloader: only start on the main process when the flag exists.
+    reload_flag = os.environ.get("WERKZEUG_RUN_MAIN")
+    if reload_flag is not None and reload_flag != "true":
+        should_start = False
+
+    if should_start:
         trigger_startup_scrape()
         start_scheduler()
+        _SCRAPER_STARTED = True
+
+
+if ENABLE_SCRAPER_IN_WEB:
+    _maybe_start_scraper()
