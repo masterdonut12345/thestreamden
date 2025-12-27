@@ -26,6 +26,7 @@ from flask import (
 from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import joinedload
+from werkzeug.exceptions import HTTPException
 from werkzeug.security import check_password_hash, generate_password_hash
 
 import embed_streams
@@ -1063,6 +1064,52 @@ def add_thread():
 
     append_thread(db, category_path, title, stream_link, expires_choice, user, tag=tag)
     return redirect(f"/forum/{category_path}")
+
+
+@app.route("/api/threads", methods=["POST"])
+def api_create_thread():
+    db = get_db()
+    user = get_current_user(db)
+    if not user:
+        return jsonify({"error": "auth_required"}), 401
+    if getattr(user, "is_banned", False):
+        abort(403)
+
+    data = request.get_json(silent=True) or {}
+    category_path = (data.get("category_path") or "").strip("/")
+    title = (data.get("title") or "").strip()
+    stream_link = (data.get("stream_link") or "").strip()
+    expires_choice = (data.get("expires_choice") or "").strip()
+    tag = (data.get("tag") or DEFAULT_TAG).strip()
+
+    if not category_path:
+        return jsonify({"error": "category_required"}), 400
+    if not title or len(title) > 80:
+        return jsonify({"error": "invalid_title"}), 400
+    if not stream_link or len(stream_link) > 500:
+        return jsonify({"error": "invalid_stream_link"}), 400
+    if expires_choice not in EXP_CHOICES:
+        return jsonify({"error": "invalid_expiration"}), 400
+    if len(tag) > 64:
+        return jsonify({"error": "invalid_tag"}), 400
+
+    try:
+        new_thread = append_thread(
+            db,
+            category_path,
+            title,
+            stream_link,
+            expires_choice,
+            user,
+            tag=tag,
+        )
+    except Exception as exc:
+        # Preserve existing behavior for missing categories/validation
+        if isinstance(exc, HTTPException):
+            raise
+        abort(400)
+
+    return jsonify({"thread": new_thread}), 201
 
 
 @app.route("/account")
