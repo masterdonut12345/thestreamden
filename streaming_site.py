@@ -725,7 +725,8 @@ def _build_games_from_df(df: pd.DataFrame):
     for _, row in df.iterrows():
         rowd = row.to_dict()
         streams = parse_streams_cell(rowd.get("streams"))
-        embed_url = (rowd.get("embed_url") or "").strip()
+        raw_embed_url = rowd.get("embed_url")
+        embed_url = raw_embed_url.strip() if isinstance(raw_embed_url, str) else ""
 
         # Fallback: if the scraper populated embed_url but streams is empty,
         # expose a single stream so the UI renders an iframe instead of "no stream".
