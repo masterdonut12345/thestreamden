@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="160" height="600" viewBox="0 0 160 600" role="img" aria-label="Stake.com promo">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#0b1220"/>
+      <stop offset="100%" stop-color="#060810"/>
+    </linearGradient>
+    <linearGradient id="glow" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#7aa2ff" stop-opacity="0.8"/>
+      <stop offset="100%" stop-color="#3fa9f5" stop-opacity="0.4"/>
+    </linearGradient>
+    <linearGradient id="button" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f5c400"/>
+      <stop offset="100%" stop-color="#f09a00"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="6" stdDeviation="8" flood-color="#000" flood-opacity="0.6"/>
+    </filter>
+  </defs>
+  <rect width="160" height="600" fill="url(#bg)"/>
+  <rect x="10" y="18" width="140" height="560" rx="14" fill="url(#glow)" opacity="0.15"/>
+  <rect x="12" y="20" width="136" height="556" rx="12" fill="none" stroke="#1c2a44" stroke-width="2"/>
+  <text x="80" y="70" text-anchor="middle" fill="#8fb3ff" font-family="Inter, 'Segoe UI', sans-serif" font-weight="700" font-size="18" letter-spacing="0.08em">Stake.com</text>
+  <text x="80" y="96" text-anchor="middle" fill="#6f8cbf" font-family="Inter, 'Segoe UI', sans-serif" font-weight="500" font-size="10">Official promo</text>
+  <g transform="translate(26 130)">
+    <rect x="0" y="0" width="108" height="280" rx="10" fill="#0d1526" stroke="#1f2f4f" stroke-width="1.5" filter="url(#shadow)"/>
+    <path d="M8 20c6-8 20-12 32-8 10 3 18 12 24 22 6-12 18-20 30-20 16 0 28 10 32 26 2 8-2 22-6 32-8 22-24 52-40 78-12 20-24 38-34 50-4-4-12-14-22-28-12-18-26-42-36-64C-4 58-2 32 8 20Z" fill="url(#glow)" opacity="0.18"/>
+    <rect x="16" y="228" width="76" height="34" rx="8" fill="url(#button)" stroke="#f6d34a" stroke-width="1.2" filter="url(#shadow)"/>
+    <text x="54" y="251" text-anchor="middle" fill="#0d1220" font-family="Inter, 'Segoe UI', sans-serif" font-weight="800" font-size="12">PLAY NOW</text>
+  </g>
+  <text x="80" y="450" text-anchor="middle" fill="#9bb8ff" font-family="Inter, 'Segoe UI', sans-serif" font-size="12" font-weight="600" letter-spacing="0.04em">Bet on your favorites</text>
+  <text x="80" y="468" text-anchor="middle" fill="#6f8cbf" font-family="Inter, 'Segoe UI', sans-serif" font-size="10">Exclusive offer: thestreamden</text>
+</svg>

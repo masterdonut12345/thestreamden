@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 200" role="img" aria-label="The Stream Den preview">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0c1024" />
+      <stop offset="100%" stop-color="#05060f" />
+    </linearGradient>
+    <linearGradient id="accent" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#7aa2ff" />
+      <stop offset="100%" stop-color="#ff4d6a" />
+    </linearGradient>
+  </defs>
+  <rect width="400" height="200" fill="url(#bg)" />
+  <circle cx="320" cy="60" r="70" fill="url(#accent)" opacity="0.22" />
+  <text x="26" y="88" fill="#e8ecff" font-family="Inter, 'Segoe UI', sans-serif" font-size="28" font-weight="700">The Stream Den</text>
+  <text x="26" y="120" fill="#b8c2e6" font-family="Inter, 'Segoe UI', sans-serif" font-size="16">Live sports & community forum</text>
+  <rect x="26" y="140" width="180" height="34" rx="8" fill="none" stroke="#7aa2ff" stroke-width="1.5" />
+  <text x="38" y="162" fill="#e8ecff" font-family="Inter, 'Segoe UI', sans-serif" font-size="14" font-weight="600">Browse today’s games</text>
+  <rect x="224" y="140" width="140" height="34" rx="8" fill="#7aa2ff" />
+  <text x="240" y="162" fill="#05060f" font-family="Inter, 'Segoe UI', sans-serif" font-size="14" font-weight="700">Visit Forum</text>
+</svg>
