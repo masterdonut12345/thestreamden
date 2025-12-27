@@ -63,6 +63,7 @@ ENABLE_VIEWER_TRACKING = os.environ.get("ENABLE_VIEWER_TRACKING", "1") == "1"
 # IMPORTANT: do not run scraper in the web process unless explicitly enabled
 ENABLE_SCRAPER_IN_WEB = os.environ.get("ENABLE_SCRAPER_IN_WEB", "1") == "1"
 SCRAPE_INTERVAL_MINUTES = int(os.environ.get("SCRAPE_INTERVAL_MINUTES", "10"))
+STARTUP_SCRAPE_ON_BOOT = os.environ.get("STARTUP_SCRAPE_ON_BOOT", "0") == "1"
 
 
 # ====================== ACTIVE VIEWER TRACKER ======================
@@ -1229,7 +1230,8 @@ def _maybe_start_scraper():
         should_start = False
 
     if should_start:
-        trigger_startup_scrape()
+        if STARTUP_SCRAPE_ON_BOOT:
+            trigger_startup_scrape()
         start_scheduler()
         _SCRAPER_STARTED = True
 
