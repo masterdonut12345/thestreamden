@@ -365,14 +365,40 @@
 
         .chat-rail {
             position: fixed;
-            right: 16px;
+            right: 0;
             top: 140px;
-            width: 260px;
+            width: 320px;
             z-index: 2600;
+            transform: translateX(0);
+            transition: transform 0.25s ease;
+        }
+
+        .chat-rail.closed {
+            transform: translateX(100%);
+        }
+
+        .chat-toggle {
+            position: absolute;
+            left: -36px;
+            top: 32px;
+            width: 36px;
+            height: 76px;
+            background: var(--accent);
+            color: #050508;
+            font-weight: 800;
+            border-radius: 12px 0 0 12px;
+            border: 1px solid rgba(255, 255, 255, 0.25);
+            cursor: pointer;
+            box-shadow: 0 12px 30px rgba(0,0,0,0.4);
+            z-index: 2601;
+        }
+        .chat-rail.closed .chat-toggle {
+            transform: translateX(-100%);
         }
 
         @media (max-width: 1280px) {
             .chat-rail { display: none; }
+            .chat-toggle { display: none; }
         }
 
         .player-card {
@@ -756,7 +782,9 @@
                             {% if g.streams and g.streams|length > 0 %}
                                 {% set _ = options.append(g) %}
                             {% endif %}
-                        </div>
+                        {% endfor %}
+                    {% endif %}
+                </div>
 
                         {% if game.streams|length > 1 %}
                             <div class="stream-picker" id="stream-picker">
@@ -803,27 +831,6 @@
                             <div id="container-ced6c8c8dbe2168bf17b0ffaa1cf5474"></div>
                         </div>
                     </div>
-                {% else %}
-                    <div class="no-stream">
-                        <strong>No embed URL available for this game.</strong><br>
-                        Check back closer to game time or try another stream.
-                    </div>
-                {% endif %}
-
-                <div class="support-note-floating">
-                    Having issues with streams? <a href="https://x.com/thestreamden" target="_blank" rel="noopener">@TheStreamDen</a>
-                </div>
-            </div>
-
-            <aside class="chat-panel" aria-label="Live chat">
-                <div class="chat-header">
-                    <div>
-                        <div class="chat-title">Live chat</div>
-                        <div class="chat-subtitle">Stay respectful. Uses your viewer session.</div>
-                    </div>
-                    <span class="chat-status" id="chat-status">Connecting…</span>
-                </div>
-            </div>
         {% else %}
             <div class="no-stream">
                 <strong>No embed URL available for this game.</strong><br>
@@ -856,12 +863,20 @@
         </div>
     </div>
 
-    <div class="chat-rail" aria-label="Live chat">
+    <div class="chat-rail open" aria-label="Live chat" id="chat-rail">
+        <button
+            type="button"
+            class="chat-toggle"
+            id="chat-toggle"
+            aria-expanded="true"
+            aria-controls="chat-rail"
+            aria-label="Toggle chat panel">
+            ›
+        </button>
         <div class="chat-panel">
             <div class="chat-header">
                 <div>
                     <div class="chat-title">Live chat</div>
-                    <div class="chat-subtitle">Stay respectful. Uses your viewer session.</div>
                 </div>
                 <span class="chat-status" id="chat-status">Connecting…</span>
             </div>
@@ -881,22 +896,33 @@
                 >
                 <button type="submit" class="chat-send">Send</button>
             </form>
-            <div class="chat-tip">Messages are ephemeral and tied to this game only.</div>
         </div>
     </div>
 
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js" crossorigin="anonymous"></script>
     <script>
         (function () {
+            const chatRail = document.getElementById('chat-rail');
+            const chatToggle = document.getElementById('chat-toggle');
             const chatMessages = document.getElementById('chat-messages');
             const chatForm = document.getElementById('chat-form');
             const chatInput = document.getElementById('chat-input');
             const chatStatus = document.getElementById('chat-status');
             const gameId = "{{ game.id }}";
 
-            if (!chatMessages || !chatForm || !chatInput || !chatStatus || !gameId) {
+            if (!chatRail || !chatToggle || !chatMessages || !chatForm || !chatInput || !chatStatus || !gameId) {
                 return;
             }
+
+            function setToggleState(isOpen) {
+                chatRail.classList.toggle("open", isOpen);
+                chatRail.classList.toggle("closed", !isOpen);
+                chatToggle.setAttribute("aria-expanded", isOpen ? "true" : "false");
+                chatToggle.textContent = isOpen ? "›" : "‹";
+                chatToggle.setAttribute("aria-label", isOpen ? "Hide chat panel" : "Show chat panel");
+            }
+
+            setToggleState(true);
 
             const MAX_RENDERED = 200;
             let connected = false;
@@ -989,10 +1015,27 @@
                 addMessage(msg);
             });
 
+            chatToggle.addEventListener("click", function () {
+                const isOpen = !chatRail.classList.contains("open");
+                setToggleState(isOpen);
+                if (isOpen) {
+                    chatInput.focus({ preventScroll: true });
+                }
+            });
+
+            let lastSendTs = 0;
+            const MIN_INTERVAL_MS = 1500;
+
             chatForm.addEventListener("submit", function (evt) {
                 evt.preventDefault();
                 const text = (chatInput.value || "").trim();
                 if (!text) return;
+
+                const now = Date.now();
+                if (now - lastSendTs < MIN_INTERVAL_MS) {
+                    setStatus("Slow down…", "warn");
+                    return;
+                }
 
                 if (!connected) {
                     setStatus("Connecting…", "warn");
@@ -1000,6 +1043,7 @@
                     return;
                 }
 
+                lastSendTs = now;
                 socket.emit("send_message", { game_id: gameId, text: text });
                 chatInput.value = "";
             });
