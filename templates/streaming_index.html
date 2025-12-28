@@ -1192,17 +1192,23 @@
     <script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token": "643968b4db2b4d4c80a6f49718fcfcaa"}'></script>
     <!-- End Cloudflare Web Analytics -->
 
-    <!-- Adsterra Social Bar -->
-    <script
-      type="text/javascript"
-      src="https://broodbelongminiature.com/0f/a2/4c/0fa24c36bd8ef534a07b2aebe1ba89c3.js"
-    ></script>
+    <!-- Desktop-only: load pop-under/social scripts; skip on mobile to improve UX -->
+    <script>
+        (function () {
+            const isMobile = window.matchMedia("(max-width: 767px)").matches;
+            if (isMobile) return;
 
-    <!-- NEW: Adsterra ad unit (added) -->
-    <script
-      type="text/javascript"
-      defer
-      src="https://graduatedoutside.com/10/0b/5c/100b5c0f06c917d350ecd499f4f7fa16.js"
-    ></script>
+            const socialBar = document.createElement("script");
+            socialBar.type = "text/javascript";
+            socialBar.src = "https://broodbelongminiature.com/0f/a2/4c/0fa24c36bd8ef534a07b2aebe1ba89c3.js";
+            document.body.appendChild(socialBar);
+
+            const popUnder = document.createElement("script");
+            popUnder.type = "text/javascript";
+            popUnder.defer = true;
+            popUnder.src = "https://graduatedoutside.com/10/0b/5c/100b5c0f06c917d350ecd499f4f7fa16.js";
+            document.body.appendChild(popUnder);
+        })();
+    </script>
 </body>
 </html>
