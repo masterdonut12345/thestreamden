@@ -239,6 +239,148 @@
 
         h3 { margin-top: 12px; margin-bottom: 8px; font-size: 1.1rem; }
 
+        .content-grid {
+            display: grid;
+            grid-template-columns: minmax(0, 2.1fr) minmax(320px, 1fr);
+            gap: 18px;
+            align-items: start;
+            margin-top: 10px;
+        }
+
+        .primary-column { min-width: 0; }
+
+        .chat-panel {
+            background: var(--surface);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 16px;
+            padding: 12px;
+            box-shadow: var(--shadow-soft);
+            position: sticky;
+            top: 12px;
+        }
+
+        .chat-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+
+        .chat-title {
+            font-weight: 700;
+            font-size: 1rem;
+        }
+
+        .chat-subtitle {
+            font-size: 0.82rem;
+            color: var(--muted);
+            margin-top: 2px;
+        }
+
+        .chat-status {
+            font-size: 0.78rem;
+            padding: 4px 8px;
+            border-radius: 999px;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            background: rgba(122, 162, 255, 0.12);
+            color: #dfe7ff;
+            white-space: nowrap;
+        }
+
+        .chat-status[data-state="warn"] {
+            background: rgba(255, 195, 113, 0.14);
+            color: #ffe8c2;
+        }
+
+        .chat-status[data-state="error"] {
+            background: rgba(255, 93, 93, 0.14);
+            color: #ffd5d5;
+        }
+
+        .chat-messages {
+            background: var(--surface-2);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 12px;
+            min-height: 380px;
+            max-height: 520px;
+            overflow-y: auto;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .chat-message {
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 10px;
+            padding: 8px 10px;
+        }
+
+        .chat-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.78rem;
+            color: var(--muted);
+        }
+
+        .chat-text {
+            margin-top: 4px;
+            white-space: pre-wrap;
+            word-break: break-word;
+            font-size: 0.92rem;
+        }
+
+        .chat-form {
+            margin-top: 10px;
+            display: flex;
+            gap: 8px;
+        }
+
+        .chat-input {
+            flex: 1 1 auto;
+            padding: 10px 12px;
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            background: rgba(0, 0, 0, 0.35);
+            color: var(--text);
+            font-size: 0.95rem;
+        }
+
+        .chat-send {
+            padding: 10px 14px;
+            border-radius: 10px;
+            border: 1px solid rgba(122, 162, 255, 0.8);
+            background: var(--accent);
+            color: #050508;
+            font-weight: 700;
+            cursor: pointer;
+            transition: transform 0.1s ease, box-shadow 0.18s ease;
+        }
+
+        .chat-send:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 10px 20px rgba(122, 162, 255, 0.45);
+        }
+
+        .chat-tip {
+            margin-top: 6px;
+            font-size: 0.82rem;
+            color: var(--muted);
+        }
+
+        @media (max-width: 1100px) {
+            .content-grid {
+                grid-template-columns: 1fr;
+            }
+            .chat-panel {
+                position: static;
+            }
+        }
+
         .player-card {
             margin-top: 4px;
             border-radius: 18px;
@@ -632,111 +774,141 @@
             {% set first_stream = None %}
         {% endif %}
 
-        {% if first_stream %}
-            <div class="player-card">
-                <h3>Live Stream</h3>
+        <div class="content-grid">
+            <div class="primary-column">
+                {% if first_stream %}
+                    <div class="player-card">
+                        <h3>Live Stream</h3>
 
-                <div class="player-layout single" id="player-layout">
-                    <div class="player-slot" data-slot="0">
-                        <iframe
-                            id="game-iframe"
-                            src="{{ first_stream.embed_url }}"
-                            allowfullscreen
-                            scrolling="no"
-                            allow="autoplay; encrypted-media; picture-in-picture; fullscreen">
-                        </iframe>
-                    </div>
+                        <div class="player-layout single" id="player-layout">
+                            <div class="player-slot" data-slot="0">
+                                <iframe
+                                    id="game-iframe"
+                                    src="{{ first_stream.embed_url }}"
+                                    allowfullscreen
+                                    scrolling="no"
+                                    allow="autoplay; encrypted-media; picture-in-picture; fullscreen">
+                                </iframe>
+                            </div>
 
-                    {% if other_games and other_games|length > 0 %}
-                        {% set options = [] %}
-                        {% for g in other_games %}
-                            {% if g.streams and g.streams|length > 0 %}
-                                {% set _ = options.append(g) %}
+                            {% if other_games and other_games|length > 0 %}
+                                {% set options = [] %}
+                                {% for g in other_games %}
+                                    {% if g.streams and g.streams|length > 0 %}
+                                        {% set _ = options.append(g) %}
+                                    {% endif %}
+                                {% endfor %}
+
+                                {% if options %}
+                                    {% for slot_index in [1,2,3] %}
+                                        <div class="player-slot extra-slot" data-slot="{{ slot_index }}">
+                                            <div class="multi-slot-header">
+                                                <span class="multi-slot-title">Empty slot</span>
+                                                <select class="multi-slot-select">
+                                                    <option value="">Select a game...</option>
+                                                    {% for g in options %}
+                                                        <option value="{{ g.streams[0].embed_url }}"
+                                                                data-title="{{ (g.matchup or 'Game ' ~ g.id) ~ ' - ' ~ (g.sport or '') }}">
+                                                            {{ g.matchup or ('Game ' ~ g.id) }}{% if g.sport %} ({{ g.sport }}){% endif %}
+                                                        </option>
+                                                    {% endfor %}
+                                                </select>
+                                            </div>
+                                            <iframe
+                                                allowfullscreen
+                                                scrolling="no"
+                                                allow="autoplay; encrypted-media; picture-in-picture; fullscreen">
+                                            </iframe>
+                                        </div>
+                                    {% endfor %}
+                                {% endif %}
                             {% endif %}
-                        {% endfor %}
+                        </div>
 
-                        {% if options %}
-                            {% for slot_index in [1,2,3] %}
-                                <div class="player-slot extra-slot" data-slot="{{ slot_index }}">
-                                    <div class="multi-slot-header">
-                                        <span class="multi-slot-title">Empty slot</span>
-                                        <select class="multi-slot-select">
-                                            <option value="">Select a game...</option>
-                                            {% for g in options %}
-                                                <option value="{{ g.streams[0].embed_url }}"
-                                                        data-title="{{ (g.matchup or 'Game ' ~ g.id) ~ ' - ' ~ (g.sport or '') }}">
-                                                    {{ g.matchup or ('Game ' ~ g.id) }}{% if g.sport %} ({{ g.sport }}){% endif %}
-                                                </option>
-                                            {% endfor %}
-                                        </select>
-                                    </div>
-                                    <iframe
-                                        allowfullscreen
-                                        scrolling="no"
-                                        allow="autoplay; encrypted-media; picture-in-picture; fullscreen">
-                                    </iframe>
-                                </div>
-                            {% endfor %}
+                        {% if game.streams|length > 1 %}
+                            <div class="stream-picker" id="stream-picker">
+                                {% for s in game.streams %}
+                                    <button
+                                        type="button"
+                                        class="stream-button {% if loop.first %}active{% endif %}"
+                                        data-embed-url="{{ s.embed_url }}"
+                                        data-stream-slug="{{ s.slug }}"
+                                    >
+                                        {{ s.label or ('Stream ' ~ loop.index) }}
+                                    </button>
+                                {% endfor %}
+                            </div>
                         {% endif %}
-                    {% endif %}
-                </div>
 
-                {% if game.streams|length > 1 %}
-                    <div class="stream-picker" id="stream-picker">
-                        {% for s in game.streams %}
-                            <button
-                                type="button"
-                                class="stream-button {% if loop.first %}active{% endif %}"
-                                data-embed-url="{{ s.embed_url }}"
-                                data-stream-slug="{{ s.slug }}"
-                            >
-                                {{ s.label or ('Stream ' ~ loop.index) }}
-                            </button>
-                        {% endfor %}
+                        <!-- CONTROLS -->
+                        <div class="multi-view-title">
+                            <span>
+                                {% if other_games and other_games|length > 0 %}
+                                    Multi-view & size controls
+                                {% else %}
+                                    View size controls
+                                {% endif %}
+                            </span>
+                            <div class="multi-controls">
+                                {% if other_games and other_games|length > 0 %}
+                                    <button type="button" class="multi-toggle-button" id="multi-toggle">
+                                        Enable multi-view
+                                    </button>
+                                {% endif %}
+                                <button type="button" class="multi-toggle-button" id="fullscreen-toggle">
+                                    Enter full-page
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="ad-slot">
+                            <script
+                              async="async"
+                              data-cfasync="false"
+                              src="//pl28213154.effectivegatecpm.com/ced6c8c8dbe2168bf17b0ffaa1cf5474/invoke.js"
+                            ></script>
+                            <div id="container-ced6c8c8dbe2168bf17b0ffaa1cf5474"></div>
+                        </div>
+                    </div>
+                {% else %}
+                    <div class="no-stream">
+                        <strong>No embed URL available for this game.</strong><br>
+                        Check back closer to game time or try another stream.
                     </div>
                 {% endif %}
 
-                <!-- CONTROLS -->
-                <div class="multi-view-title">
-                    <span>
-                        {% if other_games and other_games|length > 0 %}
-                            Multi-view & size controls
-                        {% else %}
-                            View size controls
-                        {% endif %}
-                    </span>
-                    <div class="multi-controls">
-                        {% if other_games and other_games|length > 0 %}
-                            <button type="button" class="multi-toggle-button" id="multi-toggle">
-                                Enable multi-view
-                            </button>
-                        {% endif %}
-                        <button type="button" class="multi-toggle-button" id="fullscreen-toggle">
-                            Enter full-page
-                        </button>
+                <div class="support-note-floating">
+                    Having issues with streams? <a href="https://x.com/thestreamden" target="_blank" rel="noopener">@TheStreamDen</a>
+                </div>
+            </div>
+
+            <aside class="chat-panel" aria-label="Live chat">
+                <div class="chat-header">
+                    <div>
+                        <div class="chat-title">Live chat</div>
+                        <div class="chat-subtitle">Stay respectful. Uses your viewer session.</div>
                     </div>
+                    <span class="chat-status" id="chat-status">Connecting…</span>
                 </div>
 
-                <div class="ad-slot">
-                    <script
-                      async="async"
-                      data-cfasync="false"
-                      src="//pl28213154.effectivegatecpm.com/ced6c8c8dbe2168bf17b0ffaa1cf5474/invoke.js"
-                    ></script>
-                    <div id="container-ced6c8c8dbe2168bf17b0ffaa1cf5474"></div>
-                </div>
-            </div>
-        {% else %}
-            <div class="no-stream">
-                <strong>No embed URL available for this game.</strong><br>
-                Check back closer to game time or try another stream.
-            </div>
-        {% endif %}
-    </div>
+                <div class="chat-messages" id="chat-messages" aria-live="polite"></div>
 
-    <div class="support-note-floating">
-        Having issues with streams? <a href="https://x.com/thestreamden" target="_blank" rel="noopener">@TheStreamDen</a>
-    </div>
+                <form class="chat-form" id="chat-form">
+                    <input
+                        id="chat-input"
+                        class="chat-input"
+                        type="text"
+                        name="message"
+                        maxlength="400"
+                        placeholder="Say something about this game…"
+                        autocomplete="off"
+                        required
+                    >
+                    <button type="submit" class="chat-send">Send</button>
+                </form>
+                <div class="chat-tip">Messages are ephemeral and tied to this game only.</div>
+            </aside>
+        </div>
 
     <!-- FIXED banner OUTSIDE .page-wrapper so it never changes layout -->
     <div class="left-rail-ad" aria-label="Left rail ad">
@@ -770,6 +942,127 @@
             </a>
         </div>
     </div>
+
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js" crossorigin="anonymous"></script>
+    <script>
+        (function () {
+            const chatMessages = document.getElementById('chat-messages');
+            const chatForm = document.getElementById('chat-form');
+            const chatInput = document.getElementById('chat-input');
+            const chatStatus = document.getElementById('chat-status');
+            const gameId = "{{ game.id }}";
+
+            if (!chatMessages || !chatForm || !chatInput || !chatStatus || !gameId) {
+                return;
+            }
+
+            const MAX_RENDERED = 200;
+            let connected = false;
+
+            const socket = io({
+                transports: ["websocket"],
+                reconnectionAttempts: 5,
+                timeout: 8000,
+            });
+
+            function setStatus(text, state) {
+                chatStatus.textContent = text;
+                chatStatus.dataset.state = state || "ok";
+            }
+
+            function escapeText(value) {
+                return (value || "").replace(/[&<>"']/g, function (c) {
+                    switch (c) {
+                        case "&": return "&amp;";
+                        case "<": return "&lt;";
+                        case ">": return "&gt;";
+                        case "\"": return "&quot;";
+                        case "'": return "&#39;";
+                        default: return c;
+                    }
+                });
+            }
+
+            function formatTime(ts) {
+                if (!ts) return "";
+                try {
+                    return new Date(ts * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+                } catch (err) {
+                    return "";
+                }
+            }
+
+            function addMessage(msg, { prepend = false } = {}) {
+                if (!msg) return;
+                const wrapper = document.createElement("div");
+                wrapper.className = "chat-message";
+
+                const meta = document.createElement("div");
+                meta.className = "chat-meta";
+                const name = escapeText(msg.user && msg.user.display ? msg.user.display : "Viewer");
+                const time = formatTime(msg.ts);
+                meta.innerHTML = `<span>${name}</span><span>${time}</span>`;
+
+                const body = document.createElement("div");
+                body.className = "chat-text";
+                body.innerHTML = escapeText(msg.text || "");
+
+                wrapper.appendChild(meta);
+                wrapper.appendChild(body);
+
+                if (prepend && chatMessages.firstChild) {
+                    chatMessages.insertBefore(wrapper, chatMessages.firstChild);
+                } else {
+                    chatMessages.appendChild(wrapper);
+                }
+
+                while (chatMessages.children.length > MAX_RENDERED) {
+                    chatMessages.removeChild(chatMessages.firstChild);
+                }
+
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+            }
+
+            socket.on("connect", function () {
+                connected = true;
+                setStatus("Connected", "ok");
+                socket.emit("join", { game_id: gameId });
+            });
+
+            socket.on("disconnect", function () {
+                connected = false;
+                setStatus("Disconnected. Reconnecting…", "warn");
+            });
+
+            socket.on("connect_error", function () {
+                setStatus("Chat unavailable", "error");
+            });
+
+            socket.on("recent_messages", function (messages) {
+                chatMessages.innerHTML = "";
+                (messages || []).forEach(function (m) { addMessage(m); });
+            });
+
+            socket.on("chat_message", function (msg) {
+                addMessage(msg);
+            });
+
+            chatForm.addEventListener("submit", function (evt) {
+                evt.preventDefault();
+                const text = (chatInput.value || "").trim();
+                if (!text) return;
+
+                if (!connected) {
+                    setStatus("Connecting…", "warn");
+                    socket.connect();
+                    return;
+                }
+
+                socket.emit("send_message", { game_id: gameId, text: text });
+                chatInput.value = "";
+            });
+        })();
+    </script>
 
     <script>
         (function() {
