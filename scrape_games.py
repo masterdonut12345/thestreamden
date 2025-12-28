@@ -157,7 +157,61 @@ def _should_keep_existing(row: dict) -> bool:
     # If we cannot parse a time, err on the side of keeping it so we don't drop valid manual entries
     return True
 
+def _force_https(url: str) -> str:
+    if not isinstance(url, str):
+        return url
+    if url.startswith("http://"):
+        return "https://" + url[len("http://"):]
+    return url
+
+def _guess_sport(text: str) -> str:
+    haystack = (text or "").lower()
+    for keyword, sport in _SPORT_KEYWORDS:
+        if keyword in haystack:
+            return sport
+    return "Misc"
+
 # ---------------- SPORT71 ----------------
+
+_SPORT_KEYWORDS = [
+    ("nba", "Basketball"),
+    ("basketball", "Basketball"),
+    ("wnba", "Basketball"),
+    ("ncaa basketball", "Basketball"),
+    ("college basketball", "Basketball"),
+    ("nfl", "American Football"),
+    ("american football", "American Football"),
+    ("ncaa football", "College Football"),
+    ("college football", "College Football"),
+    ("mlb", "Baseball"),
+    ("baseball", "Baseball"),
+    ("nhl", "Hockey"),
+    ("hockey", "Hockey"),
+    ("ice hockey", "Hockey"),
+    ("soccer", "Soccer"),
+    ("football", "Soccer"),
+    ("mls", "Soccer"),
+    ("premier league", "Soccer"),
+    ("la liga", "Soccer"),
+    ("serie a", "Soccer"),
+    ("bundesliga", "Soccer"),
+    ("uefa", "Soccer"),
+    ("champions league", "Soccer"),
+    ("fifa", "Soccer"),
+    ("ufc", "Fight (UFC, Boxing)"),
+    ("boxing", "Fight (UFC, Boxing)"),
+    ("mma", "Fight (UFC, Boxing)"),
+    ("bellator", "Fight (UFC, Boxing)"),
+    ("pga", "Golf"),
+    ("golf", "Golf"),
+    ("rugby", "Rugby"),
+    ("tennis", "Tennis"),
+    ("darts", "Darts"),
+    ("cricket", "Cricket"),
+    ("handball", "Handball"),
+    ("volleyball", "Volleyball"),
+    ("horse racing", "Horse Racing"),
+]
 
 _IFRAME_RE = re.compile(r'https?://[^\s"\']+')
 _EMBED_LIKE_RE = re.compile(r"https?://[^\s\"']*(?:embed|player|channel|topembed|m3u8)[^\s\"']*", re.I)
@@ -195,7 +249,7 @@ def _collect_embeds_from_html(base_url: str, soup: BeautifulSoup) -> list[dict]:
             continue
         streams.append({
             "label": "Stream",
-            "embed_url": full,
+            "embed_url": _force_https(full),
             "watch_url": base_url,
             "origin": "scraped",
         })
@@ -207,7 +261,7 @@ def _collect_embeds_from_html(base_url: str, soup: BeautifulSoup) -> list[dict]:
             if ("embed" in m or "player" in m) and not _looks_like_chat(m) and _is_probable_stream_url(m):
                 streams.append({
                     "label": "Stream",
-                    "embed_url": urljoin(base_url, m),
+                    "embed_url": _force_https(urljoin(base_url, m)),
                     "watch_url": base_url,
                     "origin": "scraped",
                 })
@@ -215,7 +269,7 @@ def _collect_embeds_from_html(base_url: str, soup: BeautifulSoup) -> list[dict]:
             if not _looks_like_chat(m) and _is_probable_stream_url(m):
                 streams.append({
                     "label": "Stream",
-                    "embed_url": urljoin(base_url, m),
+                    "embed_url": _force_https(urljoin(base_url, m)),
                     "watch_url": base_url,
                     "origin": "scraped",
                 })
@@ -232,7 +286,7 @@ def _collect_embeds_from_html(base_url: str, soup: BeautifulSoup) -> list[dict]:
             if "embed" in full or "channel" in full or "player" in full or full.startswith("http"):
                 streams.append({
                     "label": (el.get_text(strip=True) or "Stream")[:64] or "Stream",
-                    "embed_url": full,
+                    "embed_url": _force_https(full),
                     "watch_url": base_url,
                     "origin": "scraped",
                 })
@@ -262,7 +316,7 @@ def _fetch_sport71_streams(watch_url: str, session) -> list[dict]:
                 if not _looks_like_chat(full):
                     streams.append({
                         "label": label,
-                        "embed_url": full,
+                        "embed_url": _force_https(full),
                         "watch_url": watch_url,
                         "origin": "scraped",
                     })
@@ -287,7 +341,7 @@ def _fetch_sport71_streams(watch_url: str, session) -> list[dict]:
             if link in seen_links:
                 continue
             seen_links.add(link)
-            dedup_links.append((label, link))
+            dedup_links.append((label, _force_https(link)))
 
         # Fetch linked stream pages and collect embeds
         for label, link in dedup_links[:MAX_EXTRA_LINKS]:
@@ -368,8 +422,8 @@ def _fetch_streams_for_source(session, source: str, source_id: str) -> list[dict
             continue
         streams.append({
             "label": _build_stream_label(st),
-            "embed_url": embed,
-            "watch_url": embed,
+            "embed_url": _force_https(embed),
+            "watch_url": _force_https(embed),
             "origin": "api",
             "language": st.get("language"),
             "hd": bool(st.get("hd")),
@@ -466,7 +520,7 @@ def scrape_sport71() -> pd.DataFrame:
             continue
 
         watch_a = tds[2].find("a", class_="watch-button")
-        watch_url = watch_a["href"] if watch_a else None
+        watch_url = _force_https(watch_a["href"]) if watch_a else None
         if not watch_url:
             continue
 
@@ -475,7 +529,7 @@ def scrape_sport71() -> pd.DataFrame:
         rows.append({
             "source": "sport71",
             "date_header": event_dt.strftime("%A, %B %d, %Y"),
-            "sport": "Unknown",
+            "sport": _guess_sport(matchup),
             "time_unix": ts,
             "time": event_dt,
             "tournament": None,
@@ -564,6 +618,7 @@ def scrape_shark() -> pd.DataFrame:
         for u in embed_urls:
             if not u:
                 continue
+            u = _force_https(u)
             if u in seen_urls:
                 continue
             seen_urls.add(u)
@@ -604,11 +659,22 @@ def merge_streams(new, old):
     return _dedup_streams(manual + scraped)
 
 def main():
-    df_new = scrape_streamed_api()
+    df_streamed = scrape_streamed_api()
+    df_sport71 = scrape_sport71()
+    df_shark = scrape_shark()
 
-    if df_new.empty:
+    source_counts = {
+        "streamed.pk": len(df_streamed),
+        "sport71": len(df_sport71),
+        "sharkstreams": len(df_shark),
+    }
+
+    scraped_frames = [df for df in (df_streamed, df_sport71, df_shark) if not df.empty]
+    if not scraped_frames:
         print("[scraper] No games found.")
         return
+
+    df_new = pd.concat(scraped_frames, ignore_index=True)
 
     OUTPUT_FILE.parent.mkdir(parents=True, exist_ok=True)
     if not OUTPUT_FILE.exists():
@@ -624,6 +690,21 @@ def main():
         for _, row in df_old.iterrows():
             rd = row.to_dict()
             old_map[_stable_game_id(rd)] = rd
+
+        # Deduplicate new scrape across sources before merging into existing rows
+        new_map = {}
+        for _, row in df_new.iterrows():
+            rd = row.to_dict()
+            gid = _stable_game_id(rd)
+            existing = new_map.get(gid)
+            if existing:
+                merged_streams = merge_streams(rd.get("streams") or [], _parse_streams_cell(existing.get("streams")))
+                rd["streams"] = merged_streams
+                rd["embed_url"] = rd.get("embed_url") or (merged_streams[0]["embed_url"] if merged_streams else None)
+                rd["is_live"] = existing.get("is_live") or _normalize_bool(rd.get("is_live"))
+            new_map[gid] = rd
+
+        df_new = pd.DataFrame(new_map.values())
 
         out_rows = []
 
@@ -657,7 +738,7 @@ def main():
         pd.DataFrame(out_rows)[CSV_COLS].to_csv(fh, index=False)
         fcntl.flock(fh, fcntl.LOCK_UN)
 
-    print(f"[scraper] Wrote {len(out_rows)} games")
+    print(f"[scraper] Wrote {len(out_rows)} games (streamed.pk={source_counts['streamed.pk']}, sport71={source_counts['sport71']}, sharkstreams={source_counts['sharkstreams']})")
 
 if __name__ == "__main__":
     main()
