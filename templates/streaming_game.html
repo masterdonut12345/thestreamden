@@ -363,13 +363,32 @@
             color: var(--muted);
         }
 
+        .chat-toggle {
+            position: fixed;
+            right: 0;
+            top: 140px;
+            width: 48px;
+            height: 140px;
+            background: var(--accent);
+            color: #050508;
+            font-weight: 800;
+            border-radius: 12px 0 0 12px;
+            border: 1px solid rgba(255, 255, 255, 0.25);
+            writing-mode: vertical-rl;
+            text-orientation: mixed;
+            cursor: pointer;
+            box-shadow: 0 12px 30px rgba(0,0,0,0.4);
+            z-index: 2601;
+            letter-spacing: 0.04em;
+        }
+
         .chat-rail {
             position: fixed;
-            right: 16px;
+            right: 0;
             top: 140px;
-            width: 260px;
+            width: 320px;
             z-index: 2600;
-            transform: translateX(calc(100% - 48px));
+            transform: translateX(110%);
             transition: transform 0.25s ease;
         }
 
@@ -377,25 +396,9 @@
             transform: translateX(0);
         }
 
-        .chat-toggle {
-            position: absolute;
-            left: -44px;
-            top: 0;
-            width: 44px;
-            height: 120px;
-            background: var(--accent);
-            color: #050508;
-            font-weight: 700;
-            border-radius: 12px 0 0 12px;
-            border: 1px solid rgba(255, 255, 255, 0.15);
-            writing-mode: vertical-rl;
-            text-orientation: mixed;
-            cursor: pointer;
-            box-shadow: 0 12px 30px rgba(0,0,0,0.4);
-        }
-
         @media (max-width: 1280px) {
             .chat-rail { display: none; }
+            .chat-toggle { display: none; }
         }
 
         .player-card {
@@ -860,10 +863,10 @@
         </div>
     </div>
 
+    <button type="button" class="chat-toggle" id="chat-toggle" aria-expanded="false" aria-controls="chat-rail">
+        Open Chat
+    </button>
     <div class="chat-rail" aria-label="Live chat" id="chat-rail">
-        <button type="button" class="chat-toggle" id="chat-toggle" aria-expanded="false">
-            Chat
-        </button>
         <div class="chat-panel">
             <div class="chat-header">
                 <div>
@@ -1002,6 +1005,9 @@
             chatToggle.addEventListener("click", function () {
                 const isOpen = chatRail.classList.toggle("open");
                 chatToggle.setAttribute("aria-expanded", isOpen ? "true" : "false");
+                if (isOpen) {
+                    chatInput.focus({ preventScroll: true });
+                }
             });
 
             chatForm.addEventListener("submit", function (evt) {
