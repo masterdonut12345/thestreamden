@@ -63,9 +63,9 @@ app.register_blueprint(streaming_bp)
 
 socketio = SocketIO(
     app,
+    async_mode="eventlet",
     cors_allowed_origins="*",
     message_queue=REDIS_URL,
-    async_mode="eventlet",
 )
 
 # Ensure database tables exist on startup
