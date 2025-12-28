@@ -363,25 +363,7 @@
             color: var(--muted);
         }
 
-        .chat-toggle {
-            position: fixed;
-            right: 0;
-            top: 140px;
-            width: 48px;
-            height: 140px;
-            background: var(--accent);
-            color: #050508;
-            font-weight: 800;
-            border-radius: 12px 0 0 12px;
-            border: 1px solid rgba(255, 255, 255, 0.25);
-            writing-mode: vertical-rl;
-            text-orientation: mixed;
-            cursor: pointer;
-            box-shadow: 0 12px 30px rgba(0,0,0,0.4);
-            z-index: 2601;
-            letter-spacing: 0.04em;
-        }
-
+        /* Desktop rail (unchanged behavior) */
         .chat-rail {
             position: fixed;
             right: 0;
@@ -415,9 +397,56 @@
             transform: translateX(-100%);
         }
 
+        /* MOBILE/TABLET: bottom sheet chat (visible handle) */
         @media (max-width: 1280px) {
-            .chat-rail { display: none; }
-            .chat-toggle { display: none; }
+            .chat-rail {
+                display: block;
+                position: fixed;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                top: auto;
+                width: 100%;
+                max-width: none;
+                z-index: 2600;
+
+                transform: translateY(calc(100% - 56px));
+                transition: transform 0.25s ease;
+            }
+
+            .chat-rail.open {
+                transform: translateY(0);
+            }
+
+            .chat-rail.closed {
+                transform: translateY(calc(100% - 56px));
+            }
+
+            .chat-panel {
+                height: min(70vh, 520px);
+                border-radius: 16px 16px 0 0;
+            }
+
+            .chat-toggle {
+                display: block;
+                position: absolute;
+                left: 50%;
+                top: -44px;
+                transform: translateX(-50%);
+                width: 140px;
+                height: 38px;
+                border-radius: 14px 14px 0 0;
+                border: 1px solid rgba(255,255,255,0.25);
+                background: var(--accent);
+                color: #050508;
+                font-weight: 800;
+                box-shadow: 0 12px 30px rgba(0,0,0,0.4);
+            }
+
+            /* don't slide the toggle off-screen on mobile */
+            .chat-rail.closed .chat-toggle {
+                transform: translateX(-50%);
+            }
         }
 
         .player-card {
@@ -805,51 +834,51 @@
                     {% endif %}
                 </div>
 
-                        {% if game.streams|length > 1 %}
-                            <div class="stream-picker" id="stream-picker">
-                                {% for s in game.streams %}
-                                    <button
-                                        type="button"
-                                        class="stream-button {% if loop.first %}active{% endif %}"
-                                        data-embed-url="{{ s.embed_url }}"
-                                        data-stream-slug="{{ s.slug }}"
-                                    >
-                                        {{ s.label or ('Stream ' ~ loop.index) }}
-                                    </button>
-                                {% endfor %}
-                            </div>
-                        {% endif %}
-
-                        <!-- CONTROLS -->
-                        <div class="multi-view-title">
-                            <span>
-                                {% if other_games and other_games|length > 0 %}
-                                    Multi-view & size controls
-                                {% else %}
-                                    View size controls
-                                {% endif %}
-                            </span>
-                            <div class="multi-controls">
-                                {% if other_games and other_games|length > 0 %}
-                                    <button type="button" class="multi-toggle-button" id="multi-toggle">
-                                        Enable multi-view
-                                    </button>
-                                {% endif %}
-                                <button type="button" class="multi-toggle-button" id="fullscreen-toggle">
-                                    Enter full-page
-                                </button>
-                            </div>
-                        </div>
-
-                        <div class="ad-slot">
-                            <script
-                              async="async"
-                              data-cfasync="false"
-                              src="//pl28213154.effectivegatecpm.com/ced6c8c8dbe2168bf17b0ffaa1cf5474/invoke.js"
-                            ></script>
-                            <div id="container-ced6c8c8dbe2168bf17b0ffaa1cf5474"></div>
-                        </div>
+                {% if game.streams|length > 1 %}
+                    <div class="stream-picker" id="stream-picker">
+                        {% for s in game.streams %}
+                            <button
+                                type="button"
+                                class="stream-button {% if loop.first %}active{% endif %}"
+                                data-embed-url="{{ s.embed_url }}"
+                                data-stream-slug="{{ s.slug }}"
+                            >
+                                {{ s.label or ('Stream ' ~ loop.index) }}
+                            </button>
+                        {% endfor %}
                     </div>
+                {% endif %}
+
+                <!-- CONTROLS -->
+                <div class="multi-view-title">
+                    <span>
+                        {% if other_games and other_games|length > 0 %}
+                            Multi-view & size controls
+                        {% else %}
+                            View size controls
+                        {% endif %}
+                    </span>
+                    <div class="multi-controls">
+                        {% if other_games and other_games|length > 0 %}
+                            <button type="button" class="multi-toggle-button" id="multi-toggle">
+                                Enable multi-view
+                            </button>
+                        {% endif %}
+                        <button type="button" class="multi-toggle-button" id="fullscreen-toggle">
+                            Enter full-page
+                        </button>
+                    </div>
+                </div>
+
+                <div class="ad-slot">
+                    <script
+                      async="async"
+                      data-cfasync="false"
+                      src="//pl28213154.effectivegatecpm.com/ced6c8c8dbe2168bf17b0ffaa1cf5474/invoke.js"
+                    ></script>
+                    <div id="container-ced6c8c8dbe2168bf17b0ffaa1cf5474"></div>
+                </div>
+            </div>
         {% else %}
             <div class="no-stream">
                 <strong>No embed URL available for this game.</strong><br>
@@ -882,15 +911,16 @@
         </div>
     </div>
 
-    <div class="chat-rail open" aria-label="Live chat" id="chat-rail">
+    <!-- Chat: start closed by default (mobile handle visible). Desktop JS will open it. -->
+    <div class="chat-rail closed" aria-label="Live chat" id="chat-rail">
         <button
             type="button"
             class="chat-toggle"
             id="chat-toggle"
-            aria-expanded="true"
+            aria-expanded="false"
             aria-controls="chat-rail"
-            aria-label="Toggle chat panel">
-            ›
+            aria-label="Show chat panel">
+            Chat
         </button>
         <div class="chat-panel">
             <div class="chat-header">
@@ -932,36 +962,18 @@
             if (!chatRail || !chatToggle || !chatMessages || !chatForm || !chatInput || !chatStatus || !gameId) {
                 return;
             }
-            chatRail.classList.remove('open');
-
-            function setToggleState(isOpen) {
-                chatRail.classList.toggle("open", isOpen);
-                chatToggle.setAttribute("aria-expanded", isOpen ? "true" : "false");
-                chatToggle.textContent = isOpen ? "›" : "‹";
-                chatToggle.setAttribute("aria-label", isOpen ? "Hide chat panel" : "Show chat panel");
-            }
-
-            setToggleState(true);
 
             function setToggleState(isOpen) {
                 chatRail.classList.toggle("open", isOpen);
                 chatRail.classList.toggle("closed", !isOpen);
                 chatToggle.setAttribute("aria-expanded", isOpen ? "true" : "false");
-                chatToggle.textContent = isOpen ? "›" : "‹";
+                chatToggle.textContent = isOpen ? "Hide chat" : "Chat";
                 chatToggle.setAttribute("aria-label", isOpen ? "Hide chat panel" : "Show chat panel");
             }
 
-            setToggleState(true);
-
-            function setToggleState(isOpen) {
-                chatRail.classList.toggle("open", isOpen);
-                chatRail.classList.toggle("closed", !isOpen);
-                chatToggle.setAttribute("aria-expanded", isOpen ? "true" : "false");
-                chatToggle.textContent = isOpen ? "›" : "‹";
-                chatToggle.setAttribute("aria-label", isOpen ? "Hide chat panel" : "Show chat panel");
-            }
-
-            setToggleState(true);
+            // Desktop: open by default. Mobile/tablet: closed by default (handle visible).
+            const isSmall = window.matchMedia("(max-width: 1280px)").matches;
+            setToggleState(!isSmall);
 
             const MAX_RENDERED = 200;
             let connected = false;
@@ -1018,7 +1030,6 @@
                     console.warn("chat connect_error", err);
 
                     if (!usingPollingFallback) {
-                        // If websockets fail (e.g., sync Gunicorn worker), retry with HTTP polling only.
                         setStatus("Chat unavailable over websockets. Retrying…", "warn");
                         attachSocket(true);
                         return;
@@ -1027,7 +1038,7 @@
                     setStatus("Chat unavailable. Retrying…", "error");
                 });
 
-                socket.io.on("reconnect_attempt", function (attempt) {
+                socket.io.on("reconnect_attempt", function () {
                     setStatus("Reconnecting…", "warn");
                 });
 
