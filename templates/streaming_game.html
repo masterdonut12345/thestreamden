@@ -4,14 +4,14 @@
     <meta charset="UTF-8">
     <title>{{ game.matchup }} - {{ game.sport }}</title>
 
-    <!-- ✅ Open Graph / Social Preview -->
+    <!-- Open Graph / Social Preview -->
     <meta property="og:title" content="{{ (game.matchup or 'Live Game') ~ ' – ' ~ (game.sport or 'Stream') }}" />
     <meta property="og:description" content="Watch {{ game.matchup or 'this game' }} live on The Stream Den. Multiple streams available." />
     <meta property="og:image" content="{{ og_image_url }}" />
     <meta property="og:url" content="{{ share_slug_url or share_id_url }}" />
     <meta property="og:type" content="website" />
 
-    <!-- ✅ Twitter Card -->
+    <!-- Twitter Card -->
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="{{ (game.matchup or 'Live Game') ~ ' – ' ~ (game.sport or 'Stream') }}" />
     <meta name="twitter:description" content="Watch {{ game.matchup or 'this game' }} live on The Stream Den. Multiple streams available." />
@@ -51,7 +51,7 @@
             color: var(--text);
         }
 
-        /* ✅ RESTORED: do NOT reserve space for the banner */
+        /* RESTORED: do NOT reserve space for the banner */
         .page-wrapper {
             max-width: 1100px;
             margin: 0 auto;
@@ -177,7 +177,7 @@
         .meta-row { margin: 2px 0; }
         .meta strong { color: #dddddd; font-weight: 500; }
 
-        /* ✅ share link styling */
+        /* share link styling */
         .share-links {
             display: inline-flex;
             align-items: center;
@@ -485,7 +485,7 @@
             box-shadow: 0 10px 25px rgba(0, 0, 0, 0.8);
         }
 
-        /* ✅ FIXED RIGHT RAIL BANNER — OUTSIDE FLOW, DOES NOT RESIZE ANYTHING */
+        /* FIXED RIGHT RAIL BANNER — OUTSIDE FLOW, DOES NOT RESIZE ANYTHING */
         .stake-rail {
             position: fixed;
             right: 16px;
@@ -549,7 +549,7 @@
 
     <div class="page-wrapper">
         <div class="back-link">
-            <a href="{{ url_for('streaming.index') }}">&larr; Back to today’s games</a>
+            <a href="{{ url_for('streaming.index') }}">Back to today's games</a>
         </div>
 
         <header>
@@ -584,7 +584,7 @@
                             <strong>Tournament:</strong>
                             {{ game.tournament or 'N/A' }}
                             {% if game.tournament_url %}
-                                &mdash; <a href="{{ game.tournament_url }}" target="_blank" rel="noopener">Tournament page ↗</a>
+                                &mdash; <a href="{{ game.tournament_url }}" target="_blank" rel="noopener">Tournament page (opens in new tab)</a>
                             {% endif %}
                         </div>
 
@@ -696,7 +696,7 @@
                     </div>
                 {% endif %}
 
-                <!-- ✅ CONTROLS -->
+                <!-- CONTROLS -->
                 <div class="multi-view-title">
                     <span>
                         {% if other_games and other_games|length > 0 %}
@@ -738,7 +738,7 @@
         Having issues with streams? <a href="https://x.com/thestreamden" target="_blank" rel="noopener">@TheStreamDen</a>
     </div>
 
-    <!-- ✅ FIXED banner OUTSIDE .page-wrapper so it never changes layout -->
+    <!-- FIXED banner OUTSIDE .page-wrapper so it never changes layout -->
     <div class="left-rail-ad" aria-label="Left rail ad">
         <div class="box">
             <script type="text/javascript">

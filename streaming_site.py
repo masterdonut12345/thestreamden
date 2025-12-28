@@ -39,7 +39,7 @@ DATA_PATH = Path(
         "GAMES_CSV_PATH",
         Path(__file__).parent / "data" / "today_games_with_all_streams.csv",
     )
-)
+).expanduser()
 
 
 # ====================== PERFORMANCE CONTROLS ======================
@@ -581,12 +581,14 @@ def load_games_cached() -> list[dict[str, Any]]:
     """Cached loader for games from CSV."""
 
     now = time.time()
+    previous_games: list[dict[str, Any]] = []
     try:
         mtime = os.path.getmtime(DATA_PATH) if os.path.exists(DATA_PATH) else 0.0
     except Exception:
         mtime = 0.0
 
     with GAMES_CACHE_LOCK:
+        previous_games = list(GAMES_CACHE.get("games") or [])
         cache_ok = (
             GAMES_CACHE["games"]
             and (now - GAMES_CACHE["ts"] < GAMES_CACHE_TTL_SECONDS)
@@ -601,6 +603,13 @@ def load_games_cached() -> list[dict[str, Any]]:
 
     df = _read_csv_shared_locked(DATA_PATH)
     games = _build_games_from_df(df)
+
+    if not games and (len(df.index) > 0) and previous_games:
+        print(
+            f"[loader][WARN] Parsed 0 games from {DATA_PATH} with {len(df.index)} rows; "
+            f"serving {len(previous_games)} cached games instead."
+        )
+        return previous_games
 
     with GAMES_CACHE_LOCK:
         GAMES_CACHE["games"] = games
@@ -1185,9 +1194,22 @@ def _fetch_streams_for_source(session, source: str, source_id: str) -> list[dict
 def run_scraper_job():
     try:
         scrape_games.main()
-        with GAMES_CACHE_LOCK:
-            GAMES_CACHE["ts"] = 0
-            GAMES_CACHE["mtime"] = 0
+        try:
+            df = _read_csv_shared_locked(DATA_PATH)
+            games = _build_games_from_df(df)
+            with GAMES_CACHE_LOCK:
+                GAMES_CACHE["games"] = games
+                GAMES_CACHE["ts"] = time.time()
+                try:
+                    GAMES_CACHE["mtime"] = os.path.getmtime(DATA_PATH)
+                except Exception:
+                    GAMES_CACHE["mtime"] = 0
+            print(f"[scheduler] Cached {len(games)} games from {DATA_PATH}")
+        except Exception as parse_exc:
+            print(f"[scheduler][WARN] Scrape wrote file but parsing failed: {parse_exc}")
+            with GAMES_CACHE_LOCK:
+                GAMES_CACHE["ts"] = 0
+                GAMES_CACHE["mtime"] = 0
     except Exception as exc:  # pragma: no cover - logging only
         print(f"[scheduler][ERROR] Scraper error: {exc}")
 
