@@ -197,10 +197,18 @@
             font-size: 0.84rem;
             max-width: 100%;
             overflow-wrap: anywhere;
+            cursor: pointer;
         }
         .share-pill:hover {
             border-color: rgba(122, 162, 255, 0.75);
             background: rgba(122, 162, 255, 0.14);
+        }
+
+        .share-status {
+            font-size: 0.82rem;
+            color: #c7cffc;
+            margin-top: 4px;
+            min-height: 1em;
         }
 
         .support-note-floating {
@@ -803,18 +811,23 @@
                             <span class="share-links">
                                 <a class="share-pill"
                                    href="{{ share_slug_url }}"
-                                   target="_blank" rel="noopener"
+                                   data-url="{{ share_slug_url }}"
+                                   data-label="Link 1"
+                                   role="button"
                                    title="{{ share_slug_url }}">
                                     Link 1
                                 </a>
 
                                 <a class="share-pill"
                                    href="{{ share_id_url }}"
-                                   target="_blank" rel="noopener"
+                                   data-url="{{ share_id_url }}"
+                                   data-label="Link 2"
+                                   role="button"
                                    title="{{ share_id_url }}">
                                     Link 2
                                 </a>
                             </span>
+                            <div class="share-status" id="share-status" aria-live="polite"></div>
                         </div>
                     </div>
 
@@ -1281,6 +1294,55 @@
                     fullscreenToggle.textContent = fullOn ? 'Exit full-page' : 'Enter full-page';
                 });
             }
+        })();
+    </script>
+
+    <script>
+        (function () {
+            const shareButtons = document.querySelectorAll('.share-pill[data-url]');
+            const statusEl = document.getElementById('share-status');
+
+            const showStatus = (msg) => {
+                if (!statusEl) return;
+                statusEl.textContent = msg;
+            };
+
+            async function copyToClipboard(text) {
+                if (!text) return false;
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    await navigator.clipboard.writeText(text);
+                    return true;
+                }
+
+                const textarea = document.createElement('textarea');
+                textarea.value = text;
+                textarea.setAttribute('readonly', '');
+                textarea.style.position = 'absolute';
+                textarea.style.left = '-9999px';
+                document.body.appendChild(textarea);
+                textarea.select();
+                const ok = document.execCommand('copy');
+                textarea.remove();
+                return ok;
+            }
+
+            shareButtons.forEach((btn) => {
+                btn.addEventListener('click', async function (e) {
+                    e.preventDefault();
+                    const url = btn.getAttribute('data-url');
+                    const label = btn.getAttribute('data-label') || 'Link';
+                    try {
+                        const success = await copyToClipboard(url);
+                        if (success) {
+                            showStatus(`${label} copied to clipboard`);
+                        } else {
+                            showStatus('Copy failed. Tap and hold to copy.');
+                        }
+                    } catch (err) {
+                        showStatus('Copy failed. Tap and hold to copy.');
+                    }
+                });
+            });
         })();
     </script>
 
