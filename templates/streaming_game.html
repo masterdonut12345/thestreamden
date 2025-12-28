@@ -369,6 +369,29 @@
             top: 140px;
             width: 260px;
             z-index: 2600;
+            transform: translateX(calc(100% - 48px));
+            transition: transform 0.25s ease;
+        }
+
+        .chat-rail.open {
+            transform: translateX(0);
+        }
+
+        .chat-toggle {
+            position: absolute;
+            left: -44px;
+            top: 0;
+            width: 44px;
+            height: 120px;
+            background: var(--accent);
+            color: #050508;
+            font-weight: 700;
+            border-radius: 12px 0 0 12px;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            writing-mode: vertical-rl;
+            text-orientation: mixed;
+            cursor: pointer;
+            box-shadow: 0 12px 30px rgba(0,0,0,0.4);
         }
 
         @media (max-width: 1280px) {
@@ -805,17 +828,6 @@
                             <div id="container-ced6c8c8dbe2168bf17b0ffaa1cf5474"></div>
                         </div>
                     </div>
-            </div>
-
-            <aside class="chat-panel" aria-label="Live chat">
-                <div class="chat-header">
-                    <div>
-                        <div class="chat-title">Live chat</div>
-                        <div class="chat-subtitle">Stay respectful. Uses your viewer session.</div>
-                    </div>
-                    <span class="chat-status" id="chat-status">Connecting…</span>
-                </div>
-            </aside>
         {% else %}
             <div class="no-stream">
                 <strong>No embed URL available for this game.</strong><br>
@@ -848,7 +860,10 @@
         </div>
     </div>
 
-    <div class="chat-rail" aria-label="Live chat">
+    <div class="chat-rail" aria-label="Live chat" id="chat-rail">
+        <button type="button" class="chat-toggle" id="chat-toggle" aria-expanded="false">
+            Chat
+        </button>
         <div class="chat-panel">
             <div class="chat-header">
                 <div>
@@ -880,15 +895,18 @@
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js" crossorigin="anonymous"></script>
     <script>
         (function () {
+            const chatRail = document.getElementById('chat-rail');
+            const chatToggle = document.getElementById('chat-toggle');
             const chatMessages = document.getElementById('chat-messages');
             const chatForm = document.getElementById('chat-form');
             const chatInput = document.getElementById('chat-input');
             const chatStatus = document.getElementById('chat-status');
             const gameId = "{{ game.id }}";
 
-            if (!chatMessages || !chatForm || !chatInput || !chatStatus || !gameId) {
+            if (!chatRail || !chatToggle || !chatMessages || !chatForm || !chatInput || !chatStatus || !gameId) {
                 return;
             }
+            chatRail.classList.remove('open');
 
             const MAX_RENDERED = 200;
             let connected = false;
@@ -979,6 +997,11 @@
 
             socket.on("chat_message", function (msg) {
                 addMessage(msg);
+            });
+
+            chatToggle.addEventListener("click", function () {
+                const isOpen = chatRail.classList.toggle("open");
+                chatToggle.setAttribute("aria-expanded", isOpen ? "true" : "false");
             });
 
             chatForm.addEventListener("submit", function (evt) {
