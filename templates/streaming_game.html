@@ -450,7 +450,7 @@
             }
 
             .chat-panel {
-                height: min(70vh, 520px);
+                height: min(60vh, 480px);
                 border-radius: 16px 16px 0 0;
             }
 
@@ -958,6 +958,7 @@
             <div class="chat-header">
                 <div>
                     <div class="chat-title">Live chat</div>
+                    <div class="chat-subtitle">{{ game.matchup or "This game" }}</div>
                 </div>
                 <span class="chat-status" id="chat-status">Connecting…</span>
             </div>
@@ -1157,7 +1158,7 @@
             chatToggle.addEventListener("click", function () {
                 const isOpen = !chatRail.classList.contains("open");
                 setToggleState(isOpen);
-                if (isOpen) {
+                if (isOpen && !isSmall) {
                     chatInput.focus({ preventScroll: true });
                 }
             });
