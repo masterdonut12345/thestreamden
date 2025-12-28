@@ -388,12 +388,12 @@
             top: 140px;
             width: 320px;
             z-index: 2600;
-            transform: translateX(calc(100% - 36px));
+            transform: translateX(0);
             transition: transform 0.25s ease;
         }
 
-        .chat-rail.open {
-            transform: translateX(0);
+        .chat-rail.closed {
+            transform: translateX(100%);
         }
 
         .chat-toggle {
@@ -410,6 +410,9 @@
             cursor: pointer;
             box-shadow: 0 12px 30px rgba(0,0,0,0.4);
             z-index: 2601;
+        }
+        .chat-rail.closed .chat-toggle {
+            transform: translateX(-100%);
         }
 
         @media (max-width: 1280px) {
@@ -893,7 +896,6 @@
             <div class="chat-header">
                 <div>
                     <div class="chat-title">Live chat</div>
-                    <div class="chat-subtitle">Stay respectful. Uses your viewer session.</div>
                 </div>
                 <span class="chat-status" id="chat-status">Connecting…</span>
             </div>
@@ -913,7 +915,6 @@
                 >
                 <button type="submit" class="chat-send">Send</button>
             </form>
-            <div class="chat-tip">Messages are ephemeral and tied to this game only.</div>
         </div>
     </div>
 
@@ -935,6 +936,16 @@
 
             function setToggleState(isOpen) {
                 chatRail.classList.toggle("open", isOpen);
+                chatToggle.setAttribute("aria-expanded", isOpen ? "true" : "false");
+                chatToggle.textContent = isOpen ? "›" : "‹";
+                chatToggle.setAttribute("aria-label", isOpen ? "Hide chat panel" : "Show chat panel");
+            }
+
+            setToggleState(true);
+
+            function setToggleState(isOpen) {
+                chatRail.classList.toggle("open", isOpen);
+                chatRail.classList.toggle("closed", !isOpen);
                 chatToggle.setAttribute("aria-expanded", isOpen ? "true" : "false");
                 chatToggle.textContent = isOpen ? "›" : "‹";
                 chatToggle.setAttribute("aria-label", isOpen ? "Hide chat panel" : "Show chat panel");
@@ -1041,10 +1052,19 @@
                 }
             });
 
+            let lastSendTs = 0;
+            const MIN_INTERVAL_MS = 1500;
+
             chatForm.addEventListener("submit", function (evt) {
                 evt.preventDefault();
                 const text = (chatInput.value || "").trim();
                 if (!text) return;
+
+                const now = Date.now();
+                if (now - lastSendTs < MIN_INTERVAL_MS) {
+                    setStatus("Slow down…", "warn");
+                    return;
+                }
 
                 if (!connected) {
                     setStatus("Connecting…", "warn");
@@ -1052,6 +1072,7 @@
                     return;
                 }
 
+                lastSendTs = now;
                 socket.emit("send_message", { game_id: gameId, text: text });
                 chatInput.value = "";
             });
