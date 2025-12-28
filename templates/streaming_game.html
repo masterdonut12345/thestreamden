@@ -756,77 +756,72 @@
                             {% if g.streams and g.streams|length > 0 %}
                                 {% set _ = options.append(g) %}
                             {% endif %}
-                        {% endfor %}
+                        </div>
 
-                        {% if options %}
-                            {% for slot_index in [1,2,3] %}
-                                <div class="player-slot extra-slot" data-slot="{{ slot_index }}">
-                                    <div class="multi-slot-header">
-                                        <span class="multi-slot-title">Empty slot</span>
-                                        <select class="multi-slot-select">
-                                            <option value="">Select a game...</option>
-                                            {% for g in options %}
-                                                <option value="{{ g.streams[0].embed_url }}"
-                                                        data-title="{{ (g.matchup or 'Game ' ~ g.id) ~ ' - ' ~ (g.sport or '') }}">
-                                                    {{ g.matchup or ('Game ' ~ g.id) }}{% if g.sport %} ({{ g.sport }}){% endif %}
-                                                </option>
-                                            {% endfor %}
-                                        </select>
-                                    </div>
-                                    <iframe
-                                        allowfullscreen
-                                        scrolling="no"
-                                        allow="autoplay; encrypted-media; picture-in-picture; fullscreen">
-                                    </iframe>
-                                </div>
-                            {% endfor %}
+                        {% if game.streams|length > 1 %}
+                            <div class="stream-picker" id="stream-picker">
+                                {% for s in game.streams %}
+                                    <button
+                                        type="button"
+                                        class="stream-button {% if loop.first %}active{% endif %}"
+                                        data-embed-url="{{ s.embed_url }}"
+                                        data-stream-slug="{{ s.slug }}"
+                                    >
+                                        {{ s.label or ('Stream ' ~ loop.index) }}
+                                    </button>
+                                {% endfor %}
+                            </div>
                         {% endif %}
-                    {% endif %}
-                </div>
 
-                {% if game.streams|length > 1 %}
-                    <div class="stream-picker" id="stream-picker">
-                        {% for s in game.streams %}
-                            <button
-                                type="button"
-                                class="stream-button {% if loop.first %}active{% endif %}"
-                                data-embed-url="{{ s.embed_url }}"
-                                data-stream-slug="{{ s.slug }}"
-                            >
-                                {{ s.label or ('Stream ' ~ loop.index) }}
-                            </button>
-                        {% endfor %}
+                        <!-- CONTROLS -->
+                        <div class="multi-view-title">
+                            <span>
+                                {% if other_games and other_games|length > 0 %}
+                                    Multi-view & size controls
+                                {% else %}
+                                    View size controls
+                                {% endif %}
+                            </span>
+                            <div class="multi-controls">
+                                {% if other_games and other_games|length > 0 %}
+                                    <button type="button" class="multi-toggle-button" id="multi-toggle">
+                                        Enable multi-view
+                                    </button>
+                                {% endif %}
+                                <button type="button" class="multi-toggle-button" id="fullscreen-toggle">
+                                    Enter full-page
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="ad-slot">
+                            <script
+                              async="async"
+                              data-cfasync="false"
+                              src="//pl28213154.effectivegatecpm.com/ced6c8c8dbe2168bf17b0ffaa1cf5474/invoke.js"
+                            ></script>
+                            <div id="container-ced6c8c8dbe2168bf17b0ffaa1cf5474"></div>
+                        </div>
+                    </div>
+                {% else %}
+                    <div class="no-stream">
+                        <strong>No embed URL available for this game.</strong><br>
+                        Check back closer to game time or try another stream.
                     </div>
                 {% endif %}
 
-                <!-- CONTROLS -->
-                <div class="multi-view-title">
-                    <span>
-                        {% if other_games and other_games|length > 0 %}
-                            Multi-view & size controls
-                        {% else %}
-                            View size controls
-                        {% endif %}
-                    </span>
-                    <div class="multi-controls">
-                        {% if other_games and other_games|length > 0 %}
-                            <button type="button" class="multi-toggle-button" id="multi-toggle">
-                                Enable multi-view
-                            </button>
-                        {% endif %}
-                        <button type="button" class="multi-toggle-button" id="fullscreen-toggle">
-                            Enter full-page
-                        </button>
-                    </div>
+                <div class="support-note-floating">
+                    Having issues with streams? <a href="https://x.com/thestreamden" target="_blank" rel="noopener">@TheStreamDen</a>
                 </div>
+            </div>
 
-                <div class="ad-slot">
-                    <script
-                      async="async"
-                      data-cfasync="false"
-                      src="//pl28213154.effectivegatecpm.com/ced6c8c8dbe2168bf17b0ffaa1cf5474/invoke.js"
-                    ></script>
-                    <div id="container-ced6c8c8dbe2168bf17b0ffaa1cf5474"></div>
+            <aside class="chat-panel" aria-label="Live chat">
+                <div class="chat-header">
+                    <div>
+                        <div class="chat-title">Live chat</div>
+                        <div class="chat-subtitle">Stay respectful. Uses your viewer session.</div>
+                    </div>
+                    <span class="chat-status" id="chat-status">Connecting…</span>
                 </div>
             </div>
         {% else %}
