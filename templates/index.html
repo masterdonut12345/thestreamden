@@ -660,18 +660,19 @@
         </aside>
 
         <div class="main-wrap">
-        <div class="forum-shell">
-          <div class="forum-banner">
-            <div>
-              <h1>The Stream Den</h1>
-              <p class="tagline">The decentralized stream sharing platform.</p>
+          <div class="forum-shell">
+            <div class="forum-banner">
+              <div>
+                <h1>The Stream Den</h1>
+                <p class="tagline">The decentralized stream sharing platform.</p>
+              </div>
+              <div class="nav-actions">
+                <a class="nav-btn" href="/">← Back to main site</a>
+                {% if current_path %}
+                  <a class="nav-btn" href="/forum{% if parent_path %}/{{ parent_path }}{% endif %}">← Back</a>
+                {% endif %}
+              </div>
             </div>
-            <div class="nav-actions">
-              {% if current_path %}
-                <a class="nav-btn" href="/forum{% if parent_path %}/{{ parent_path }}{% endif %}">← Back</a>
-              {% endif %}
-            </div>
-          </div>
 
           <div class="crumbs">
             {% for crumb in breadcrumbs %}
