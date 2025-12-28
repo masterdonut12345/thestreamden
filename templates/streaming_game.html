@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>{{ game.matchup }} - {{ game.sport }}</title>
 
     <!-- Open Graph / Social Preview -->
@@ -195,10 +196,19 @@
             color: #dde5ff;
             font-size: 0.84rem;
             max-width: 100%;
+            overflow-wrap: anywhere;
+            cursor: pointer;
         }
         .share-pill:hover {
             border-color: rgba(122, 162, 255, 0.75);
             background: rgba(122, 162, 255, 0.14);
+        }
+
+        .share-status {
+            font-size: 0.82rem;
+            color: #c7cffc;
+            margin-top: 4px;
+            min-height: 1em;
         }
 
         .support-note-floating {
@@ -233,8 +243,25 @@
         }
 
         @media (max-width: 700px) {
+            .page-wrapper { padding: 16px 14px 32px; }
+            header { padding: 14px; }
             .header-container { flex-direction: column; align-items: flex-start; }
             .ad-slot-left { text-align: left; width: 100%; max-width: 320px; margin-bottom: 8px; }
+            h1 { font-size: 1.6rem; }
+            .title-row { flex-direction: column; align-items: flex-start; gap: 6px; }
+            .meta { font-size: 0.95rem; }
+            .share-links { width: 100%; flex-direction: column; align-items: stretch; gap: 6px; }
+            .share-pill { width: 100%; justify-content: space-between; }
+            .meta-chips { gap: 8px; }
+            .player-card { padding: 12px; }
+            .player-layout.multi { grid-template-columns: 1fr; }
+            .player-layout.single .player-slot[data-slot="0"] iframe { height: 360px; }
+            .stream-picker { flex-direction: column; }
+            .stream-button { width: 100%; justify-content: center; }
+            .multi-view-title { flex-direction: column; align-items: flex-start; gap: 6px; }
+            .multi-controls { width: 100%; }
+            .multi-toggle-button { width: 100%; justify-content: center; }
+            .ad-slot { margin-top: 12px; }
         }
 
         h3 { margin-top: 12px; margin-bottom: 8px; font-size: 1.1rem; }
@@ -784,18 +811,23 @@
                             <span class="share-links">
                                 <a class="share-pill"
                                    href="{{ share_slug_url }}"
-                                   target="_blank" rel="noopener"
+                                   data-url="{{ share_slug_url }}"
+                                   data-label="Link 1"
+                                   role="button"
                                    title="{{ share_slug_url }}">
                                     Link 1
                                 </a>
 
                                 <a class="share-pill"
                                    href="{{ share_id_url }}"
-                                   target="_blank" rel="noopener"
+                                   data-url="{{ share_id_url }}"
+                                   data-label="Link 2"
+                                   role="button"
                                    title="{{ share_id_url }}">
                                     Link 2
                                 </a>
                             </span>
+                            <div class="share-status" id="share-status" aria-live="polite"></div>
                         </div>
                     </div>
 
@@ -1262,6 +1294,55 @@
                     fullscreenToggle.textContent = fullOn ? 'Exit full-page' : 'Enter full-page';
                 });
             }
+        })();
+    </script>
+
+    <script>
+        (function () {
+            const shareButtons = document.querySelectorAll('.share-pill[data-url]');
+            const statusEl = document.getElementById('share-status');
+
+            const showStatus = (msg) => {
+                if (!statusEl) return;
+                statusEl.textContent = msg;
+            };
+
+            async function copyToClipboard(text) {
+                if (!text) return false;
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    await navigator.clipboard.writeText(text);
+                    return true;
+                }
+
+                const textarea = document.createElement('textarea');
+                textarea.value = text;
+                textarea.setAttribute('readonly', '');
+                textarea.style.position = 'absolute';
+                textarea.style.left = '-9999px';
+                document.body.appendChild(textarea);
+                textarea.select();
+                const ok = document.execCommand('copy');
+                textarea.remove();
+                return ok;
+            }
+
+            shareButtons.forEach((btn) => {
+                btn.addEventListener('click', async function (e) {
+                    e.preventDefault();
+                    const url = btn.getAttribute('data-url');
+                    const label = btn.getAttribute('data-label') || 'Link';
+                    try {
+                        const success = await copyToClipboard(url);
+                        if (success) {
+                            showStatus(`${label} copied to clipboard`);
+                        } else {
+                            showStatus('Copy failed. Tap and hold to copy.');
+                        }
+                    } catch (err) {
+                        showStatus('Copy failed. Tap and hold to copy.');
+                    }
+                });
+            });
         })();
     </script>
 
