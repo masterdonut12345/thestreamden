@@ -953,12 +953,27 @@
 
             setToggleState(true);
 
+            function setToggleState(isOpen) {
+                chatRail.classList.toggle("open", isOpen);
+                chatRail.classList.toggle("closed", !isOpen);
+                chatToggle.setAttribute("aria-expanded", isOpen ? "true" : "false");
+                chatToggle.textContent = isOpen ? "›" : "‹";
+                chatToggle.setAttribute("aria-label", isOpen ? "Hide chat panel" : "Show chat panel");
+            }
+
+            setToggleState(true);
+
             const MAX_RENDERED = 200;
             let connected = false;
 
             const socket = io({
-                transports: ["websocket"],
-                reconnectionAttempts: 5,
+                // Prefer websockets but allow long-polling fallback
+                transports: ["websocket", "polling"],
+                upgrade: true,
+                reconnection: true,
+                reconnectionAttempts: 8,
+                reconnectionDelay: 750,
+                reconnectionDelayMax: 5000,
                 timeout: 8000,
             });
 
@@ -1031,7 +1046,16 @@
                 setStatus("Disconnected. Reconnecting…", "warn");
             });
 
-            socket.on("connect_error", function () {
+            socket.on("connect_error", function (err) {
+                console.warn("chat connect_error", err);
+                setStatus("Chat unavailable. Retrying…", "error");
+            });
+
+            socket.io.on("reconnect_attempt", function (attempt) {
+                setStatus("Reconnecting…", "warn");
+            });
+
+            socket.io.on("reconnect_failed", function () {
                 setStatus("Chat unavailable", "error");
             });
 
