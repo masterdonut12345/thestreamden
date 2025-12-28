@@ -1288,12 +1288,16 @@ def signup():
 
 @app.before_request
 def admin_gate():
+    """Optional gate to hide admin endpoints behind a shared secret."""
+    if not ADMIN_GATE:
+        # No gate configured; do not block admin routes.
+        return
     if request.path.startswith('/admin'):
         gate_param = request.args.get('gate')
         if gate_param:
             session['admin_gate_token'] = gate_param
         gate_token = session.get('admin_gate_token')
-        if not gate_token or not hmac.compare_digest(gate_token, ADMIN_GATE):
+        if not gate_token or not hmac.compare_digest(str(gate_token), str(ADMIN_GATE)):
             abort(404)
 
 @app.route("/admin", methods=["GET", "POST"])
