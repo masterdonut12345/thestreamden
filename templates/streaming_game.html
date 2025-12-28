@@ -756,7 +756,9 @@
                             {% if g.streams and g.streams|length > 0 %}
                                 {% set _ = options.append(g) %}
                             {% endif %}
-                        </div>
+                        {% endfor %}
+                    {% endif %}
+                </div>
 
                         {% if game.streams|length > 1 %}
                             <div class="stream-picker" id="stream-picker">
@@ -803,16 +805,6 @@
                             <div id="container-ced6c8c8dbe2168bf17b0ffaa1cf5474"></div>
                         </div>
                     </div>
-                {% else %}
-                    <div class="no-stream">
-                        <strong>No embed URL available for this game.</strong><br>
-                        Check back closer to game time or try another stream.
-                    </div>
-                {% endif %}
-
-                <div class="support-note-floating">
-                    Having issues with streams? <a href="https://x.com/thestreamden" target="_blank" rel="noopener">@TheStreamDen</a>
-                </div>
             </div>
 
             <aside class="chat-panel" aria-label="Live chat">
@@ -823,7 +815,7 @@
                     </div>
                     <span class="chat-status" id="chat-status">Connecting…</span>
                 </div>
-            </div>
+            </aside>
         {% else %}
             <div class="no-stream">
                 <strong>No embed URL available for this game.</strong><br>
