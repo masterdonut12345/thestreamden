@@ -965,17 +965,91 @@
 
             const MAX_RENDERED = 200;
             let connected = false;
+            let socket = null;
+            let usingPollingFallback = false;
 
-            const socket = io({
-                // Prefer websockets but allow long-polling fallback
-                transports: ["websocket", "polling"],
-                upgrade: true,
-                reconnection: true,
-                reconnectionAttempts: 8,
-                reconnectionDelay: 750,
-                reconnectionDelayMax: 5000,
-                timeout: 8000,
-            });
+            function disconnectSocket() {
+                if (!socket) return;
+                if (typeof socket.off === "function") {
+                    socket.off();
+                    if (socket.io && typeof socket.io.off === "function") {
+                        socket.io.off();
+                    }
+                }
+                socket.disconnect();
+            }
+
+            function buildSocketOptions(forcePolling) {
+                const opts = {
+                    transports: ["websocket", "polling"],
+                    upgrade: true,
+                    reconnection: true,
+                    reconnectionAttempts: 8,
+                    reconnectionDelay: 750,
+                    reconnectionDelayMax: 5000,
+                    timeout: 8000,
+                };
+
+                if (forcePolling) {
+                    opts.transports = ["polling"];
+                    opts.upgrade = false;
+                }
+
+                return opts;
+            }
+
+            function attachSocket(forcePolling = false) {
+                disconnectSocket();
+                usingPollingFallback = forcePolling;
+                socket = io(buildSocketOptions(forcePolling));
+
+                socket.on("connect", function () {
+                    connected = true;
+                    setStatus("Connected", "ok");
+                    socket.emit("join", { game_id: gameId });
+                });
+
+                socket.on("disconnect", function () {
+                    connected = false;
+                    setStatus("Disconnected. Reconnecting…", "warn");
+                });
+
+                socket.on("connect_error", function (err) {
+                    console.warn("chat connect_error", err);
+
+                    if (!usingPollingFallback) {
+                        // If websockets fail (e.g., sync Gunicorn worker), retry with HTTP polling only.
+                        setStatus("Chat unavailable over websockets. Retrying…", "warn");
+                        attachSocket(true);
+                        return;
+                    }
+
+                    setStatus("Chat unavailable. Retrying…", "error");
+                });
+
+                socket.io.on("reconnect_attempt", function (attempt) {
+                    setStatus("Reconnecting…", "warn");
+                });
+
+                socket.io.on("reconnect_failed", function () {
+                    if (!usingPollingFallback) {
+                        setStatus("Websocket failed. Switching to polling…", "warn");
+                        attachSocket(true);
+                        return;
+                    }
+
+                    setStatus("Chat unavailable", "error");
+                });
+
+                socket.on("recent_messages", function (messages) {
+                    chatMessages.innerHTML = "";
+                    (messages || []).forEach(function (m) { addMessage(m); });
+                });
+
+                socket.on("chat_message", function (msg) {
+                    addMessage(msg);
+                });
+            }
 
             function setStatus(text, state) {
                 chatStatus.textContent = text;
@@ -1035,38 +1109,7 @@
                 chatMessages.scrollTop = chatMessages.scrollHeight;
             }
 
-            socket.on("connect", function () {
-                connected = true;
-                setStatus("Connected", "ok");
-                socket.emit("join", { game_id: gameId });
-            });
-
-            socket.on("disconnect", function () {
-                connected = false;
-                setStatus("Disconnected. Reconnecting…", "warn");
-            });
-
-            socket.on("connect_error", function (err) {
-                console.warn("chat connect_error", err);
-                setStatus("Chat unavailable. Retrying…", "error");
-            });
-
-            socket.io.on("reconnect_attempt", function (attempt) {
-                setStatus("Reconnecting…", "warn");
-            });
-
-            socket.io.on("reconnect_failed", function () {
-                setStatus("Chat unavailable", "error");
-            });
-
-            socket.on("recent_messages", function (messages) {
-                chatMessages.innerHTML = "";
-                (messages || []).forEach(function (m) { addMessage(m); });
-            });
-
-            socket.on("chat_message", function (msg) {
-                addMessage(msg);
-            });
+            attachSocket();
 
             chatToggle.addEventListener("click", function () {
                 const isOpen = !chatRail.classList.contains("open");
