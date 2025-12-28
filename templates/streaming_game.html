@@ -756,7 +756,9 @@
                             {% if g.streams and g.streams|length > 0 %}
                                 {% set _ = options.append(g) %}
                             {% endif %}
-                        </div>
+                        {% endfor %}
+                    {% endif %}
+                </div>
 
                         {% if game.streams|length > 1 %}
                             <div class="stream-picker" id="stream-picker">
