@@ -49,7 +49,7 @@ _cleanup_thread_started = False
 _seed_started = False
 
 REDIS_URL = os.environ.get("REDIS_URL")
-CHAT_MAX_MESSAGES = int(os.environ.get("CHAT_MAX_MESSAGES", "50"))
+CHAT_MAX_MESSAGES = int(os.environ.get("CHAT_MAX_MESSAGES", "25"))
 CHAT_MAX_LENGTH = int(os.environ.get("CHAT_MAX_LENGTH", "400"))
 
 app.secret_key = os.environ.get("APP_SECRET", "dev-secret-key")
