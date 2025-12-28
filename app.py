@@ -7,7 +7,7 @@ import secrets
 import threading
 import time
 import json
-from collections import defaultdict
+from collections import defaultdict, deque
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit, quote
@@ -23,6 +23,8 @@ from flask import (
     session,
     url_for,
 )
+from flask_socketio import SocketIO, emit, join_room
+import redis
 from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import joinedload
@@ -33,7 +35,7 @@ import embed_streams
 from cleanup_expired import cleanup_expired_threads
 from db_models import Category, Post, SessionLocal, Thread, User, init_db
 from pathlib import Path
-from streaming_site import streaming_bp
+from streaming_site import streaming_bp, get_session_id
 
 app = Flask(__name__)
 
@@ -46,6 +48,10 @@ CLEANUP_INTERVAL_SECONDS = int(os.environ.get("CLEANUP_INTERVAL_SECONDS", "3600"
 _cleanup_thread_started = False
 _seed_started = False
 
+REDIS_URL = os.environ.get("REDIS_URL")
+CHAT_MAX_MESSAGES = int(os.environ.get("CHAT_MAX_MESSAGES", "25"))
+CHAT_MAX_LENGTH = int(os.environ.get("CHAT_MAX_LENGTH", "400"))
+
 app.secret_key = os.environ.get("APP_SECRET", "dev-secret-key")
 app.config.update(
     SESSION_COOKIE_SECURE=True,
@@ -55,8 +61,72 @@ app.config.update(
 
 app.register_blueprint(streaming_bp)
 
+socketio = SocketIO(
+    app,
+    cors_allowed_origins="*",
+    message_queue=REDIS_URL,
+    async_mode="eventlet",
+)
+
 # Ensure database tables exist on startup
 init_db()
+
+
+class ChatStore:
+    """Persist recent chat messages per game, with Redis fanout when available."""
+
+    def __init__(self, redis_url: str | None, max_messages: int):
+        self.max_messages = max_messages
+        self._redis = None
+        self._local: dict[str, deque] = defaultdict(deque)
+        self._lock = threading.Lock()
+
+        if redis_url:
+            try:
+                self._redis = redis.from_url(redis_url, decode_responses=True)
+            except Exception as exc:
+                print(f"[chat] Failed to init Redis ({redis_url}): {exc}")
+                self._redis = None
+
+    def _key(self, game_id: str) -> str:
+        return f"chat:{game_id}"
+
+    def _recent_local(self, game_id: str, limit: int | None = None) -> list[dict]:
+        limit = limit or self.max_messages
+        with self._lock:
+            bucket = self._local[game_id]
+            return list(reversed(list(bucket)[-limit:]))
+
+    def recent(self, game_id: str, limit: int | None = None) -> list[dict]:
+        limit = limit or self.max_messages
+        if self._redis:
+            try:
+                raw = self._redis.lrange(self._key(game_id), 0, limit - 1)
+                parsed = [json.loads(item) for item in raw]
+                return list(reversed(parsed))
+            except Exception as exc:
+                print(f"[chat] Redis recent fallback: {exc}")
+        return self._recent_local(game_id, limit)
+
+    def add(self, game_id: str, message: dict) -> None:
+        if self._redis:
+            try:
+                pipe = self._redis.pipeline()
+                pipe.lpush(self._key(game_id), json.dumps(message))
+                pipe.ltrim(self._key(game_id), 0, self.max_messages - 1)
+                pipe.execute()
+                return
+            except Exception as exc:
+                print(f"[chat] Redis add fallback: {exc}")
+
+        with self._lock:
+            bucket = self._local[game_id]
+            bucket.appendleft(message)
+            while len(bucket) > self.max_messages:
+                bucket.pop()
+
+
+chat_store = ChatStore(REDIS_URL, CHAT_MAX_MESSAGES)
 
 
 # -----------------------------
@@ -145,6 +215,69 @@ def is_admin_authed() -> bool:
 def require_admin():
     if not is_admin_authed():
         abort(403)
+
+
+def _chat_room(game_id: str) -> str:
+    return f"game:{game_id}"
+
+
+def _build_chat_identity() -> dict:
+    db = SessionLocal()
+    try:
+        user = get_current_user(db)
+        if user:
+            display = user.username or f"User-{user.id}"
+            return {
+                "display": display,
+                "user_id": user.id,
+                "is_guest": False,
+            }
+    except Exception as exc:
+        print(f"[chat] user lookup failed: {exc}")
+    finally:
+        db.close()
+
+    viewer_id = get_session_id()
+    anon_label = f"Fan-{viewer_id[:6]}" if viewer_id else "Fan"
+    return {
+        "display": anon_label,
+        "viewer_id": viewer_id,
+        "is_guest": True,
+    }
+
+
+@socketio.on("join")
+def socket_join(payload):
+    game_id = str((payload or {}).get("game_id") or "").strip()
+    if not game_id:
+        return
+
+    join_room(_chat_room(game_id))
+    recent = chat_store.recent(game_id)
+    emit("recent_messages", recent or [])
+
+
+@socketio.on("send_message")
+def socket_send_message(payload):
+    game_id = str((payload or {}).get("game_id") or "").strip()
+    text = (payload or {}).get("text") or ""
+    text = text.strip()
+
+    if not game_id or not text:
+        return
+
+    text = text[:CHAT_MAX_LENGTH]
+    message = {
+        "id": secrets.token_hex(8),
+        "game_id": game_id,
+        "text": text,
+        "ts": time.time(),
+        "user": _build_chat_identity(),
+    }
+
+    chat_store.add(game_id, message)
+    emit("chat_message", message, room=_chat_room(game_id))
+
 
 # -----------------------------
 # Utility helpers
@@ -1636,4 +1769,4 @@ def reply_thread(thread_id):
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)), debug=False)
+    socketio.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 5000)), debug=False)
