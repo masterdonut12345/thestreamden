@@ -363,6 +363,25 @@
             color: var(--muted);
         }
 
+        .chat-toggle {
+            position: fixed;
+            right: 0;
+            top: 140px;
+            width: 48px;
+            height: 140px;
+            background: var(--accent);
+            color: #050508;
+            font-weight: 800;
+            border-radius: 12px 0 0 12px;
+            border: 1px solid rgba(255, 255, 255, 0.25);
+            writing-mode: vertical-rl;
+            text-orientation: mixed;
+            cursor: pointer;
+            box-shadow: 0 12px 30px rgba(0,0,0,0.4);
+            z-index: 2601;
+            letter-spacing: 0.04em;
+        }
+
         .chat-rail {
             position: fixed;
             right: 0;
@@ -913,6 +932,16 @@
             if (!chatRail || !chatToggle || !chatMessages || !chatForm || !chatInput || !chatStatus || !gameId) {
                 return;
             }
+            chatRail.classList.remove('open');
+
+            function setToggleState(isOpen) {
+                chatRail.classList.toggle("open", isOpen);
+                chatToggle.setAttribute("aria-expanded", isOpen ? "true" : "false");
+                chatToggle.textContent = isOpen ? "›" : "‹";
+                chatToggle.setAttribute("aria-label", isOpen ? "Hide chat panel" : "Show chat panel");
+            }
+
+            setToggleState(true);
 
             function setToggleState(isOpen) {
                 chatRail.classList.toggle("open", isOpen);
