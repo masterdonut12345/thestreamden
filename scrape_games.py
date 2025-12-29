@@ -293,7 +293,7 @@ def _collect_embeds_from_html(base_url: str, soup: BeautifulSoup) -> list[dict]:
     return streams
 
 
-_URL_RE = re.compile(r"https?://[^'\"\\s]+", re.I)
+_URL_RE = re.compile(r"https?://[^\s'\"<>]+", re.I)
 
 
 def _extract_first_url(text: str | None) -> str | None:
