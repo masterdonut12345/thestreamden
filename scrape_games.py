@@ -493,21 +493,23 @@ def scrape_topembed() -> pd.DataFrame:
             if slug:
                 watch_url = urljoin(BASE_URL_TOP_EMBED, f"/event/{slug}")
 
-        primary_streams = []
+        channel_streams = _extract_topembed_streams(card, watch_url)
+        streams = list(channel_streams)
+
         primary_url = event_embed_url or watch_url
         if primary_url:
-            primary_streams.append({
-                "label": "Stream 1",
+            streams.append({
+                "label": "Event Embed",
                 "embed_url": primary_url,
                 "watch_url": primary_url,
                 "origin": "api",
             })
 
-        channel_streams = _extract_topembed_streams(card, watch_url)
-        streams = _dedup_streams(primary_streams + channel_streams)
+        streams = _dedup_streams(streams)
         if not streams:
             continue
         embed_url = streams[0]["embed_url"]
+        resolved_watch = watch_url or streams[0]["watch_url"]
 
         sport = card.get("data-category") or _guess_sport(matchup)
         status = (card.get("data-status") or "").lower()
@@ -522,7 +524,7 @@ def scrape_topembed() -> pd.DataFrame:
             "tournament": league,
             "tournament_url": None,
             "matchup": matchup,
-            "watch_url": watch_url or embed_url,
+            "watch_url": resolved_watch,
             "streams": streams,
             "embed_url": embed_url,
             "is_live": is_live,
