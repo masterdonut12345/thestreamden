@@ -476,12 +476,14 @@ def scrape_topembed() -> pd.DataFrame:
 
         # Build watch URL from copy buttons or fallback to event slug
         watch_url = None
+        event_embed_url = None
         embed_actions = card.select_one(".event-embed-actions")
         if embed_actions:
             for btn in embed_actions.find_all("button"):
                 maybe_url = _extract_first_url(btn.get("onclick"))
                 if maybe_url and "/event/" in maybe_url:
-                    watch_url = maybe_url
+                    event_embed_url = maybe_url
+                    watch_url = watch_url or maybe_url
                     break
         if not watch_url:
             channels_div = card.select_one(".event-channels")
@@ -491,10 +493,21 @@ def scrape_topembed() -> pd.DataFrame:
             if slug:
                 watch_url = urljoin(BASE_URL_TOP_EMBED, f"/event/{slug}")
 
-        streams = _extract_topembed_streams(card, watch_url)
+        primary_streams = []
+        primary_url = event_embed_url or watch_url
+        if primary_url:
+            primary_streams.append({
+                "label": "Stream 1",
+                "embed_url": primary_url,
+                "watch_url": primary_url,
+                "origin": "api",
+            })
+
+        channel_streams = _extract_topembed_streams(card, watch_url)
+        streams = _dedup_streams(primary_streams + channel_streams)
         if not streams:
             continue
-        embed_url = streams[0]["embed_url"] if streams else None
+        embed_url = streams[0]["embed_url"]
 
         sport = card.get("data-category") or _guess_sport(matchup)
         status = (card.get("data-status") or "").lower()
