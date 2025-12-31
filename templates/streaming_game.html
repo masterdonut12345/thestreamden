@@ -477,6 +477,30 @@
             }
         }
 
+        /* Left floating 160x600 ad, hidden on small screens */
+        .left-rail-ad {
+            position: fixed;
+            top: 120px;
+            left: 20px;
+            width: 160px;
+            height: 600px;
+            max-width: none;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 16px 36px rgba(0, 0, 0, 0.85);
+            z-index: 900;
+        }
+        .left-rail-ad .ad-iframe {
+            width: 160px;
+            height: 600px;
+            border-radius: 12px;
+            border: 0;
+            overflow: hidden;
+        }
+        @media (max-width: 1200px) {
+            .left-rail-ad { display: none; }
+        }
+
         .player-card {
             margin-top: 4px;
             border-radius: 18px;
@@ -909,16 +933,13 @@
 
     </div>
 
-    <!-- FIXED banner OUTSIDE .page-wrapper so it never changes layout -->
-    <div class="left-rail-ad" aria-label="Left rail ad">
-        <div class="box">
-            <iframe
-                class="ad-iframe"
-                title="Sidebar banner ad"
-                sandbox="allow-scripts allow-same-origin"
-                srcdoc='<!doctype html><html><head><meta charset="utf-8"></head><body style="margin:0;padding:0;display:flex;align-items:center;justify-content:center;background:transparent;"><script type="text/javascript">var atOptions={"key":"29ef845582924216c628b8930841e3bb","format":"iframe","height":300,"width":160,"params":{}};</script><script type="text/javascript" src="https://broodbelongminiature.com/29ef845582924216c628b8930841e3bb/invoke.js"></script></body></html>'>
-            </iframe>
-        </div>
+    <div class="left-rail-ad" aria-label="Sidebar banner">
+        <iframe
+            class="ad-iframe"
+            title="Sidebar banner ad"
+            sandbox="allow-scripts allow-same-origin"
+            srcdoc='<!doctype html><html><head><meta charset="utf-8"></head><body style="margin:0;padding:0;display:flex;align-items:center;justify-content:center;background:transparent;"><script>atOptions={"key":"fea0e81c7727467a10d419a8e7d2f3d8","format":"iframe","height":600,"width":160,"params":{}};</script><script src="https://graduatedoutside.com/fea0e81c7727467a10d419a8e7d2f3d8/invoke.js"></script></body></html>'>
+        ></iframe>
     </div>
 
     <!-- Chat: start closed by default (mobile handle visible). Desktop JS will open it. -->
