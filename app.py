@@ -63,11 +63,20 @@ REDIS_URL = os.environ.get("REDIS_URL")
 CHAT_MAX_MESSAGES = int(os.environ.get("CHAT_MAX_MESSAGES", "25"))
 CHAT_MAX_LENGTH = int(os.environ.get("CHAT_MAX_LENGTH", "400"))
 
+def _env_bool(key: str, default: bool = False) -> bool:
+    raw = os.environ.get(key)
+    if raw is None:
+        return default
+    return str(raw).strip().lower() in ("1", "true", "yes", "on")
+
+SESSION_COOKIE_SECURE = _env_bool("SESSION_COOKIE_SECURE", default=False)
+SESSION_COOKIE_SAMESITE = os.environ.get("SESSION_COOKIE_SAMESITE", "Lax")
+
 app.secret_key = os.environ.get("APP_SECRET", "dev-secret-key")
 app.config.update(
     SESSION_COOKIE_SECURE=SESSION_COOKIE_SECURE,
     SESSION_COOKIE_HTTPONLY=True,
-    SESSION_COOKIE_SAMESITE="Lax",
+    SESSION_COOKIE_SAMESITE=SESSION_COOKIE_SAMESITE,
 )
 
 app.register_blueprint(streaming_bp)
