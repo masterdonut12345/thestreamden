@@ -126,7 +126,7 @@
             grid-template-columns: 1fr;
         }
         .player-layout.multi {
-            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            grid-template-columns: 1fr;
         }
 
         .main-player iframe,
@@ -173,6 +173,13 @@
             cursor: pointer;
         }
 
+        .multi-slots {
+            display: none;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 10px;
+            margin-top: 10px;
+        }
+        .multi-slots.on { display: grid; }
         .extra-slot {
             background: rgba(255, 255, 255, 0.03);
             border: 1px solid rgba(255, 255, 255, 0.08);
@@ -343,7 +350,10 @@
                                         scrolling="no"
                                     ></iframe>
                                 </div>
-                                {% if current_user_id and den.owner_id == current_user_id and den_streams and den_streams|length > 1 %}
+                            </div>
+
+                            {% if current_user_id and den.owner_id == current_user_id and den_streams and den_streams|length > 1 %}
+                                <div class="multi-slots" id="den-multi-slots">
                                     <div class="extra-slot">
                                         <header>
                                             <div class="pill" style="background:rgba(255,255,255,0.04);">Multi view slot A</div>
@@ -368,8 +378,8 @@
                                         </header>
                                         <iframe allowfullscreen allow="autoplay; encrypted-media; picture-in-picture; fullscreen"></iframe>
                                     </div>
-                                {% endif %}
-                            </div>
+                                </div>
+                            {% endif %}
 
                             {% if current_user_id and den.owner_id == current_user_id %}
                                 <form method="POST" action="/dens/{{ den.slug }}/stream" style="display:flex; gap:8px; flex-wrap:wrap; margin-top:10px;">
@@ -428,7 +438,8 @@
             const streamSelect = document.getElementById('den-stream-select');
             const playerLayout = document.getElementById('den-player-layout');
             const multiToggle  = document.getElementById('den-multi-toggle');
-            const extraSlots   = playerLayout ? playerLayout.querySelectorAll('.extra-slot') : [];
+            const multiSlots   = document.getElementById('den-multi-slots');
+            const extraSlots   = multiSlots ? multiSlots.querySelectorAll('.extra-slot') : [];
             const presetSelect = document.getElementById('presetStream');
             const streamInput  = document.getElementById('streamUrlInput');
 
@@ -446,12 +457,13 @@
                 });
             }
 
-            if (playerLayout && multiToggle) {
+            if (playerLayout && multiToggle && multiSlots) {
                 let multiOn = false;
                 multiToggle.addEventListener('click', function () {
                     multiOn = !multiOn;
                     playerLayout.classList.toggle('multi', multiOn);
                     playerLayout.classList.toggle('single', !multiOn);
+                    multiSlots.classList.toggle('on', multiOn);
                     multiToggle.textContent = multiOn ? 'Disable multi-view' : 'Enable multi-view';
 
                     if (multiOn && extraSlots) {

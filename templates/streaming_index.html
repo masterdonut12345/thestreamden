@@ -979,19 +979,13 @@
                     <a class="pill-button" href="/account">Account</a>
                     <a class="pill-button" href="/logout">Logout</a>
                 {% else %}
-                    <form class="auth-inline" method="POST" action="/login">
+                    <form class="auth-inline" method="POST" action="/login" style="gap:6px;">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                         <input type="hidden" name="next" value="/">
                         <input type="text" name="username" placeholder="Username" required>
                         <input type="password" name="password" placeholder="Password" required>
                         <button type="submit">Login</button>
-                    </form>
-                    <form class="auth-inline" method="POST" action="/signup">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-                        <input type="hidden" name="next" value="/">
-                        <input type="text" name="username" placeholder="New username" required>
-                        <input type="password" name="password" placeholder="Password" required>
-                        <button type="submit">Sign up</button>
+                        <a class="pill-button" href="/signup" style="text-decoration:none; display:inline-flex; align-items:center;">Sign up</a>
                     </form>
                 {% endif %}
             </div>
