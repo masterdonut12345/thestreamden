@@ -188,6 +188,12 @@
             <div style="display:flex; gap:8px; flex-wrap:wrap;">
                 <a class="pill" href="/">Back to games</a>
                 <a class="pill" href="/account">Account</a>
+                {% if current_user_id and den.owner_id == current_user_id %}
+                    <form method="POST" action="/dens/{{ den.slug }}/delete" onsubmit="return confirm('Delete this den?');">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                        <button class="pill" type="submit" style="background:#2d1a20; border-color:rgba(255,77,106,0.35); color:#ffb7c5;">Delete den</button>
+                    </form>
+                {% endif %}
             </div>
         </header>
 

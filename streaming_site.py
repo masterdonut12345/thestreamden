@@ -73,11 +73,19 @@ ACTIVE_VIEWERS: dict[str, datetime] = {}  # session_id → last_seen timestamp
 ACTIVE_PAGE_VIEWS: dict[tuple[str, str], datetime] = {}  # (session_id, path) → last_seen timestamp
 LAST_VIEWER_PRINT: datetime | None = None  # throttle printing
 
+DEN_EXPIRATION_HOURS = 6
+
 
 def get_session_id() -> str:
     if "sid" not in session:
         session["sid"] = str(uuid.UUID(bytes=os.urandom(16)))
     return session["sid"]
+
+
+def den_expiration_cutoff() -> datetime:
+    """Return the cutoff timestamp for active dens."""
+
+    return datetime.now(timezone.utc) - timedelta(hours=DEN_EXPIRATION_HOURS)
 
 
 def mark_active() -> None:
@@ -662,9 +670,12 @@ def get_user_dens(user_id: int) -> tuple[list[Den], list[Den]]:
     """Return dens owned by the user and dens they have joined."""
     db = SessionLocal()
     try:
+        cutoff = den_expiration_cutoff()
         owned = (
             db.execute(
-                select(Den).where(Den.owner_id == user_id).order_by(Den.created_at.desc())
+                select(Den)
+                .where(Den.owner_id == user_id, Den.created_at >= cutoff)
+                .order_by(Den.created_at.desc())
             )
             .scalars()
             .all()
@@ -673,7 +684,11 @@ def get_user_dens(user_id: int) -> tuple[list[Den], list[Den]]:
             db.execute(
                 select(Den)
                 .join(DenMembership, DenMembership.den_id == Den.id)
-                .where(DenMembership.user_id == user_id, Den.owner_id != user_id)
+                .where(
+                    DenMembership.user_id == user_id,
+                    Den.owner_id != user_id,
+                    Den.created_at >= cutoff,
+                )
                 .order_by(Den.created_at.desc())
             )
             .scalars()
@@ -690,6 +705,7 @@ def index():
 
     all_games = load_games_cached()
     games = list(all_games)
+    cutoff = den_expiration_cutoff()
 
     q = request.args.get("q", "").strip().lower()
     if q:
@@ -720,11 +736,28 @@ def index():
     current_user = getattr(g, "current_user", None)
     owned_dens: list[Den] = []
     joined_dens: list[Den] = []
+    active_public_dens: list[Den] = []
+    db = SessionLocal()
     if current_user:
         try:
             owned_dens, joined_dens = get_user_dens(current_user.id)
         except Exception:
             owned_dens, joined_dens = [], []
+    try:
+        active_public_dens = (
+            db.execute(
+                select(Den)
+                .where(Den.is_public.is_(True), Den.created_at >= cutoff)
+                .order_by(Den.created_at.desc())
+                .limit(20)
+            )
+            .scalars()
+            .all()
+        )
+    except Exception:
+        active_public_dens = []
+    finally:
+        db.close()
 
     return render_template(
         "streaming_index.html",
@@ -735,6 +768,9 @@ def index():
         current_user=current_user,
         owned_dens=owned_dens,
         joined_dens=joined_dens,
+        active_public_dens=active_public_dens,
+        den_expiration_hours=DEN_EXPIRATION_HOURS,
+        games_for_dens=games,
     )
 
 
