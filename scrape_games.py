@@ -422,9 +422,8 @@ def scrape_streamed_api() -> pd.DataFrame:
 def _extract_topembed_streams(card, default_watch: str) -> list[dict]:
     channels = card.select(".channel-item-compact")
     streams: list[dict] = []
-    for ch in channels:
-        name_el = ch.select_one(".channel-name-compact")
-        label = (name_el.get_text(" ", strip=True) if name_el else "Stream") or "Stream"
+    for idx, ch in enumerate(channels, start=1):
+        label = f"Stream {idx}"
         copy_urls = []
         for btn in ch.select(".btn-copy-icon"):
             maybe_url = _extract_first_url(btn.get("onclick"))
