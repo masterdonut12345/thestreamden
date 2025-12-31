@@ -55,6 +55,7 @@ DEFAULT_TAG = "general"
 ADMIN_TOKEN = os.environ.get("ADMIN_TOKEN")
 TWITCH_PARENT_HOST = "thestreamden.com"
 CLEANUP_INTERVAL_SECONDS = int(os.environ.get("CLEANUP_INTERVAL_SECONDS", "3600"))
+SESSION_COOKIE_SECURE = os.environ.get("SESSION_COOKIE_SECURE", "0").lower() in ("1", "true", "yes")
 _cleanup_thread_started = False
 _seed_started = False
 
@@ -64,7 +65,7 @@ CHAT_MAX_LENGTH = int(os.environ.get("CHAT_MAX_LENGTH", "400"))
 
 app.secret_key = os.environ.get("APP_SECRET", "dev-secret-key")
 app.config.update(
-    SESSION_COOKIE_SECURE=True,
+    SESSION_COOKIE_SECURE=SESSION_COOKIE_SECURE,
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE="Lax",
 )
