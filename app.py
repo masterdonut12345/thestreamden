@@ -1492,7 +1492,7 @@ def signup():
         if not username or not password:
             error = "Username and password required"
         else:
-            hashed = generate_password_hash(password)
+            hashed = generate_password_hash(password, method="pbkdf2:sha256")
             new_user = User(username=username, password_hash=hashed)
             db.add(new_user)
             try:
