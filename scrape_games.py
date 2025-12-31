@@ -485,14 +485,19 @@ def scrape_topembed() -> pd.DataFrame:
         if embed_actions:
             embed_action_urls: list[str] = []
             for btn in embed_actions.find_all("button"):
-                maybe_url = _extract_first_url(btn.get("onclick"))
-                if maybe_url:
-                    embed_action_urls.append(maybe_url)
-                    if not event_embed_url and "/event/" in maybe_url:
-                        event_embed_url = maybe_url
+                onclick = btn.get("onclick") or ""
+                maybe_url = _extract_first_url(onclick)
+                if not maybe_url:
+                    continue
+                embed_action_urls.append(maybe_url)
+                if "showEmbed" in onclick:
+                    event_embed_url = event_embed_url or maybe_url
+                if not event_embed_url and "/event/" in maybe_url:
+                    event_embed_url = maybe_url
             if embed_action_urls:
-                watch_url = watch_url or embed_action_urls[0]
+                # Prefer the preview/showEmbed URL (typically the correct stream slug)
                 event_embed_url = event_embed_url or embed_action_urls[0]
+                watch_url = watch_url or event_embed_url or embed_action_urls[0]
         if not watch_url:
             channels_div = card.select_one(".event-channels")
             slug = None
