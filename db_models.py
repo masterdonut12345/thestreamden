@@ -66,6 +66,10 @@ class User(Base):
 
     threads = relationship("Thread", back_populates="user", cascade="all,delete")
     posts = relationship("Post", back_populates="user", cascade="all,delete")
+    dens = relationship("Den", back_populates="owner", cascade="all,delete-orphan")
+    memberships = relationship("DenMembership", back_populates="user", cascade="all,delete")
+    dens = relationship("Den", back_populates="owner", cascade="all,delete-orphan")
+    memberships = relationship("DenMembership", back_populates="user", cascade="all,delete")
 
 
 class Category(Base):
@@ -167,6 +171,62 @@ def ensure_user_ban_column() -> None:
 
     with engine.begin() as conn:
         conn.execute(text("ALTER TABLE users ADD COLUMN is_banned BOOLEAN NOT NULL DEFAULT FALSE"))
+
+
+class Den(Base):
+    __tablename__ = "dens"
+    __table_args__ = (
+        UniqueConstraint("slug", name="uq_dens_slug"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String(160), nullable=False)
+    slug = Column(String(200), nullable=False, index=True)
+    owner_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    is_public = Column(Boolean, nullable=False, default=True, server_default=text("TRUE"))
+    invite_code = Column(String(64), nullable=True)
+    game_id = Column(Integer, nullable=True)
+    stream_url = Column(String(2048), nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    owner = relationship("User", back_populates="dens")
+    memberships = relationship("DenMembership", back_populates="den", cascade="all,delete-orphan")
+    messages = relationship("DenChatMessage", back_populates="den", cascade="all,delete-orphan")
+
+
+class DenMembership(Base):
+    __tablename__ = "den_memberships"
+    __table_args__ = (
+        UniqueConstraint("den_id", "user_id", name="uq_den_membership"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    den_id = Column(Integer, ForeignKey("dens.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    role = Column(String(32), nullable=False, default="member", server_default="member")
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+    den = relationship("Den", back_populates="memberships")
+    user = relationship("User", back_populates="memberships")
+
+
+class DenChatMessage(Base):
+    __tablename__ = "den_chat_messages"
+
+    id = Column(Integer, primary_key=True)
+    den_id = Column(Integer, ForeignKey("dens.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    body = Column(Text, nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+    den = relationship("Den", back_populates="messages")
+    user = relationship("User")
 
 
 def get_session() -> Generator:

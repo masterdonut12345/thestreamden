@@ -224,6 +224,15 @@
         .support-note-floating a { font-weight: 600; color: var(--accent); }
         .support-note-floating a:hover { color: #a4bcff; }
 
+        .den-cta {
+            margin: 16px 0;
+            padding: 12px;
+            border-radius: 14px;
+            background: rgba(8, 10, 18, 0.85);
+            border: 1px solid rgba(122, 162, 255, 0.4);
+            color: #e5e9ff;
+        }
+
         .meta-chips {
             margin-top: 8px;
             display: flex;
@@ -941,252 +950,25 @@
         ></iframe>
     </div>
 
-    <!-- Chat: start closed by default (mobile handle visible). Desktop JS will open it. -->
-    <div class="chat-rail closed" aria-label="Live chat" id="chat-rail">
-        <button
-            type="button"
-            class="chat-toggle"
-            id="chat-toggle"
-            aria-expanded="false"
-            aria-controls="chat-rail"
-            aria-label="Show chat panel">
-            Chat
-        </button>
-        <div class="chat-panel">
-            <div class="chat-header">
-                <div>
-                    <div class="chat-title">Live chat</div>
-                    <div class="chat-subtitle">{{ game.matchup or "This game" }}</div>
-                </div>
-                <span class="chat-status" id="chat-status">Connecting…</span>
-            </div>
-
-            <div class="chat-messages" id="chat-messages" aria-live="polite"></div>
-
-            <form class="chat-form" id="chat-form">
-                <input
-                    id="chat-input"
-                    class="chat-input"
-                    type="text"
-                    name="message"
-                    maxlength="400"
-                    placeholder="Say something about this game…"
-                    autocomplete="off"
-                    required
-                >
-                <button type="submit" class="chat-send">Send</button>
+    <div class="den-cta" aria-label="Watch together">
+        {% if current_user %}
+            <div>Want to chat with friends? Create a den for this stream.</div>
+            <form method="POST" action="/dens/create" style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:8px;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <input type="hidden" name="game_id" value="{{ game.id }}">
+                {% if game.streams and game.streams|length > 0 and game.streams[0].embed_url %}
+                    <input type="hidden" name="stream_url" value="{{ game.streams[0].embed_url }}">
+                {% endif %}
+                <input type="text" name="name" placeholder="e.g. {{ game.matchup }} with friends" required style="padding:10px 12px; border-radius:10px; border:1px solid rgba(255,255,255,0.15); background:rgba(255,255,255,0.04); color:#fff; min-width:220px;">
+                <label style="display:flex; align-items:center; gap:6px; color:#c7cffc; font-size:0.9rem;">
+                    <input type="checkbox" name="is_public" checked> Public den
+                </label>
+                <button type="submit" style="padding:10px 14px; border-radius:12px; border:none; background:#7aa2ff; color:#05060f; font-weight:700; cursor:pointer;">Create den</button>
             </form>
-        </div>
+        {% else %}
+            <div>Log in or sign up on the homepage to create a den and chat.</div>
+        {% endif %}
     </div>
-
-    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js" crossorigin="anonymous"></script>
-    <script>
-        (function () {
-            const chatRail = document.getElementById('chat-rail');
-            const chatToggle = document.getElementById('chat-toggle');
-            const chatMessages = document.getElementById('chat-messages');
-            const chatForm = document.getElementById('chat-form');
-            const chatInput = document.getElementById('chat-input');
-            const chatStatus = document.getElementById('chat-status');
-            const gameId = "{{ game.id }}";
-
-            if (!chatRail || !chatToggle || !chatMessages || !chatForm || !chatInput || !chatStatus || !gameId) {
-                return;
-            }
-
-            function setToggleState(isOpen) {
-                chatRail.classList.toggle("open", isOpen);
-                chatRail.classList.toggle("closed", !isOpen);
-                chatToggle.setAttribute("aria-expanded", isOpen ? "true" : "false");
-                chatToggle.textContent = isOpen ? "Hide chat" : "Chat";
-                chatToggle.setAttribute("aria-label", isOpen ? "Hide chat panel" : "Show chat panel");
-            }
-
-            // Desktop: open by default. Mobile/tablet: closed by default (handle visible).
-            const isSmall = window.matchMedia("(max-width: 1280px)").matches;
-            setToggleState(!isSmall);
-
-            const MAX_RENDERED = 200;
-            let connected = false;
-            let socket = null;
-            let usingPollingFallback = false;
-
-            function disconnectSocket() {
-                if (!socket) return;
-                if (typeof socket.off === "function") {
-                    socket.off();
-                    if (socket.io && typeof socket.io.off === "function") {
-                        socket.io.off();
-                    }
-                }
-                socket.disconnect();
-            }
-
-            function buildSocketOptions(forcePolling) {
-                const opts = {
-                    transports: ["websocket", "polling"],
-                    upgrade: true,
-                    reconnection: true,
-                    reconnectionAttempts: 8,
-                    reconnectionDelay: 750,
-                    reconnectionDelayMax: 5000,
-                    timeout: 8000,
-                };
-
-                if (forcePolling) {
-                    opts.transports = ["polling"];
-                    opts.upgrade = false;
-                }
-
-                return opts;
-            }
-
-            function attachSocket(forcePolling = false) {
-                disconnectSocket();
-                usingPollingFallback = forcePolling;
-                socket = io(buildSocketOptions(forcePolling));
-
-                socket.on("connect", function () {
-                    connected = true;
-                    setStatus("Connected", "ok");
-                    socket.emit("join", { game_id: gameId });
-                });
-
-                socket.on("disconnect", function () {
-                    connected = false;
-                    setStatus("Disconnected. Reconnecting…", "warn");
-                });
-
-                socket.on("connect_error", function (err) {
-                    console.warn("chat connect_error", err);
-
-                    if (!usingPollingFallback) {
-                        setStatus("Chat unavailable over websockets. Retrying…", "warn");
-                        attachSocket(true);
-                        return;
-                    }
-
-                    setStatus("Chat unavailable. Retrying…", "error");
-                });
-
-                socket.io.on("reconnect_attempt", function () {
-                    setStatus("Reconnecting…", "warn");
-                });
-
-                socket.io.on("reconnect_failed", function () {
-                    if (!usingPollingFallback) {
-                        setStatus("Websocket failed. Switching to polling…", "warn");
-                        attachSocket(true);
-                        return;
-                    }
-
-                    setStatus("Chat unavailable", "error");
-                });
-
-                socket.on("recent_messages", function (messages) {
-                    chatMessages.innerHTML = "";
-                    (messages || []).forEach(function (m) { addMessage(m); });
-                });
-
-                socket.on("chat_message", function (msg) {
-                    addMessage(msg);
-                });
-            }
-
-            function setStatus(text, state) {
-                chatStatus.textContent = text;
-                chatStatus.dataset.state = state || "ok";
-            }
-
-            function escapeText(value) {
-                return (value || "").replace(/[&<>"']/g, function (c) {
-                    switch (c) {
-                        case "&": return "&amp;";
-                        case "<": return "&lt;";
-                        case ">": return "&gt;";
-                        case "\"": return "&quot;";
-                        case "'": return "&#39;";
-                        default: return c;
-                    }
-                });
-            }
-
-            function formatTime(ts) {
-                if (!ts) return "";
-                try {
-                    return new Date(ts * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-                } catch (err) {
-                    return "";
-                }
-            }
-
-            function addMessage(msg, { prepend = false } = {}) {
-                if (!msg) return;
-                const wrapper = document.createElement("div");
-                wrapper.className = "chat-message";
-
-                const meta = document.createElement("div");
-                meta.className = "chat-meta";
-                const name = escapeText(msg.user && msg.user.display ? msg.user.display : "Viewer");
-                const time = formatTime(msg.ts);
-                meta.innerHTML = `<span>${name}</span><span>${time}</span>`;
-
-                const body = document.createElement("div");
-                body.className = "chat-text";
-                body.innerHTML = escapeText(msg.text || "");
-
-                wrapper.appendChild(meta);
-                wrapper.appendChild(body);
-
-                if (prepend && chatMessages.firstChild) {
-                    chatMessages.insertBefore(wrapper, chatMessages.firstChild);
-                } else {
-                    chatMessages.appendChild(wrapper);
-                }
-
-                while (chatMessages.children.length > MAX_RENDERED) {
-                    chatMessages.removeChild(chatMessages.firstChild);
-                }
-
-                chatMessages.scrollTop = chatMessages.scrollHeight;
-            }
-
-            attachSocket();
-
-            chatToggle.addEventListener("click", function () {
-                const isOpen = !chatRail.classList.contains("open");
-                setToggleState(isOpen);
-                if (isOpen && !isSmall) {
-                    chatInput.focus({ preventScroll: true });
-                }
-            });
-
-            let lastSendTs = 0;
-            const MIN_INTERVAL_MS = 1500;
-
-            chatForm.addEventListener("submit", function (evt) {
-                evt.preventDefault();
-                const text = (chatInput.value || "").trim();
-                if (!text) return;
-
-                const now = Date.now();
-                if (now - lastSendTs < MIN_INTERVAL_MS) {
-                    setStatus("Slow down…", "warn");
-                    return;
-                }
-
-                if (!connected) {
-                    setStatus("Connecting…", "warn");
-                    socket.connect();
-                    return;
-                }
-
-                lastSendTs = now;
-                socket.emit("send_message", { game_id: gameId, text: text });
-                chatInput.value = "";
-            });
-        })();
-    </script>
 
     <script>
         (function() {
