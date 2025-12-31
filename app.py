@@ -32,7 +32,7 @@ from werkzeug.exceptions import HTTPException
 from werkzeug.security import check_password_hash, generate_password_hash
 
 import embed_streams
-from cleanup_expired import cleanup_expired_threads
+from cleanup_expired import cleanup_expired_threads, cleanup_expired_dens
 from db_models import (
     Category,
     Post,
@@ -45,7 +45,12 @@ from db_models import (
     init_db,
 )
 from pathlib import Path
-from streaming_site import streaming_bp, get_session_id, load_games_cached
+from streaming_site import (
+    streaming_bp,
+    get_session_id,
+    load_games_cached,
+    den_expiration_cutoff,
+)
 
 app = Flask(__name__)
 
@@ -289,6 +294,23 @@ def ensure_den_membership(db, den: Den, user: User) -> None:
     db.commit()
 
 
+def _as_utc(dt: datetime | None) -> datetime | None:
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+
+def is_den_expired(den: Den) -> bool:
+    if not den or not den.created_at:
+        return True
+    created_at = _as_utc(den.created_at)
+    if created_at is None:
+        return True
+    return created_at < den_expiration_cutoff()
+
+
 def serialize_den_message(msg: DenChatMessage, user_lookup: dict[int, User]) -> dict:
     user = user_lookup.get(msg.user_id)
     username = user.username if user else f"User-{msg.user_id}"
@@ -321,7 +343,7 @@ def socket_join(payload):
             return
 
         den = db.get(Den, den_id)
-        if den is None or not user_is_den_member(db, den, user):
+        if den is None or is_den_expired(den) or not user_is_den_member(db, den, user):
             emit("chat_error", {"error": "not_allowed"})
             return
 
@@ -377,7 +399,7 @@ def socket_send_message(payload):
             return
 
         den = db.get(Den, den_id)
-        if den is None or not user_is_den_member(db, den, user):
+        if den is None or is_den_expired(den) or not user_is_den_member(db, den, user):
             emit("chat_error", {"error": "not_allowed"})
             return
 
@@ -1209,9 +1231,12 @@ def _start_cleanup_worker():
     def _loop():
         while True:
             try:
-                deleted = cleanup_expired_threads()
-                if deleted:
-                    print(f"[cleanup] Removed {deleted} expired threads")
+                deleted_threads = cleanup_expired_threads()
+                deleted_dens = cleanup_expired_dens()
+                if deleted_threads:
+                    print(f"[cleanup] Removed {deleted_threads} expired threads")
+                if deleted_dens:
+                    print(f"[cleanup] Removed {deleted_dens} expired dens")
             except Exception as exc:
                 print(f"[cleanup] Error during cleanup: {exc}")
             time.sleep(CLEANUP_INTERVAL_SECONDS)
@@ -1281,6 +1306,24 @@ def create_den():
     except Exception:
         game_id = None
 
+    if not game_id and not stream_url:
+        abort(400)
+
+    selected_game = find_game_by_id(game_id) if game_id else None
+    if game_id and not selected_game:
+        abort(400)
+    if selected_game and not stream_url:
+        stream_url = selected_game.get("watch_url") or ""
+        if not stream_url:
+            streams = selected_game.get("streams") or []
+            if streams:
+                stream_url = streams[0].get("watch_url") or streams[0].get("embed_url") or ""
+
+    if not stream_url:
+        abort(400)
+    if len(stream_url) > 2048:
+        abort(400)
+
     slug = unique_den_slug(db, name)
     invite_code = None if is_public else secrets.token_urlsafe(6)
     den = Den(
@@ -1307,7 +1350,7 @@ def _den_or_404(db, slug: str) -> Den:
         .scalars()
         .first()
     )
-    if den is None:
+    if den is None or is_den_expired(den):
         abort(404)
     return den
 
@@ -1362,6 +1405,12 @@ def den_page(slug):
     serialized_messages = [serialize_den_message(m, user_lookup) for m in reversed(messages)]
 
     game = find_game_by_id(den.game_id) if den.game_id else None
+    den_streams = game.get("streams") if game else []
+    active_stream_url = den.stream_url or ""
+    if not active_stream_url and den_streams:
+        first_stream = den_streams[0]
+        if first_stream:
+            active_stream_url = first_stream.get("embed_url") or first_stream.get("watch_url") or ""
     share_url = request.url_root.rstrip("/") + url_for("den_page", slug=den.slug)
     invite_url = share_url
     if den.invite_code:
@@ -1371,7 +1420,10 @@ def den_page(slug):
         den=serialize_den(den),
         messages=serialized_messages,
         current_user=user.username,
+        current_user_id=user.id,
         game=game,
+        den_streams=den_streams,
+        active_stream_url=active_stream_url,
         share_url=share_url,
         invite_url=invite_url,
         chat_max_length=CHAT_MAX_LENGTH,
@@ -1402,12 +1454,61 @@ def join_den(slug):
                 access_denied=True,
                 invite_error="Invalid invite code.",
                 current_user=user.username,
+                current_user_id=user.id,
                 share_url=share_url,
                 invite_url=invite_url,
                 chat_max_length=CHAT_MAX_LENGTH,
             )
 
     ensure_den_membership(db, den, user)
+    return redirect(url_for("den_page", slug=slug))
+
+
+@app.route("/dens/<slug>/delete", methods=["POST"])
+def delete_den(slug):
+    require_csrf()
+    db = get_db()
+    user = require_login(url_for("den_page", slug=slug))
+    if not isinstance(user, User):
+        return user
+
+    den = _den_or_404(db, slug)
+    if den.owner_id != user.id:
+        abort(403)
+
+    db.delete(den)
+    db.commit()
+    return redirect(url_for("account"))
+
+
+@app.route("/dens/<slug>/stream", methods=["POST"])
+def update_den_stream(slug):
+    require_csrf()
+    db = get_db()
+    user = require_login(url_for("den_page", slug=slug))
+    if not isinstance(user, User):
+        return user
+
+    den = _den_or_404(db, slug)
+    if den.owner_id != user.id:
+        abort(403)
+
+    stream_url = (request.form.get("stream_url") or "").strip()
+    game_id_raw = request.form.get("game_id") or ""
+    if not stream_url or len(stream_url) > 2048:
+        abort(400)
+
+    game_id = None
+    try:
+        if game_id_raw:
+            game_id = int(game_id_raw)
+    except Exception:
+        game_id = None
+
+    den.stream_url = stream_url
+    if game_id:
+        den.game_id = game_id
+    db.commit()
     return redirect(url_for("den_page", slug=slug))
 
 
@@ -1420,7 +1521,9 @@ def account():
 
     owned_dens = (
         db.execute(
-            select(Den).where(Den.owner_id == user.id).order_by(Den.created_at.desc())
+            select(Den)
+            .where(Den.owner_id == user.id, Den.created_at >= den_expiration_cutoff())
+            .order_by(Den.created_at.desc())
         )
         .scalars()
         .all()
@@ -1429,7 +1532,11 @@ def account():
         db.execute(
             select(Den)
             .join(DenMembership, DenMembership.den_id == Den.id)
-            .where(DenMembership.user_id == user.id, Den.owner_id != user.id)
+            .where(
+                DenMembership.user_id == user.id,
+                Den.owner_id != user.id,
+                Den.created_at >= den_expiration_cutoff(),
+            )
             .order_by(Den.created_at.desc())
         )
         .scalars()
