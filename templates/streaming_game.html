@@ -136,10 +136,13 @@
             justify-content: flex-start;
             overflow: hidden;
         }
-        .ad-slot-left iframe {
-            width: 100% !important;
-            height: 100% !important;
-            display: block;
+        .ad-slot-left .ad-iframe {
+            width: 320px;
+            height: 50px;
+            border-radius: 8px;
+            border: 0;
+            overflow: hidden;
+            box-shadow: 0 8px 18px rgba(0, 0, 0, 0.45);
         }
 
         .header-text {
@@ -261,7 +264,6 @@
             .multi-view-title { flex-direction: column; align-items: flex-start; gap: 6px; }
             .multi-controls { width: 100%; }
             .multi-toggle-button { width: 100%; justify-content: center; }
-            .ad-slot { margin-top: 12px; }
         }
 
         h3 { margin-top: 12px; margin-bottom: 8px; font-size: 1.1rem; }
@@ -594,11 +596,6 @@
             box-shadow: 0 14px 30px rgba(122, 162, 255, 0.5);
         }
 
-        .ad-slot {
-            margin: 16px 0 0;
-            text-align: center;
-        }
-
         .no-stream {
             margin-top: 30px;
             padding: 16px 14px;
@@ -701,8 +698,9 @@
             border-radius: 0;
         }
 
-        body.full-page-player .ad-slot { display: none; }
         body.full-page-player #stream-picker { display: none !important; }
+        body.full-page-player .ad-slot-left,
+        body.full-page-player .left-rail-ad { display: none; }
 
         body.full-page-player .multi-view-title {
             position: fixed;
@@ -722,31 +720,6 @@
             box-shadow: 0 10px 25px rgba(0, 0, 0, 0.8);
         }
 
-        .left-rail-ad {
-            position: fixed;
-            left: 16px;
-            top: 200px;
-            width: 160px;
-            z-index: 2500;
-        }
-        .left-rail-ad .box {
-            width: 160px;
-            height: 300px;
-            border-radius: 14px;
-            overflow: hidden;
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            box-shadow: 0 14px 30px rgba(0, 0, 0, 0.8);
-            background: rgba(0,0,0,0.35);
-        }
-
-        /* hide on smaller screens to avoid overlap */
-        @media (max-width: 1280px) {
-            .left-rail-ad { display: none; }
-        }
-
-        /* hide in full-page mode */
-        body.full-page-player .left-rail-ad { display: none; }
-
         @media (prefers-reduced-motion: reduce) {
             .live-pill::before { animation: none !important; box-shadow: 0 0 0 0 rgba(255, 77, 106, 0.6); }
         }
@@ -763,20 +736,13 @@
 
         <header>
             <div class="header-container">
-                <div class="ad-slot-left">
-                    <script type="text/javascript">
-                      atOptions = {
-                        'key' : '5478f94711ce55d9b858433d3c49812f',
-                        'format' : 'iframe',
-                        'height' : 50,
-                        'width' : 320,
-                        'params' : {}
-                      };
-                    </script>
-                    <script
-                      type="text/javascript"
-                      src="//www.highperformanceformat.com/5478f94711ce55d9b858433d3c49812f/invoke.js"
-                    ></script>
+                <div class="ad-slot-left" aria-label="Sponsored banner">
+                    <iframe
+                        class="ad-iframe"
+                        title="Top banner ad"
+                        sandbox="allow-scripts allow-same-origin"
+                        srcdoc='<!doctype html><html><head><meta charset="utf-8"></head><body style="margin:0;padding:0;display:flex;align-items:center;justify-content:center;background:transparent;"><script type="text/javascript">var atOptions={"key":"5478f94711ce55d9b858433d3c49812f","format":"iframe","height":50,"width":320,"params":{}};</script><script type="text/javascript" src="https://www.highperformanceformat.com/5478f94711ce55d9b858433d3c49812f/invoke.js"></script></body></html>'>
+                    </iframe>
                 </div>
 
                 <div class="header-text">
@@ -863,6 +829,35 @@
                                 {% set _ = options.append(g) %}
                             {% endif %}
                         {% endfor %}
+                        {% if options %}
+                            {% set extra_slot_count = 3 %}
+                            {% for slot_idx in range(1, extra_slot_count + 1) %}
+                                <div class="player-slot extra-slot" data-slot="{{ slot_idx }}">
+                                    <div class="multi-slot-header">
+                                        <span class="multi-slot-title">Empty slot</span>
+                                        <select class="multi-slot-select" aria-label="Select stream for slot {{ slot_idx }}">
+                                            <option value="">Select another game…</option>
+                                            {% for g in options %}
+                                                {% set first_extra_stream = g.streams[0] %}
+                                                {% if first_extra_stream %}
+                                                    <option
+                                                        value="{{ first_extra_stream.embed_url }}"
+                                                        data-title="{{ g.matchup or ('Stream ' ~ loop.index) }}"
+                                                    >
+                                                        {{ g.matchup or ('Stream ' ~ loop.index) }}
+                                                    </option>
+                                                {% endif %}
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                    <iframe
+                                        allowfullscreen
+                                        scrolling="no"
+                                        allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
+                                    ></iframe>
+                                </div>
+                            {% endfor %}
+                        {% endif %}
                     {% endif %}
                 </div>
 
@@ -901,15 +896,6 @@
                         </button>
                     </div>
                 </div>
-
-                <div class="ad-slot">
-                    <script
-                      async="async"
-                      data-cfasync="false"
-                      src="//pl28213154.effectivegatecpm.com/ced6c8c8dbe2168bf17b0ffaa1cf5474/invoke.js"
-                    ></script>
-                    <div id="container-ced6c8c8dbe2168bf17b0ffaa1cf5474"></div>
-                </div>
             </div>
         {% else %}
             <div class="no-stream">
@@ -927,19 +913,12 @@
     <!-- FIXED banner OUTSIDE .page-wrapper so it never changes layout -->
     <div class="left-rail-ad" aria-label="Left rail ad">
         <div class="box">
-            <script type="text/javascript">
-              atOptions = {
-                'key' : '29ef845582924216c628b8930841e3bb',
-                'format' : 'iframe',
-                'height' : 300,
-                'width' : 160,
-                'params' : {}
-              };
-            </script>
-            <script
-              type="text/javascript"
-              src="https://broodbelongminiature.com/29ef845582924216c628b8930841e3bb/invoke.js"
-            ></script>
+            <iframe
+                class="ad-iframe"
+                title="Sidebar banner ad"
+                sandbox="allow-scripts allow-same-origin"
+                srcdoc='<!doctype html><html><head><meta charset="utf-8"></head><body style="margin:0;padding:0;display:flex;align-items:center;justify-content:center;background:transparent;"><script type="text/javascript">var atOptions={"key":"29ef845582924216c628b8930841e3bb","format":"iframe","height":300,"width":160,"params":{}};</script><script type="text/javascript" src="https://broodbelongminiature.com/29ef845582924216c628b8930841e3bb/invoke.js"></script></body></html>'>
+            </iframe>
         </div>
     </div>
 
@@ -1248,6 +1227,7 @@
 
             if (playerLayout && multiToggle) {
                 let multiOn = false;
+                const extraSlots = playerLayout.querySelectorAll('.extra-slot');
 
                 multiToggle.addEventListener('click', function () {
                     multiOn = !multiOn;
@@ -1255,6 +1235,14 @@
                         playerLayout.classList.remove('single');
                         playerLayout.classList.add('multi');
                         multiToggle.textContent = 'Disable multi-view';
+
+                        extraSlots.forEach((slot) => {
+                            const select = slot.querySelector('.multi-slot-select');
+                            if (select && !select.value && select.options.length > 1) {
+                                select.selectedIndex = 1;
+                                select.dispatchEvent(new Event('change'));
+                            }
+                        });
                     } else {
                         playerLayout.classList.remove('multi');
                         playerLayout.classList.add('single');
@@ -1262,7 +1250,6 @@
                     }
                 });
 
-                const extraSlots = playerLayout.querySelectorAll('.extra-slot');
                 extraSlots.forEach(slot => {
                     const select = slot.querySelector('.multi-slot-select');
                     const titleEl = slot.querySelector('.multi-slot-title');
@@ -1365,22 +1352,5 @@
     </script>
 
     <script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token": "643968b4db2b4d4c80a6f49718fcfcaa"}'></script>
-
-{% if open_ad %}
-<script>
-  window.addEventListener('load', function () {
-    try {
-      window.open(
-        'https://broodbelongminiature.com/d01t94kua?key=491dbdc350af1bf2b2f5c05ef1a574df',
-        '_blank'
-      );
-    } catch (e) {
-      if (window.console && console.debug) {
-        console.debug('Ad popunder blocked:', e);
-      }
-    }
-  });
-</script>
-{% endif %}
 </body>
 </html>
