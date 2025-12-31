@@ -582,7 +582,7 @@
 
       function isIosSafari() {
         var ua = window.navigator.userAgent || "";
-        var isIos = /iP(hone|ad|od)/i.test(ua);
+        var isIos = /iP(hone|ad|od)/i.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
         var isSafari = /Safari/i.test(ua) && !/CriOS|FxiOS|EdgiOS/i.test(ua);
         return isIos && isSafari;
       }
