@@ -98,6 +98,26 @@
             padding: 10px;
         }
 
+        .player-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 8px;
+        }
+        .player-actions {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+        .primary-select {
+            padding: 8px 10px;
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            background: rgba(255, 255, 255, 0.05);
+            color: #f7f8ff;
+        }
+
         .player-layout {
             display: grid;
             gap: 10px;
@@ -294,6 +314,25 @@
                 <div class="layout" style="margin-top:14px;">
                     <div class="player-shell">
                         {% if active_stream_url %}
+                            <div class="player-header">
+                                <div style="font-weight:700;">Watching together</div>
+                                {% if den_streams and den_streams|length > 0 %}
+                                    <div class="player-actions">
+                                        <select id="den-stream-select" class="primary-select">
+                                            {% for s in den_streams %}
+                                                {% set candidate = s.embed_url or s.watch_url %}
+                                                <option value="{{ candidate }}" {% if active_stream_url and candidate == active_stream_url %}selected{% elif not active_stream_url and loop.first %}selected{% endif %}>
+                                                    {{ s.label or ('Stream ' ~ loop.index) }}
+                                                </option>
+                                            {% endfor %}
+                                        </select>
+                                        {% if current_user_id and den.owner_id == current_user_id and den_streams|length > 1 %}
+                                            <button type="button" class="multi-toggle-button" id="den-multi-toggle">Enable multi-view</button>
+                                        {% endif %}
+                                    </div>
+                                {% endif %}
+                            </div>
+
                             <div class="player-layout single" id="den-player-layout">
                                 <div class="main-player">
                                     <iframe
@@ -304,7 +343,7 @@
                                         scrolling="no"
                                     ></iframe>
                                 </div>
-                                {% if den_streams and den_streams|length > 1 %}
+                                {% if current_user_id and den.owner_id == current_user_id and den_streams and den_streams|length > 1 %}
                                     <div class="extra-slot">
                                         <header>
                                             <div class="pill" style="background:rgba(255,255,255,0.04);">Multi view slot A</div>
@@ -331,23 +370,6 @@
                                     </div>
                                 {% endif %}
                             </div>
-
-                            {% if den_streams and den_streams|length > 1 %}
-                                <div class="stream-picker" id="den-stream-picker">
-                                    {% for s in den_streams %}
-                                        <button
-                                            type="button"
-                                            class="stream-button {% if active_stream_url and (s.embed_url == active_stream_url or s.watch_url == active_stream_url) %}active{% endif %}"
-                                            data-embed-url="{{ s.embed_url or s.watch_url }}"
-                                        >
-                                            {{ s.label or ('Stream ' ~ loop.index) }}
-                                        </button>
-                                    {% endfor %}
-                                </div>
-                                <div class="multi-controls">
-                                    <button type="button" class="multi-toggle-button" id="den-multi-toggle">Enable multi-view</button>
-                                </div>
-                            {% endif %}
 
                             {% if current_user_id and den.owner_id == current_user_id %}
                                 <form method="POST" action="/dens/{{ den.slug }}/stream" style="display:flex; gap:8px; flex-wrap:wrap; margin-top:10px;">
@@ -403,23 +425,17 @@
     <script>
         (function () {
             const mainIframe   = document.getElementById('den-iframe');
-            const picker       = document.getElementById('den-stream-picker');
+            const streamSelect = document.getElementById('den-stream-select');
             const playerLayout = document.getElementById('den-player-layout');
             const multiToggle  = document.getElementById('den-multi-toggle');
             const extraSlots   = playerLayout ? playerLayout.querySelectorAll('.extra-slot') : [];
             const presetSelect = document.getElementById('presetStream');
             const streamInput  = document.getElementById('streamUrlInput');
 
-            if (picker && mainIframe) {
-                picker.addEventListener('click', function (evt) {
-                    const btn = evt.target.closest('.stream-button');
-                    if (!btn) return;
-                    const url = btn.getAttribute('data-embed-url');
-                    if (!url) return;
-                    mainIframe.src = url;
-                    picker.querySelectorAll('.stream-button').forEach(b => {
-                        b.classList.toggle('active', b === btn);
-                    });
+            if (streamSelect && mainIframe) {
+                streamSelect.addEventListener('change', function () {
+                    const url = streamSelect.value || '';
+                    if (url) mainIframe.src = url;
                 });
             }
 
