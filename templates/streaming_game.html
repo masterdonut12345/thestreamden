@@ -126,6 +126,25 @@
             gap: 20px;
         }
 
+        /* fixed 320x50 ad box on the left */
+        .ad-slot-left {
+            flex: 0 0 auto;
+            width: 320px;
+            height: 50px;
+            display: flex;
+            align-items: center;
+            justify-content: flex-start;
+            overflow: hidden;
+        }
+        .ad-slot-left .ad-iframe {
+            width: 320px;
+            height: 50px;
+            border-radius: 8px;
+            border: 0;
+            overflow: hidden;
+            box-shadow: 0 8px 18px rgba(0, 0, 0, 0.45);
+        }
+
         .header-text {
             flex: 1 1 auto;
             padding-right: 10px;
@@ -679,6 +698,8 @@
         }
 
         body.full-page-player #stream-picker { display: none !important; }
+        body.full-page-player .ad-slot-left,
+        body.full-page-player .left-rail-ad { display: none; }
 
         body.full-page-player .multi-view-title {
             position: fixed;
@@ -714,6 +735,15 @@
 
         <header>
             <div class="header-container">
+                <div class="ad-slot-left" aria-label="Sponsored banner">
+                    <iframe
+                        class="ad-iframe"
+                        title="Top banner ad"
+                        sandbox="allow-scripts allow-same-origin"
+                        srcdoc='<!doctype html><html><head><meta charset="utf-8"></head><body style="margin:0;padding:0;display:flex;align-items:center;justify-content:center;background:transparent;"><script type="text/javascript">var atOptions={"key":"5478f94711ce55d9b858433d3c49812f","format":"iframe","height":50,"width":320,"params":{}};</script><script type="text/javascript" src="https://www.highperformanceformat.com/5478f94711ce55d9b858433d3c49812f/invoke.js"></script></body></html>'>
+                    </iframe>
+                </div>
+
                 <div class="header-text">
                     <div class="title-row">
                         <h1>{{ game.matchup }}</h1>
@@ -798,6 +828,35 @@
                                 {% set _ = options.append(g) %}
                             {% endif %}
                         {% endfor %}
+                        {% if options %}
+                            {% set extra_slot_count = 3 %}
+                            {% for slot_idx in range(1, extra_slot_count + 1) %}
+                                <div class="player-slot extra-slot" data-slot="{{ slot_idx }}">
+                                    <div class="multi-slot-header">
+                                        <span class="multi-slot-title">Empty slot</span>
+                                        <select class="multi-slot-select" aria-label="Select stream for slot {{ slot_idx }}">
+                                            <option value="">Select another game…</option>
+                                            {% for g in options %}
+                                                {% set first_extra_stream = g.streams[0] %}
+                                                {% if first_extra_stream %}
+                                                    <option
+                                                        value="{{ first_extra_stream.embed_url }}"
+                                                        data-title="{{ g.matchup or ('Stream ' ~ loop.index) }}"
+                                                    >
+                                                        {{ g.matchup or ('Stream ' ~ loop.index) }}
+                                                    </option>
+                                                {% endif %}
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                    <iframe
+                                        allowfullscreen
+                                        scrolling="no"
+                                        allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
+                                    ></iframe>
+                                </div>
+                            {% endfor %}
+                        {% endif %}
                     {% endif %}
                 </div>
 
@@ -848,6 +907,18 @@
             Having issues with streams? <a href="https://x.com/thestreamden" target="_blank" rel="noopener">@TheStreamDen</a>
         </div>
 
+    </div>
+
+    <!-- FIXED banner OUTSIDE .page-wrapper so it never changes layout -->
+    <div class="left-rail-ad" aria-label="Left rail ad">
+        <div class="box">
+            <iframe
+                class="ad-iframe"
+                title="Sidebar banner ad"
+                sandbox="allow-scripts allow-same-origin"
+                srcdoc='<!doctype html><html><head><meta charset="utf-8"></head><body style="margin:0;padding:0;display:flex;align-items:center;justify-content:center;background:transparent;"><script type="text/javascript">var atOptions={"key":"29ef845582924216c628b8930841e3bb","format":"iframe","height":300,"width":160,"params":{}};</script><script type="text/javascript" src="https://broodbelongminiature.com/29ef845582924216c628b8930841e3bb/invoke.js"></script></body></html>'>
+            </iframe>
+        </div>
     </div>
 
     <!-- Chat: start closed by default (mobile handle visible). Desktop JS will open it. -->
@@ -1155,6 +1226,7 @@
 
             if (playerLayout && multiToggle) {
                 let multiOn = false;
+                const extraSlots = playerLayout.querySelectorAll('.extra-slot');
 
                 multiToggle.addEventListener('click', function () {
                     multiOn = !multiOn;
@@ -1162,6 +1234,14 @@
                         playerLayout.classList.remove('single');
                         playerLayout.classList.add('multi');
                         multiToggle.textContent = 'Disable multi-view';
+
+                        extraSlots.forEach((slot) => {
+                            const select = slot.querySelector('.multi-slot-select');
+                            if (select && !select.value && select.options.length > 1) {
+                                select.selectedIndex = 1;
+                                select.dispatchEvent(new Event('change'));
+                            }
+                        });
                     } else {
                         playerLayout.classList.remove('multi');
                         playerLayout.classList.add('single');
@@ -1169,7 +1249,6 @@
                     }
                 });
 
-                const extraSlots = playerLayout.querySelectorAll('.extra-slot');
                 extraSlots.forEach(slot => {
                     const select = slot.querySelector('.multi-slot-select');
                     const titleEl = slot.querySelector('.multi-slot-title');
