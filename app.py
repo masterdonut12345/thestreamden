@@ -294,10 +294,21 @@ def ensure_den_membership(db, den: Den, user: User) -> None:
     db.commit()
 
 
+def _as_utc(dt: datetime | None) -> datetime | None:
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+
 def is_den_expired(den: Den) -> bool:
     if not den or not den.created_at:
         return True
-    return den.created_at < den_expiration_cutoff()
+    created_at = _as_utc(den.created_at)
+    if created_at is None:
+        return True
+    return created_at < den_expiration_cutoff()
 
 
 def serialize_den_message(msg: DenChatMessage, user_lookup: dict[int, User]) -> dict:
@@ -1403,6 +1414,7 @@ def den_page(slug):
         den=serialize_den(den),
         messages=serialized_messages,
         current_user=user.username,
+        current_user_id=user.id,
         game=game,
         share_url=share_url,
         invite_url=invite_url,
@@ -1434,6 +1446,7 @@ def join_den(slug):
                 access_denied=True,
                 invite_error="Invalid invite code.",
                 current_user=user.username,
+                current_user_id=user.id,
                 share_url=share_url,
                 invite_url=invite_url,
                 chat_max_length=CHAT_MAX_LENGTH,
@@ -1441,6 +1454,23 @@ def join_den(slug):
 
     ensure_den_membership(db, den, user)
     return redirect(url_for("den_page", slug=slug))
+
+
+@app.route("/dens/<slug>/delete", methods=["POST"])
+def delete_den(slug):
+    require_csrf()
+    db = get_db()
+    user = require_login(url_for("den_page", slug=slug))
+    if not isinstance(user, User):
+        return user
+
+    den = _den_or_404(db, slug)
+    if den.owner_id != user.id:
+        abort(403)
+
+    db.delete(den)
+    db.commit()
+    return redirect(url_for("account"))
 
 
 @app.route("/account")
