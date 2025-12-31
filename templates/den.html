@@ -91,11 +91,108 @@
             gap: 16px;
         }
 
-        .player iframe {
+        .player-shell {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 14px;
+            padding: 10px;
+        }
+
+        .player-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 8px;
+        }
+        .player-actions {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+        .primary-select {
+            padding: 8px 10px;
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            background: rgba(255, 255, 255, 0.05);
+            color: #f7f8ff;
+        }
+
+        .player-layout {
+            display: grid;
+            gap: 10px;
+        }
+        .player-layout.single {
+            grid-template-columns: 1fr;
+        }
+        .player-layout.multi {
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        }
+
+        .main-player iframe,
+        .extra-slot iframe {
             width: 100%;
-            height: 420px;
+            height: 320px;
             border: none;
             border-radius: 12px;
+        }
+
+        .stream-picker {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin: 10px 0;
+        }
+        .stream-button {
+            padding: 8px 10px;
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            background: rgba(255, 255, 255, 0.05);
+            color: #f7f8ff;
+            cursor: pointer;
+        }
+        .stream-button.active {
+            background: var(--accent);
+            color: #05060f;
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+
+        .multi-controls {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+            margin: 8px 0 0 0;
+        }
+        .multi-toggle-button {
+            padding: 8px 12px;
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            background: rgba(255, 255, 255, 0.05);
+            color: #f7f8ff;
+            cursor: pointer;
+        }
+
+        .extra-slot {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 12px;
+            padding: 8px;
+        }
+        .extra-slot header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 6px;
+        }
+        .multi-slot-select {
+            flex: 1 1 auto;
+            padding: 6px;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            background: rgba(255, 255, 255, 0.04);
+            color: #f7f8ff;
         }
 
         .chat-panel {
@@ -188,6 +285,12 @@
             <div style="display:flex; gap:8px; flex-wrap:wrap;">
                 <a class="pill" href="/">Back to games</a>
                 <a class="pill" href="/account">Account</a>
+                {% if current_user_id and den.owner_id == current_user_id %}
+                    <form method="POST" action="/dens/{{ den.slug }}/delete" onsubmit="return confirm('Delete this den?');">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                        <button class="pill" type="submit" style="background:#2d1a20; border-color:rgba(255,77,106,0.35); color:#ffb7c5;">Delete den</button>
+                    </form>
+                {% endif %}
             </div>
         </header>
 
@@ -209,11 +312,82 @@
                 </div>
             {% else %}
                 <div class="layout" style="margin-top:14px;">
-                    <div class="player">
-                        {% if den.stream_url %}
-                            <iframe src="{{ den.stream_url }}" allowfullscreen allow="autoplay; encrypted-media"></iframe>
-                        {% elif game and game.streams and game.streams|length > 0 and game.streams[0].embed_url %}
-                            <iframe src="{{ game.streams[0].embed_url }}" allowfullscreen allow="autoplay; encrypted-media"></iframe>
+                    <div class="player-shell">
+                        {% if active_stream_url %}
+                            <div class="player-header">
+                                <div style="font-weight:700;">Watching together</div>
+                                {% if den_streams and den_streams|length > 0 %}
+                                    <div class="player-actions">
+                                        <select id="den-stream-select" class="primary-select">
+                                            {% for s in den_streams %}
+                                                {% set candidate = s.embed_url or s.watch_url %}
+                                                <option value="{{ candidate }}" {% if active_stream_url and candidate == active_stream_url %}selected{% elif not active_stream_url and loop.first %}selected{% endif %}>
+                                                    {{ s.label or ('Stream ' ~ loop.index) }}
+                                                </option>
+                                            {% endfor %}
+                                        </select>
+                                        {% if current_user_id and den.owner_id == current_user_id and den_streams|length > 1 %}
+                                            <button type="button" class="multi-toggle-button" id="den-multi-toggle">Enable multi-view</button>
+                                        {% endif %}
+                                    </div>
+                                {% endif %}
+                            </div>
+
+                            <div class="player-layout single" id="den-player-layout">
+                                <div class="main-player">
+                                    <iframe
+                                        id="den-iframe"
+                                        src="{{ active_stream_url }}"
+                                        allowfullscreen
+                                        allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
+                                        scrolling="no"
+                                    ></iframe>
+                                </div>
+                                {% if current_user_id and den.owner_id == current_user_id and den_streams and den_streams|length > 1 %}
+                                    <div class="extra-slot">
+                                        <header>
+                                            <div class="pill" style="background:rgba(255,255,255,0.04);">Multi view slot A</div>
+                                            <select class="multi-slot-select" data-slot="a">
+                                                <option value="">Empty slot</option>
+                                                {% for s in den_streams %}
+                                                    <option value="{{ s.embed_url or s.watch_url }}">{{ s.label or ('Stream ' ~ loop.index) }}</option>
+                                                {% endfor %}
+                                            </select>
+                                        </header>
+                                        <iframe allowfullscreen allow="autoplay; encrypted-media; picture-in-picture; fullscreen"></iframe>
+                                    </div>
+                                    <div class="extra-slot">
+                                        <header>
+                                            <div class="pill" style="background:rgba(255,255,255,0.04);">Multi view slot B</div>
+                                            <select class="multi-slot-select" data-slot="b">
+                                                <option value="">Empty slot</option>
+                                                {% for s in den_streams %}
+                                                    <option value="{{ s.embed_url or s.watch_url }}">{{ s.label or ('Stream ' ~ loop.index) }}</option>
+                                                {% endfor %}
+                                            </select>
+                                        </header>
+                                        <iframe allowfullscreen allow="autoplay; encrypted-media; picture-in-picture; fullscreen"></iframe>
+                                    </div>
+                                {% endif %}
+                            </div>
+
+                            {% if current_user_id and den.owner_id == current_user_id %}
+                                <form method="POST" action="/dens/{{ den.slug }}/stream" style="display:flex; gap:8px; flex-wrap:wrap; margin-top:10px;">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                                    {% if game %}
+                                        <input type="hidden" name="game_id" value="{{ game.id }}">
+                                    {% endif %}
+                                    <select name="preset_stream" id="presetStream" class="multi-slot-select" style="flex:1 1 200px;">
+                                        <option value="">Select stream from list</option>
+                                        {% for s in den_streams %}
+                                            {% set candidate = s.embed_url or s.watch_url %}
+                                            <option value="{{ candidate }}">{{ s.label or ('Stream ' ~ loop.index) }}</option>
+                                        {% endfor %}
+                                    </select>
+                                    <input type="url" name="stream_url" id="streamUrlInput" value="{{ active_stream_url }}" placeholder="Or paste another embed URL" style="padding:8px 10px; border-radius:10px; border:1px solid rgba(255,255,255,0.2); background:rgba(255,255,255,0.04); color:#f7f8ff; flex:2 1 240px;">
+                                    <button type="submit" class="share-btn">Set as den stream</button>
+                                </form>
+                            {% endif %}
                         {% else %}
                             <div class="invite-card">No stream attached yet. Add an embed URL when creating the den to watch together.</div>
                         {% endif %}
@@ -248,6 +422,62 @@
     </div>
 
     {% if not invite_required %}
+    <script>
+        (function () {
+            const mainIframe   = document.getElementById('den-iframe');
+            const streamSelect = document.getElementById('den-stream-select');
+            const playerLayout = document.getElementById('den-player-layout');
+            const multiToggle  = document.getElementById('den-multi-toggle');
+            const extraSlots   = playerLayout ? playerLayout.querySelectorAll('.extra-slot') : [];
+            const presetSelect = document.getElementById('presetStream');
+            const streamInput  = document.getElementById('streamUrlInput');
+
+            if (streamSelect && mainIframe) {
+                streamSelect.addEventListener('change', function () {
+                    const url = streamSelect.value || '';
+                    if (url) mainIframe.src = url;
+                });
+            }
+
+            if (presetSelect && streamInput) {
+                presetSelect.addEventListener('change', function () {
+                    const val = presetSelect.value || '';
+                    if (val) streamInput.value = val;
+                });
+            }
+
+            if (playerLayout && multiToggle) {
+                let multiOn = false;
+                multiToggle.addEventListener('click', function () {
+                    multiOn = !multiOn;
+                    playerLayout.classList.toggle('multi', multiOn);
+                    playerLayout.classList.toggle('single', !multiOn);
+                    multiToggle.textContent = multiOn ? 'Disable multi-view' : 'Enable multi-view';
+
+                    if (multiOn && extraSlots) {
+                        extraSlots.forEach(slot => {
+                            const select = slot.querySelector('.multi-slot-select');
+                            const iframe = slot.querySelector('iframe');
+                            if (select && iframe && !iframe.src && select.options.length > 1) {
+                                select.selectedIndex = 1;
+                                select.dispatchEvent(new Event('change'));
+                            }
+                        });
+                    }
+                });
+
+                extraSlots.forEach(slot => {
+                    const select = slot.querySelector('.multi-slot-select');
+                    const iframe = slot.querySelector('iframe');
+                    if (!select || !iframe) return;
+                    select.addEventListener('change', function () {
+                        iframe.src = select.value || '';
+                    });
+                });
+            }
+        })();
+    </script>
+
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js" crossorigin="anonymous"></script>
     <script>
         const chatMessages = document.getElementById('chat-messages');
