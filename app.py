@@ -1405,6 +1405,12 @@ def den_page(slug):
     serialized_messages = [serialize_den_message(m, user_lookup) for m in reversed(messages)]
 
     game = find_game_by_id(den.game_id) if den.game_id else None
+    den_streams = game.get("streams") if game else []
+    active_stream_url = den.stream_url or ""
+    if not active_stream_url and den_streams:
+        first_stream = den_streams[0]
+        if first_stream:
+            active_stream_url = first_stream.get("embed_url") or first_stream.get("watch_url") or ""
     share_url = request.url_root.rstrip("/") + url_for("den_page", slug=den.slug)
     invite_url = share_url
     if den.invite_code:
@@ -1416,6 +1422,8 @@ def den_page(slug):
         current_user=user.username,
         current_user_id=user.id,
         game=game,
+        den_streams=den_streams,
+        active_stream_url=active_stream_url,
         share_url=share_url,
         invite_url=invite_url,
         chat_max_length=CHAT_MAX_LENGTH,
@@ -1471,6 +1479,37 @@ def delete_den(slug):
     db.delete(den)
     db.commit()
     return redirect(url_for("account"))
+
+
+@app.route("/dens/<slug>/stream", methods=["POST"])
+def update_den_stream(slug):
+    require_csrf()
+    db = get_db()
+    user = require_login(url_for("den_page", slug=slug))
+    if not isinstance(user, User):
+        return user
+
+    den = _den_or_404(db, slug)
+    if den.owner_id != user.id:
+        abort(403)
+
+    stream_url = (request.form.get("stream_url") or "").strip()
+    game_id_raw = request.form.get("game_id") or ""
+    if not stream_url or len(stream_url) > 2048:
+        abort(400)
+
+    game_id = None
+    try:
+        if game_id_raw:
+            game_id = int(game_id_raw)
+    except Exception:
+        game_id = None
+
+    den.stream_url = stream_url
+    if game_id:
+        den.game_id = game_id
+    db.commit()
+    return redirect(url_for("den_page", slug=slug))
 
 
 @app.route("/account")
