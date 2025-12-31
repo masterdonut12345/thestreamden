@@ -268,88 +268,62 @@
             .ad-slot-top-right { justify-content: flex-start; max-width: 100%; }
         }
 
-        /* === Cross-promo banner === */
-        .promo-strip {
-            margin: 14px 0 14px 0;
+        /* === Accordions === */
+        .accordion {
+            margin: 16px 0;
+            display: grid;
+            gap: 10px;
+        }
+        .accordion-item {
+            border: 1px solid rgba(122, 162, 255, 0.35);
+            border-radius: 14px;
+            background: rgba(7, 9, 18, 0.9);
+            color: #e8ecff;
+            box-shadow: 0 10px 28px rgba(0, 0, 0, 0.65);
+            overflow: hidden;
+        }
+        .accordion-item summary {
+            list-style: none;
             padding: 12px 14px;
-            border-radius: 16px;
-            background: radial-gradient(circle at top left, rgba(122, 162, 255, 0.22), rgba(5, 5, 18, 0.96));
-            border: 1px solid rgba(122, 162, 255, 0.45);
-            box-shadow: 0 14px 34px rgba(0, 0, 0, 0.75);
             display: flex;
             align-items: center;
-            justify-content: space-between;
-            gap: 12px;
+            gap: 10px;
+            cursor: pointer;
         }
-
-        .promo-left { display: flex; flex-direction: column; gap: 3px; }
-        .promo-title { font-size: 0.95rem; font-weight: 700; letter-spacing: 0.02em; color: #e8ecff; }
-        .promo-subtitle { font-size: 0.82rem; color: var(--muted); }
-
-        .promo-cta {
-            flex: 0 0 auto;
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            padding: 9px 14px;
-            border-radius: 999px;
-            border: 1px solid rgba(122, 162, 255, 0.65);
-            background: rgba(122, 162, 255, 0.14);
-            color: #eef2ff;
-            text-decoration: none;
-            font-size: 0.85rem;
-            font-weight: 600;
-            transition: transform 0.12s ease, background 0.15s ease, border-color 0.15s ease;
-            min-height: 40px; /* ✅ nicer tap target */
+        .accordion-item summary::-webkit-details-marker { display: none; }
+        .accordion-title-block { display: flex; flex-direction: column; gap: 4px; }
+        .accordion-title { font-size: 1rem; font-weight: 700; }
+        .accordion-subtitle { font-size: 0.9rem; color: #c7d2ff; }
+        .accordion-icon {
+            margin-left: auto;
+            font-weight: 700;
+            color: rgba(232, 236, 255, 0.85);
+            transition: transform 0.15s ease;
         }
-
-        .promo-cta:hover {
-            transform: translateY(-1px);
-            background: rgba(122, 162, 255, 0.22);
-            border-color: rgba(122, 162, 255, 0.9);
-        }
-
-        .promo-cta .pill {
-            font-size: 0.72rem;
-            padding: 2px 8px;
-            border-radius: 999px;
-            border: 1px solid rgba(255, 255, 255, 0.14);
-            background: rgba(0, 0, 0, 0.18);
-            color: #dbe4ff;
-        }
-
-        @media (max-width: 650px) {
-            .promo-strip { flex-direction: column; align-items: flex-start; }
-            .promo-cta { width: 100%; justify-content: center; }
+        details[open] .accordion-icon { transform: rotate(180deg); }
+        .accordion-body {
+            border-top: 1px solid rgba(122, 162, 255, 0.2);
+            padding: 12px 14px;
         }
 
         .den-panel {
-            margin: 16px 0;
-            padding: 14px;
-            border-radius: 16px;
-            background: rgba(7, 9, 18, 0.92);
-            border: 1px solid rgba(122, 162, 255, 0.4);
-            box-shadow: 0 14px 34px rgba(0, 0, 0, 0.8);
-        }
-        .den-panel h3 { margin: 0 0 8px 0; }
-        .den-panel form {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-            gap: 10px;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 12px;
             align-items: end;
         }
-        .den-panel label { font-size: 0.85rem; color: var(--muted); display: block; margin-bottom: 4px; }
-        .den-panel input[type="text"] {
+        .den-panel label { font-size: 0.9rem; color: #cdd5ff; display: block; margin-bottom: 6px; }
+        .den-panel input[type="text"], .den-panel input[type="search"] {
             width: 100%;
-            padding: 10px 12px;
+            padding: 11px 12px;
             border-radius: 10px;
             border: 1px solid rgba(255, 255, 255, 0.12);
-            background: rgba(255, 255, 255, 0.03);
-            color: var(--text);
+            background: rgba(255, 255, 255, 0.06);
+            color: #f7f8ff;
         }
-        .den-panel .checkbox-row { display: flex; align-items: center; gap: 8px; font-size: 0.9rem; color: var(--muted); }
+        .den-panel .checkbox-row { display: flex; align-items: center; gap: 8px; font-size: 0.92rem; color: #cdd5ff; }
         .den-panel button {
-            padding: 10px 14px;
+            padding: 11px 14px;
             border-radius: 12px;
             background: var(--accent);
             border: none;
@@ -364,12 +338,37 @@
             padding: 8px 12px;
             border-radius: 10px;
             border: 1px solid rgba(255, 255, 255, 0.12);
-            background: rgba(255, 255, 255, 0.04);
-            color: var(--text);
+            background: rgba(255, 255, 255, 0.08);
+            color: #f7f8ff;
             text-decoration: none;
             font-size: 0.9rem;
         }
-        .den-pill .meta { color: var(--muted); font-size: 0.78rem; display: block; }
+        .den-pill .meta { color: #c7d2ff; font-size: 0.78rem; display: block; }
+        .den-empty { color: #cdd5ff; margin: 0; }
+        .active-den-list { display: flex; flex-direction: column; gap: 8px; }
+        .active-den-row {
+            padding: 8px 10px;
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            justify-content: space-between;
+        }
+        .active-den-meta { font-size: 0.85rem; color: #cdd5ff; }
+        .active-den-name { font-weight: 700; color: #f7f8ff; text-decoration: none; }
+        .pill-inline {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 10px;
+            border-radius: 999px;
+            background: rgba(122, 162, 255, 0.18);
+            border: 1px solid rgba(122, 162, 255, 0.3);
+            color: #e8ecff;
+            font-size: 0.8rem;
+        }
 
         /* search bar */
         .search-shell {
@@ -1031,56 +1030,102 @@
             </div>
         </header>
 
-        <div class="promo-strip">
-            <div class="promo-left">
-              <div class="promo-title">Watch together in a Den</div>
-                <div class="promo-subtitle">
-                    Create a private or public den, share the link, and chat while watching the same stream.
+        <div class="accordion" id="dens">
+            <details class="accordion-item" open>
+                <summary>
+                    <div class="accordion-title-block">
+                        <div class="accordion-title">Watch together in a Den</div>
+                        <div class="accordion-subtitle">
+                            Create a private or public den, share the link, and chat while watching the same stream.
+                        </div>
+                    </div>
+                    <span class="accordion-icon">▼</span>
+                </summary>
+                <div class="accordion-body">
+                    {% if current_user %}
+                        <form class="den-panel" method="POST" action="/dens/create">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                            <input type="hidden" name="stream_url" id="denStreamUrl">
+                            <input type="hidden" name="game_id" id="denGameId">
+                            <div>
+                                <label>Den name</label>
+                                <input type="text" name="name" maxlength="160" placeholder="e.g. Sunday Night Watch Party" required>
+                            </div>
+                            <div>
+                                <label>Find a stream to add</label>
+                                <input
+                                    type="search"
+                                    id="denGameSearch"
+                                    list="den-game-options"
+                                    placeholder="Search by matchup, league, or sport"
+                                    autocomplete="off"
+                                    required
+                                >
+                                <datalist id="den-game-options">
+                                    {% for game in games_for_dens %}
+                                        {% set first_stream = (game.streams or [])|first %}
+                                        <option
+                                            value="{{ game.matchup }} — {{ game.sport or 'Sport' }}{% if game.time %} • {{ game.time }}{% endif %}"
+                                            data-id="{{ game.id }}"
+                                            data-watch="{{ game.watch_url or '' }}"
+                                            data-embed="{{ first_stream.embed_url if first_stream else '' }}"
+                                        ></option>
+                                    {% endfor %}
+                                </datalist>
+                            </div>
+                            <div class="checkbox-row">
+                                <input type="checkbox" id="is_public" name="is_public" checked>
+                                <label for="is_public">Make this den public (any signed-in user with the link can join)</label>
+                            </div>
+                            <button type="submit">Create den</button>
+                        </form>
+
+                        {% if owned_dens or joined_dens %}
+                            <div class="den-list">
+                                {% for den in owned_dens %}
+                                    <a class="den-pill" href="/dens/{{ den.slug }}">
+                                        {{ den.name }} <span class="meta">(Owner)</span>
+                                    </a>
+                                {% endfor %}
+                                {% for den in joined_dens %}
+                                    <a class="den-pill" href="/dens/{{ den.slug }}">
+                                        {{ den.name }} <span class="meta">(Member)</span>
+                                    </a>
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                    {% else %}
+                        <p class="den-empty">Log in or sign up above to create a den with your friends.</p>
+                    {% endif %}
                 </div>
-            </div>
+            </details>
 
-            <a class="promo-cta" href="#dens">
-                Build a den<span class="pill">Together</span>
-            </a>
-        </div>
-
-        <div class="den-panel" id="dens">
-            <h3>Create a Den for synced watching</h3>
-            {% if current_user %}
-                <form method="POST" action="/dens/create">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-                    <div>
-                        <label>Den name</label>
-                        <input type="text" name="name" maxlength="160" placeholder="e.g. Sunday Night Watch Party" required>
+            <details class="accordion-item">
+                <summary>
+                    <div class="accordion-title-block">
+                        <div class="accordion-title">Active dens</div>
+                        <div class="accordion-subtitle">Public dens created within the last {{ den_expiration_hours }} hours.</div>
                     </div>
-                    <div>
-                        <label>Stream embed URL (optional)</label>
-                        <input type="text" name="stream_url" placeholder="Paste an embed URL to share in your den">
-                    </div>
-                    <div class="checkbox-row">
-                        <input type="checkbox" id="is_public" name="is_public" checked>
-                        <label for="is_public">Make this den public (any signed-in user with the link can join)</label>
-                    </div>
-                    <button type="submit">Create den</button>
-                </form>
-
-                {% if owned_dens or joined_dens %}
-                    <div class="den-list">
-                        {% for den in owned_dens %}
-                            <a class="den-pill" href="/dens/{{ den.slug }}">
-                                {{ den.name }} <span class="meta">(Owner)</span>
-                            </a>
-                        {% endfor %}
-                        {% for den in joined_dens %}
-                            <a class="den-pill" href="/dens/{{ den.slug }}">
-                                {{ den.name }} <span class="meta">(Member)</span>
-                            </a>
-                        {% endfor %}
-                    </div>
-                {% endif %}
-            {% else %}
-                <p style="margin:0;">Log in or sign up above to create a den with your friends.</p>
-            {% endif %}
+                    <span class="accordion-icon">▼</span>
+                </summary>
+                <div class="accordion-body">
+                    {% if active_public_dens %}
+                        <div class="active-den-list">
+                            {% for den in active_public_dens %}
+                                <div class="active-den-row">
+                                    <div>
+                                        <a class="active-den-name" href="/dens/{{ den.slug }}">{{ den.name }}</a>
+                                        <div class="active-den-meta">Created {{ den.created_at.strftime('%I:%M %p').lstrip('0') if den.created_at else 'recently' }}</div>
+                                    </div>
+                                    <span class="pill-inline">Public</span>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <p class="den-empty">No public dens right now. Create one to get started!</p>
+                    {% endif %}
+                </div>
+            </details>
         </div>
 
         <div class="search-shell">
@@ -1318,6 +1363,46 @@
 
                 if (index === 0) sec.classList.add('open');
             });
+
+            const denSearch = document.getElementById('denGameSearch');
+            const denGameIdInput = document.getElementById('denGameId');
+            const denStreamUrlInput = document.getElementById('denStreamUrl');
+            const denForm = denSearch ? denSearch.closest('form') : null;
+
+            function hydrateDenSelection() {
+                if (!denSearch) return;
+                const value = denSearch.value.trim();
+                const options = document.querySelectorAll('#den-game-options option');
+                let matched = null;
+                options.forEach(opt => {
+                    if (opt.value === value) matched = opt;
+                });
+                if (matched) {
+                    const watch = matched.dataset.watch || '';
+                    const embed = matched.dataset.embed || '';
+                    const pickedUrl = watch || embed;
+                    if (denGameIdInput) denGameIdInput.value = matched.dataset.id || '';
+                    if (denStreamUrlInput) denStreamUrlInput.value = pickedUrl;
+                } else {
+                    if (denGameIdInput) denGameIdInput.value = '';
+                    if (denStreamUrlInput) denStreamUrlInput.value = '';
+                }
+            }
+
+            if (denSearch) {
+                denSearch.addEventListener('change', hydrateDenSelection);
+                denSearch.addEventListener('blur', hydrateDenSelection);
+            }
+
+            if (denForm) {
+                denForm.addEventListener('submit', function (evt) {
+                    hydrateDenSelection();
+                    if (!denGameIdInput.value || !denStreamUrlInput.value) {
+                        evt.preventDefault();
+                        alert('Please select a stream from the list so your den has a watch URL.');
+                    }
+                });
+            }
         });
     </script>
 
