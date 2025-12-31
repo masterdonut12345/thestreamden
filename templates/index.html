@@ -124,6 +124,12 @@
         box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.45), 0 2px 6px rgba(0,0,0,0.15);
       }
       .nav-btn:hover { background: linear-gradient(180deg, #f7f9ff, #e7ecf6); }
+      .nav-btn.secondary {
+        border-color: #2f4f9c;
+        color: #1f3d80;
+        background: linear-gradient(180deg, #f7f9ff, #eaf0ff);
+      }
+      .nav-btn.secondary:hover { background: linear-gradient(180deg, #eef4ff, #e2eaff); }
 
       .crumbs {
         padding: 11px 16px 10px 16px;
@@ -338,6 +344,54 @@
         .nav-actions .nav-btn { width: 100%; text-align: center; }
         .auth-stack { gap: 12px; }
       }
+
+      .modal-backdrop {
+        position: fixed;
+        inset: 0;
+        background: rgba(17, 24, 39, 0.55);
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: 16px;
+        z-index: 999;
+      }
+      .modal-panel {
+        max-width: 440px;
+        width: 100%;
+        background: #fff;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        box-shadow: 0 18px 36px rgba(17, 24, 39, 0.2);
+        padding: 18px 18px 16px;
+      }
+      .modal-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 10px;
+      }
+      .modal-title { margin: 0; font-size: 17px; }
+      .close-btn {
+        border: 1px solid var(--border);
+        background: #f5f7ff;
+        color: var(--ink);
+        cursor: pointer;
+        border-radius: 4px;
+        padding: 6px 10px;
+      }
+      .modal-body { font-size: 14px; color: var(--muted); }
+      .step-list { margin: 10px 0 0 0; padding-left: 20px; color: var(--ink); }
+      .hint-bubble {
+        display: inline-block;
+        padding: 4px 8px;
+        background: var(--highlight);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        font-size: 12px;
+        color: var(--accent-strong);
+        margin-top: 8px;
+      }
     </style>
 
     <script>
@@ -525,10 +579,64 @@
         window.postableCategories = {{ postable_categories | tojson }};
         window.addEventListener("DOMContentLoaded", filterPostableCategories);
       {% endif %}
+
+      function isIosSafari() {
+        var ua = window.navigator.userAgent || "";
+        var isIos = /iP(hone|ad|od)/i.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+        var isSafari = /Safari/i.test(ua) && !/CriOS|FxiOS|EdgiOS/i.test(ua);
+        return isIos && isSafari;
+      }
+
+      function shouldShowAddToHome() {
+        var inStandalone = window.navigator.standalone === true;
+        return isIosSafari() && !inStandalone;
+      }
+
+      function openAddToHomeModal() {
+        var modal = document.getElementById("add-home-modal");
+        if (modal) { modal.style.display = "flex"; }
+      }
+
+      function closeAddToHomeModal() {
+        var modal = document.getElementById("add-home-modal");
+        if (modal) { modal.style.display = "none"; }
+      }
+
+      window.addEventListener("DOMContentLoaded", function() {
+        var addBtn = document.getElementById("add-home-btn");
+        if (addBtn && shouldShowAddToHome()) {
+          addBtn.style.display = "inline-block";
+          addBtn.addEventListener("click", openAddToHomeModal);
+        }
+        var modal = document.getElementById("add-home-modal");
+        if (modal) {
+          modal.addEventListener("click", function(e) {
+            if (e.target === modal) { closeAddToHomeModal(); }
+          });
+        }
+      });
     </script>
   </head>
 
   <body>
+    <div id="add-home-modal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="add-home-title">
+      <div class="modal-panel">
+        <div class="modal-header">
+          <h2 id="add-home-title" class="modal-title">Add The Stream Den to your Home Screen</h2>
+          <button class="close-btn" type="button" onclick="closeAddToHomeModal();">Close</button>
+        </div>
+        <div class="modal-body">
+          Add a quick-launch icon to your iPhone or iPad:
+          <ol class="step-list">
+            <li>Tap the <strong>Share</strong> button (square with the arrow).</li>
+            <li>Scroll if needed and pick <strong>Add to Home Screen</strong>.</li>
+            <li>Confirm the name, then tap <strong>Add</strong>.</li>
+          </ol>
+          <div class="hint-bubble">Only available in Safari on iOS or iPadOS</div>
+        </div>
+      </div>
+    </div>
+
     <div class="page-wrap">
       <div class="page">
         <aside class="sidebar">
@@ -667,6 +775,7 @@
                 <p class="tagline">The decentralized stream sharing platform.</p>
               </div>
               <div class="nav-actions">
+                <button id="add-home-btn" class="nav-btn secondary" type="button" style="display:none;">Add to Home Screen</button>
                 <a class="nav-btn" href="/">← Back to main site</a>
                 {% if current_path %}
                   <a class="nav-btn" href="/forum{% if parent_path %}/{{ parent_path }}{% endif %}">← Back</a>
