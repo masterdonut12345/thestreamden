@@ -1,0 +1,327 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ den.name }} - Den</title>
+    <style>
+        :root {
+            --bg: #050508;
+            --panel: #0c0f1c;
+            --panel-soft: rgba(255, 255, 255, 0.02);
+            --text: #f2f4ff;
+            --muted: #adb2c5;
+            --accent: #7aa2ff;
+            --accent-2: #ff4d6a;
+        }
+
+        body {
+            margin: 0;
+            font-family: "Inter", system-ui, -apple-system, sans-serif;
+            background: radial-gradient(circle at 30% 0%, rgba(122, 162, 255, 0.16), transparent 50%),
+                        radial-gradient(circle at 80% 20%, rgba(255, 77, 106, 0.12), transparent 45%),
+                        #050508;
+            color: var(--text);
+        }
+
+        .page {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 20px 16px 40px;
+        }
+
+        .card {
+            background: var(--panel);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 16px;
+            padding: 16px;
+            box-shadow: 0 18px 40px rgba(0, 0, 0, 0.55);
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-bottom: 12px;
+        }
+
+        .pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 10px;
+            border-radius: 999px;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            background: var(--panel-soft);
+            color: var(--text);
+            font-size: 0.9rem;
+        }
+
+        .share-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        .share-input {
+            flex: 1 1 260px;
+            padding: 10px;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(255, 255, 255, 0.04);
+            color: var(--text);
+        }
+
+        .share-btn {
+            padding: 10px 12px;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            background: var(--accent);
+            color: #05060f;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        .layout {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 16px;
+        }
+
+        .player iframe {
+            width: 100%;
+            height: 420px;
+            border: none;
+            border-radius: 12px;
+        }
+
+        .chat-panel {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 14px;
+            padding: 10px;
+        }
+
+        .chat-messages {
+            flex: 1 1 auto;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            padding: 4px;
+        }
+
+        .chat-item {
+            padding: 8px;
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.03);
+        }
+
+        .chat-meta {
+            display: flex;
+            justify-content: space-between;
+            color: var(--muted);
+            font-size: 0.82rem;
+        }
+
+        .chat-form {
+            display: flex;
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        .chat-form input {
+            flex: 1 1 auto;
+            padding: 10px;
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text);
+        }
+
+        .chat-form button {
+            padding: 10px 12px;
+            border-radius: 10px;
+            border: none;
+            background: var(--accent);
+            color: #05060f;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        .invite-card {
+            margin-top: 12px;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px dashed rgba(255, 255, 255, 0.2);
+            padding: 12px;
+            border-radius: 12px;
+        }
+
+        .error { color: #ff9ba9; margin-top: 8px; }
+
+        @media (max-width: 900px) {
+            .layout { grid-template-columns: 1fr; }
+            .player iframe { height: 260px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="page">
+        <header>
+            <div>
+                <div class="pill">Den</div>
+                <h1 style="margin:6px 0 4px 0;">{{ den.name }}</h1>
+                <div class="pill" style="gap:10px;">
+                    {% if den.is_public %}
+                        Public den — anyone signed in with this link can join.
+                    {% else %}
+                        Private den — invite code required.
+                    {% endif %}
+                </div>
+            </div>
+            <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                <a class="pill" href="/">Back to games</a>
+                <a class="pill" href="/account">Account</a>
+            </div>
+        </header>
+
+        <div class="card">
+            <div class="share-row">
+                <input class="share-input" id="share-link" value="{{ invite_url if den.invite_code else share_url }}" readonly>
+                <button class="share-btn" type="button" onclick="copyShare()">Copy link</button>
+            </div>
+
+            {% if invite_required %}
+                <div class="invite-card">
+                    <strong>This den is private.</strong>
+                    <form method="POST" action="/dens/{{ den.slug }}/join" style="margin-top:10px;">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                        <input type="text" name="invite_code" placeholder="Invite code" required style="padding:10px; width:100%; max-width:240px; border-radius:10px; border:1px solid rgba(255,255,255,0.1); background:rgba(255,255,255,0.05); color:var(--text);">
+                        <button type="submit" class="share-btn" style="margin-top:8px;">Join den</button>
+                        {% if invite_error %}<div class="error">{{ invite_error }}</div>{% endif %}
+                    </form>
+                </div>
+            {% else %}
+                <div class="layout" style="margin-top:14px;">
+                    <div class="player">
+                        {% if den.stream_url %}
+                            <iframe src="{{ den.stream_url }}" allowfullscreen allow="autoplay; encrypted-media"></iframe>
+                        {% elif game and game.streams and game.streams|length > 0 and game.streams[0].embed_url %}
+                            <iframe src="{{ game.streams[0].embed_url }}" allowfullscreen allow="autoplay; encrypted-media"></iframe>
+                        {% else %}
+                            <div class="invite-card">No stream attached yet. Add an embed URL when creating the den to watch together.</div>
+                        {% endif %}
+                    </div>
+                    <div class="chat-panel">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                            <div>
+                                <div style="font-weight:700;">Chat</div>
+                                <div style="font-size:0.85rem; color:var(--muted);">Messages are limited to {{ chat_max_length }} characters.</div>
+                            </div>
+                            <div class="pill" id="chat-status">Connecting…</div>
+                        </div>
+                        <div class="chat-messages" id="chat-messages">
+                            {% for m in messages %}
+                                <div class="chat-item">
+                                    <div class="chat-meta">
+                                        <span>{{ m.user.display }}</span>
+                                        <span>{{ m.ts | int }}</span>
+                                    </div>
+                                    <div>{{ m.text }}</div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                        <form class="chat-form" id="chat-form">
+                            <input type="text" id="chat-input" maxlength="{{ chat_max_length }}" placeholder="Say something…" autocomplete="off" required>
+                            <button type="submit">Send</button>
+                        </form>
+                    </div>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    {% if not invite_required %}
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js" crossorigin="anonymous"></script>
+    <script>
+        const chatMessages = document.getElementById('chat-messages');
+        const chatStatus = document.getElementById('chat-status');
+        const chatForm = document.getElementById('chat-form');
+        const chatInput = document.getElementById('chat-input');
+        const denId = "{{ den.id }}";
+
+        function setStatus(text, state) {
+            if (!chatStatus) return;
+            chatStatus.textContent = text;
+            chatStatus.style.borderColor = state === "error" ? "#ff9ba9" : "rgba(255,255,255,0.12)";
+        }
+
+        function addMessage(msg) {
+            if (!chatMessages || !msg) return;
+            const item = document.createElement('div');
+            item.className = 'chat-item';
+            const meta = document.createElement('div');
+            meta.className = 'chat-meta';
+            const name = (msg.user && msg.user.display) || "Viewer";
+            const time = msg.ts ? new Date(msg.ts * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "";
+            meta.innerHTML = `<span>${name}</span><span>${time}</span>`;
+            const body = document.createElement('div');
+            body.textContent = msg.text || "";
+            item.appendChild(meta);
+            item.appendChild(body);
+            chatMessages.appendChild(item);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        let socket = null;
+        function connect() {
+            socket = io();
+            socket.on("connect", () => {
+                setStatus("Connected", "ok");
+                socket.emit("join", { den_id: denId });
+            });
+            socket.on("recent_messages", (msgs) => {
+                chatMessages.innerHTML = "";
+                (msgs || []).forEach(addMessage);
+            });
+            socket.on("chat_message", addMessage);
+            socket.on("chat_error", (err) => {
+                setStatus(err && err.error === "not_allowed" ? "You are not allowed in this den." : "Login required", "error");
+            });
+            socket.on("disconnect", () => setStatus("Disconnected", "warn"));
+        }
+        if (chatMessages && chatForm && chatInput) {
+            connect();
+            chatForm.addEventListener("submit", function (evt) {
+                evt.preventDefault();
+                const text = (chatInput.value || "").trim();
+                if (!text) return;
+                if (text.length > {{ chat_max_length }}) return;
+                socket.emit("send_message", { den_id: denId, text: text });
+                chatInput.value = "";
+            });
+        }
+    </script>
+    {% endif %}
+    <script>
+        function copyShare() {
+            const el = document.getElementById('share-link');
+            if (!el) return;
+            el.select();
+            document.execCommand('copy');
+            const btn = document.querySelector('.share-btn');
+            if (btn) {
+                const prev = btn.textContent;
+                btn.textContent = "Copied!";
+                setTimeout(() => btn.textContent = prev, 1200);
+            }
+        }
+    </script>
+</body>
+</html>
