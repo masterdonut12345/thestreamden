@@ -221,8 +221,27 @@
             box-shadow: 0 0 8px rgba(255, 77, 106, 0.7);
         }
 
+        .ad-slot-top-right {
+            flex: 0 0 auto;
+            max-width: 728px;
+            display: flex;
+            justify-content: flex-end;
+            width: 100%;
+        }
+
+        .ad-iframe {
+            border: 0;
+            width: 100%;
+            max-width: 728px;
+            height: 90px;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 8px 18px rgba(0, 0, 0, 0.45);
+        }
+
         @media (max-width: 900px) {
             .header-container { flex-direction: column; align-items: flex-start; }
+            .ad-slot-top-right { justify-content: flex-start; max-width: 100%; }
         }
 
         /* === Cross-promo banner === */
@@ -665,6 +684,26 @@
             font-size: 0.95rem;
         }
 
+        /* Right ad hidden under 1100 already */
+        .vertical-ad-fixed {
+            position: fixed;
+            top: 120px;
+            right: 20px;
+            width: 160px;
+            height: 600px;
+            z-index: 100;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 16px 36px rgba(0, 0, 0, 0.85);
+        }
+        .vertical-ad-fixed .ad-iframe {
+            width: 160px;
+            height: 600px;
+            max-width: none;
+            border-radius: 12px;
+        }
+        @media (max-width: 1100px) { .vertical-ad-fixed { display: none; } }
+
         /* Most viewed hidden under 1400 already */
         .vertical-most-viewed-fixed {
             position: fixed;
@@ -891,6 +930,15 @@
                     </div>
                 </div>
 
+                <div class="ad-slot-top-right" aria-label="Sponsored banner">
+                    <iframe
+                        class="ad-iframe"
+                        title="Top banner ad"
+                        sandbox="allow-scripts allow-same-origin"
+                        srcdoc='<!doctype html><html><head><meta charset="utf-8"></head><body style="margin:0;padding:0;display:flex;align-items:center;justify-content:center;background:transparent;"><script type="text/javascript">var atOptions={"key":"404cd50590d1227fb3038749119d5034","format":"iframe","height":90,"width":728,"params":{}};</script><script type="text/javascript" src="https://broodbelongminiature.com/404cd50590d1227fb3038749119d5034/invoke.js"></script></body></html>'>
+                    </iframe>
+                </div>
+
             </div>
         </header>
 
@@ -1060,6 +1108,15 @@
                 Try another team, league, or tournament.
             </div>
         {% endif %}
+    </div>
+
+    <div class="vertical-ad-fixed" aria-label="Sidebar banner">
+        <iframe
+            class="ad-iframe"
+            title="Sidebar banner ad"
+            sandbox="allow-scripts allow-same-origin"
+            srcdoc='<!doctype html><html><head><meta charset="utf-8"></head><body style="margin:0;padding:0;display:flex;align-items:center;justify-content:center;background:transparent;"><script type="text/javascript">var atOptions={"key":"29ef845582924216c628b8930841e3bb","format":"iframe","height":600,"width":160,"params":{}};</script><script type="text/javascript" src="https://broodbelongminiature.com/29ef845582924216c628b8930841e3bb/invoke.js"></script></body></html>'>
+        </iframe>
     </div>
 
     {% if most_viewed_games %}
