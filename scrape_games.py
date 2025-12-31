@@ -425,19 +425,21 @@ def _extract_topembed_streams(card, default_watch: str) -> list[dict]:
     for ch in channels:
         name_el = ch.select_one(".channel-name-compact")
         label = (name_el.get_text(" ", strip=True) if name_el else "Stream") or "Stream"
-        preview_btn = ch.select_one(".btn-preview-inline-small")
-        embed_url = _extract_first_url(preview_btn.get("onclick") if preview_btn else None)
+        copy_urls = []
+        for btn in ch.select(".btn-copy-icon"):
+            maybe_url = _extract_first_url(btn.get("onclick"))
+            if maybe_url:
+                copy_urls.append(maybe_url)
+        embed_url = copy_urls[0] if copy_urls else None
         if not embed_url:
-            for btn in ch.select(".btn-copy-icon"):
-                embed_url = _extract_first_url(btn.get("onclick"))
-                if embed_url:
-                    break
+            preview_btn = ch.select_one(".btn-preview-inline-small")
+            embed_url = _extract_first_url(preview_btn.get("onclick") if preview_btn else None)
         if not embed_url:
             continue
         streams.append({
             "label": label[:64] or "Stream",
             "embed_url": embed_url,
-            "watch_url": default_watch or embed_url,
+            "watch_url": embed_url or default_watch,
             "origin": "api",
         })
     return _dedup_streams(streams)
@@ -481,12 +483,21 @@ def scrape_topembed() -> pd.DataFrame:
         event_embed_url = None
         embed_actions = card.select_one(".event-embed-actions")
         if embed_actions:
+            embed_action_urls: list[str] = []
             for btn in embed_actions.find_all("button"):
-                maybe_url = _extract_first_url(btn.get("onclick"))
-                if maybe_url and "/event/" in maybe_url:
+                onclick = btn.get("onclick") or ""
+                maybe_url = _extract_first_url(onclick)
+                if not maybe_url:
+                    continue
+                embed_action_urls.append(maybe_url)
+                if "showEmbed" in onclick:
+                    event_embed_url = event_embed_url or maybe_url
+                if not event_embed_url and "/event/" in maybe_url:
                     event_embed_url = maybe_url
-                    watch_url = watch_url or maybe_url
-                    break
+            if embed_action_urls:
+                # Prefer the preview/showEmbed URL (typically the correct stream slug)
+                event_embed_url = event_embed_url or embed_action_urls[0]
+                watch_url = watch_url or event_embed_url or embed_action_urls[0]
         if not watch_url:
             channels_div = card.select_one(".event-channels")
             slug = None
