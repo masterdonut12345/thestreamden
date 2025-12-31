@@ -507,9 +507,9 @@ def scrape_topembed() -> pd.DataFrame:
                 watch_url = urljoin(BASE_URL_TOP_EMBED, f"/event/{slug}")
 
         channel_streams = _extract_topembed_streams(card, watch_url)
-        streams = list(channel_streams)
 
         primary_url = event_embed_url or watch_url
+        streams = []
         if primary_url:
             streams.append({
                 "label": "Event Embed",
@@ -517,6 +517,7 @@ def scrape_topembed() -> pd.DataFrame:
                 "watch_url": primary_url,
                 "origin": "api",
             })
+        streams.extend(channel_streams)
 
         streams = _dedup_streams(streams)
         if not streams:
