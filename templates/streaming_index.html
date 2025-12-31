@@ -223,13 +223,25 @@
 
         .ad-slot-top-right {
             flex: 0 0 auto;
-            text-align: right;
             max-width: 728px;
+            display: flex;
+            justify-content: flex-end;
+            width: 100%;
+        }
+
+        .ad-iframe {
+            border: 0;
+            width: 100%;
+            max-width: 728px;
+            height: 90px;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 8px 18px rgba(0, 0, 0, 0.45);
         }
 
         @media (max-width: 900px) {
             .header-container { flex-direction: column; align-items: flex-start; }
-            .ad-slot-top-right { text-align: left; width: 100%; overflow-x: auto; }
+            .ad-slot-top-right { justify-content: flex-start; max-width: 100%; }
         }
 
         /* === Cross-promo banner === */
@@ -684,6 +696,12 @@
             overflow: hidden;
             box-shadow: 0 16px 36px rgba(0, 0, 0, 0.85);
         }
+        .vertical-ad-fixed .ad-iframe {
+            width: 160px;
+            height: 600px;
+            max-width: none;
+            border-radius: 12px;
+        }
         @media (max-width: 1100px) { .vertical-ad-fixed { display: none; } }
 
         /* Most viewed hidden under 1400 already */
@@ -912,21 +930,15 @@
                     </div>
                 </div>
 
-                <div class="ad-slot-top-right">
-                    <script type="text/javascript">
-                      atOptions = {
-                      	'key' : '404cd50590d1227fb3038749119d5034',
-                      	'format' : 'iframe',
-                      	'height' : 90,
-                      	'width' : 728,
-                      	'params' : {}
-                      };
-                    </script>
-                    <script
-                      type="text/javascript"
-                      src="https://broodbelongminiature.com/404cd50590d1227fb3038749119d5034/invoke.js"
-                    ></script>
+                <div class="ad-slot-top-right" aria-label="Sponsored banner">
+                    <iframe
+                        class="ad-iframe"
+                        title="Top banner ad"
+                        sandbox="allow-scripts allow-same-origin"
+                        srcdoc='<!doctype html><html><head><meta charset="utf-8"></head><body style="margin:0;padding:0;display:flex;align-items:center;justify-content:center;background:transparent;"><script type="text/javascript">var atOptions={"key":"404cd50590d1227fb3038749119d5034","format":"iframe","height":90,"width":728,"params":{}};</script><script type="text/javascript" src="https://broodbelongminiature.com/404cd50590d1227fb3038749119d5034/invoke.js"></script></body></html>'>
+                    </iframe>
                 </div>
+
             </div>
         </header>
 
@@ -1098,20 +1110,13 @@
         {% endif %}
     </div>
 
-    <div class="vertical-ad-fixed">
-        <script type="text/javascript">
-          atOptions = {
-          	'key' : '29ef845582924216c628b8930841e3bb',
-          	'format' : 'iframe',
-          	'height' : 600,
-          	'width' : 160,
-          	'params' : {}
-          };
-        </script>
-        <script
-          type="text/javascript"
-          src="https://broodbelongminiature.com/29ef845582924216c628b8930841e3bb/invoke.js"
-        ></script>
+    <div class="vertical-ad-fixed" aria-label="Sidebar banner">
+        <iframe
+            class="ad-iframe"
+            title="Sidebar banner ad"
+            sandbox="allow-scripts allow-same-origin"
+            srcdoc='<!doctype html><html><head><meta charset="utf-8"></head><body style="margin:0;padding:0;display:flex;align-items:center;justify-content:center;background:transparent;"><script type="text/javascript">var atOptions={"key":"29ef845582924216c628b8930841e3bb","format":"iframe","height":600,"width":160,"params":{}};</script><script type="text/javascript" src="https://broodbelongminiature.com/29ef845582924216c628b8930841e3bb/invoke.js"></script></body></html>'>
+        </iframe>
     </div>
 
     {% if most_viewed_games %}
@@ -1191,27 +1196,5 @@
     <!-- Cloudflare Web Analytics -->
     <script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token": "643968b4db2b4d4c80a6f49718fcfcaa"}'></script>
     <!-- End Cloudflare Web Analytics -->
-
-    <!-- Desktop-only: load pop-under/social scripts; skip on mobile to improve UX -->
-    <script>
-        (function loadDesktopAds() {
-            // Consider a device “mobile” only if it is narrow AND touch-capable.
-            const hasTouch = "ontouchstart" in window || navigator.maxTouchPoints > 0;
-            const isNarrow = window.matchMedia("(max-width: 767px)").matches;
-            const isMobile = hasTouch && isNarrow;
-            if (isMobile) return;
-
-            const appendScript = (src, defer = false) => {
-                const s = document.createElement("script");
-                s.type = "text/javascript";
-                s.src = src;
-                if (defer) s.defer = true;
-                (document.body || document.documentElement).appendChild(s);
-            };
-
-            appendScript("https://broodbelongminiature.com/0f/a2/4c/0fa24c36bd8ef534a07b2aebe1ba89c3.js");
-            appendScript("https://graduatedoutside.com/10/0b/5c/100b5c0f06c917d350ecd499f4f7fa16.js", true);
-        })();
-    </script>
 </body>
 </html>
