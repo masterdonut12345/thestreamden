@@ -26,10 +26,12 @@ import pandas as pd
 import pytz
 from apscheduler.schedulers.background import BackgroundScheduler
 from bs4 import BeautifulSoup
-from flask import Blueprint, abort, jsonify, make_response, redirect, render_template, request, session, url_for
+from flask import Blueprint, abort, g, jsonify, make_response, redirect, render_template, request, session, url_for
 import requests
+from sqlalchemy import select
 
 import scrape_games
+from db_models import SessionLocal, Den, DenMembership
 
 streaming_bp = Blueprint("streaming", __name__)
 
@@ -656,6 +658,32 @@ def get_most_viewed_games(all_games: list[dict[str, Any]], limit: int = 5) -> li
     return result
 
 
+def get_user_dens(user_id: int) -> tuple[list[Den], list[Den]]:
+    """Return dens owned by the user and dens they have joined."""
+    db = SessionLocal()
+    try:
+        owned = (
+            db.execute(
+                select(Den).where(Den.owner_id == user_id).order_by(Den.created_at.desc())
+            )
+            .scalars()
+            .all()
+        )
+        joined = (
+            db.execute(
+                select(Den)
+                .join(DenMembership, DenMembership.den_id == Den.id)
+                .where(DenMembership.user_id == user_id, Den.owner_id != user_id)
+                .order_by(Den.created_at.desc())
+            )
+            .scalars()
+            .all()
+        )
+        return owned, joined
+    finally:
+        db.close()
+
+
 @streaming_bp.route("/")
 def index():
     mark_active()
@@ -689,12 +717,24 @@ def index():
 
     most_viewed_games = get_most_viewed_games(all_games, limit=5)
 
+    current_user = getattr(g, "current_user", None)
+    owned_dens: list[Den] = []
+    joined_dens: list[Den] = []
+    if current_user:
+        try:
+            owned_dens, joined_dens = get_user_dens(current_user.id)
+        except Exception:
+            owned_dens, joined_dens = [], []
+
     return render_template(
         "streaming_index.html",
         sections=sections,
         search_query=q,
         live_only=live_only,
         most_viewed_games=most_viewed_games,
+        current_user=current_user,
+        owned_dens=owned_dens,
+        joined_dens=joined_dens,
     )
 
 
@@ -1101,6 +1141,8 @@ def game_detail(game_id: int):
     share_slug_url = _absolute_url(url_for("streaming.game_by_slug", slug=slug))
     og_image_url = _absolute_url(url_for("static", filename="preview.svg"))
 
+    current_user = getattr(g, "current_user", None)
+
     return render_template(
         "streaming_game.html",
         game=game,
@@ -1110,6 +1152,7 @@ def game_detail(game_id: int):
         share_slug_url=share_slug_url,
         og_image_url=og_image_url,
         requested_stream_slug=requested_stream_slug,
+        current_user=current_user,
     )
 
 

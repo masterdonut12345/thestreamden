@@ -144,10 +144,37 @@
             background: rgba(5, 5, 12, 0.85);
         }
 
-        .forum-link {
-            display: inline-flex;
+        .auth-inline {
+            display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 6px;
+            background: rgba(8, 9, 16, 0.85);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            padding: 6px 8px;
+            border-radius: 12px;
+        }
+        .auth-inline input {
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 8px;
+            padding: 8px 10px;
+            color: var(--text);
+            min-width: 120px;
+        }
+        .auth-inline button {
+            background: var(--accent);
+            border: none;
+            color: #05060f;
+            font-weight: 700;
+            padding: 9px 12px;
+            border-radius: 10px;
+            cursor: pointer;
+            box-shadow: 0 8px 18px rgba(122, 162, 255, 0.35);
+        }
+        .auth-inline button:hover {
+            filter: brightness(1.05);
+        }
+        .pill-button {
             padding: 8px 12px;
             border-radius: 10px;
             border: 1px solid rgba(122, 162, 255, 0.55);
@@ -155,12 +182,9 @@
             color: #eef2ff;
             text-decoration: none;
             font-weight: 600;
-            transition: transform 0.12s ease, background 0.15s ease, border-color 0.15s ease;
-        }
-        .forum-link:hover {
-            transform: translateY(-1px);
-            background: rgba(122, 162, 255, 0.22);
-            border-color: rgba(122, 162, 255, 0.9);
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
         }
 
         /* === HEADER === */
@@ -298,6 +322,54 @@
             .promo-strip { flex-direction: column; align-items: flex-start; }
             .promo-cta { width: 100%; justify-content: center; }
         }
+
+        .den-panel {
+            margin: 16px 0;
+            padding: 14px;
+            border-radius: 16px;
+            background: rgba(7, 9, 18, 0.92);
+            border: 1px solid rgba(122, 162, 255, 0.4);
+            box-shadow: 0 14px 34px rgba(0, 0, 0, 0.8);
+        }
+        .den-panel h3 { margin: 0 0 8px 0; }
+        .den-panel form {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 10px;
+            align-items: end;
+        }
+        .den-panel label { font-size: 0.85rem; color: var(--muted); display: block; margin-bottom: 4px; }
+        .den-panel input[type="text"] {
+            width: 100%;
+            padding: 10px 12px;
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            background: rgba(255, 255, 255, 0.03);
+            color: var(--text);
+        }
+        .den-panel .checkbox-row { display: flex; align-items: center; gap: 8px; font-size: 0.9rem; color: var(--muted); }
+        .den-panel button {
+            padding: 10px 14px;
+            border-radius: 12px;
+            background: var(--accent);
+            border: none;
+            color: #05060f;
+            font-weight: 700;
+            cursor: pointer;
+            box-shadow: 0 10px 24px rgba(122, 162, 255, 0.4);
+        }
+        .den-panel button:hover { filter: brightness(1.05); }
+        .den-list { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 8px; }
+        .den-pill {
+            padding: 8px 12px;
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            background: rgba(255, 255, 255, 0.04);
+            color: var(--text);
+            text-decoration: none;
+            font-size: 0.9rem;
+        }
+        .den-pill .meta { color: var(--muted); font-size: 0.78rem; display: block; }
 
         /* search bar */
         .search-shell {
@@ -825,7 +897,6 @@
                 flex-wrap: wrap;
                 gap: 8px;
             }
-            .forum-link { width: 100%; justify-content: center; }
             .pill-label { display: none; } /* ✅ declutter */
 
             header { padding: 14px 14px 12px; border-radius: 18px; }
@@ -904,8 +975,26 @@
                 <span>The Stream Den</span>
             </div>
             <div class="top-nav-right">
-                <a class="forum-link" href="/forum">Community Forum ↗</a>
-                <div class="pill-label">live sports</div>
+                {% if current_user %}
+                    <div class="pill-label">Signed in as {{ current_user.username }}</div>
+                    <a class="pill-button" href="/account">Account</a>
+                    <a class="pill-button" href="/logout">Logout</a>
+                {% else %}
+                    <form class="auth-inline" method="POST" action="/login">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                        <input type="hidden" name="next" value="/">
+                        <input type="text" name="username" placeholder="Username" required>
+                        <input type="password" name="password" placeholder="Password" required>
+                        <button type="submit">Login</button>
+                    </form>
+                    <form class="auth-inline" method="POST" action="/signup">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                        <input type="hidden" name="next" value="/">
+                        <input type="text" name="username" placeholder="New username" required>
+                        <input type="password" name="password" placeholder="Password" required>
+                        <button type="submit">Sign up</button>
+                    </form>
+                {% endif %}
             </div>
         </div>
 
@@ -944,15 +1033,54 @@
 
         <div class="promo-strip">
             <div class="promo-left">
-              <div class="promo-title">Want more streams?</div>
+              <div class="promo-title">Watch together in a Den</div>
                 <div class="promo-subtitle">
-                    Join TheStreamDen community forum for movies, TV shows, and more.
+                    Create a private or public den, share the link, and chat while watching the same stream.
                 </div>
             </div>
 
-            <a class="promo-cta" href="/forum">
-                Visit the forum<span class="pill">↗</span>
+            <a class="promo-cta" href="#dens">
+                Build a den<span class="pill">Together</span>
             </a>
+        </div>
+
+        <div class="den-panel" id="dens">
+            <h3>Create a Den for synced watching</h3>
+            {% if current_user %}
+                <form method="POST" action="/dens/create">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    <div>
+                        <label>Den name</label>
+                        <input type="text" name="name" maxlength="160" placeholder="e.g. Sunday Night Watch Party" required>
+                    </div>
+                    <div>
+                        <label>Stream embed URL (optional)</label>
+                        <input type="text" name="stream_url" placeholder="Paste an embed URL to share in your den">
+                    </div>
+                    <div class="checkbox-row">
+                        <input type="checkbox" id="is_public" name="is_public" checked>
+                        <label for="is_public">Make this den public (any signed-in user with the link can join)</label>
+                    </div>
+                    <button type="submit">Create den</button>
+                </form>
+
+                {% if owned_dens or joined_dens %}
+                    <div class="den-list">
+                        {% for den in owned_dens %}
+                            <a class="den-pill" href="/dens/{{ den.slug }}">
+                                {{ den.name }} <span class="meta">(Owner)</span>
+                            </a>
+                        {% endfor %}
+                        {% for den in joined_dens %}
+                            <a class="den-pill" href="/dens/{{ den.slug }}">
+                                {{ den.name }} <span class="meta">(Member)</span>
+                            </a>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            {% else %}
+                <p style="margin:0;">Log in or sign up above to create a den with your friends.</p>
+            {% endif %}
         </div>
 
         <div class="search-shell">
