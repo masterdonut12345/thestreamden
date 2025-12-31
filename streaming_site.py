@@ -694,23 +694,23 @@ def index():
     q = request.args.get("q", "").strip().lower()
     if q:
         games = [
-            g
-            for g in games
-            if q in safe_lower(g.get("matchup"))
-            or q in safe_lower(g.get("sport"))
-            or q in safe_lower(g.get("tournament"))
+            game
+            for game in games
+            if q in safe_lower(game.get("matchup"))
+            or q in safe_lower(game.get("sport"))
+            or q in safe_lower(game.get("tournament"))
         ]
 
     live_only = request.args.get("live_only", "").lower() in ("1", "true", "yes", "on")
     if live_only:
-        games = [g for g in games if g.get("is_live")]
+        games = [game for game in games if game.get("is_live")]
 
     sections_by_sport: dict[str, list[dict[str, Any]]] = {}
-    for g in games:
-        sport = normalize_sport_name(g.get("sport"))
+    for game in games:
+        sport = normalize_sport_name(game.get("sport"))
         if sport_is_invalid(sport):
             continue
-        sections_by_sport.setdefault(sport, []).append(g)
+        sections_by_sport.setdefault(sport, []).append(game)
 
     sections = [{"sport": s, "games": lst} for s, lst in sections_by_sport.items()]
     sections.sort(key=lambda s: normalize_sport_name(s["sport"]).lower())
