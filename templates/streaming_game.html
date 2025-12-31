@@ -126,22 +126,6 @@
             gap: 20px;
         }
 
-        /* fixed 320x50 ad box on the left */
-        .ad-slot-left {
-            flex: 0 0 auto;
-            width: 320px;
-            height: 50px;
-            display: flex;
-            align-items: center;
-            justify-content: flex-start;
-            overflow: hidden;
-        }
-        .ad-slot-left iframe {
-            width: 100% !important;
-            height: 100% !important;
-            display: block;
-        }
-
         .header-text {
             flex: 1 1 auto;
             padding-right: 10px;
@@ -246,7 +230,6 @@
             .page-wrapper { padding: 16px 14px 32px; }
             header { padding: 14px; }
             .header-container { flex-direction: column; align-items: flex-start; }
-            .ad-slot-left { text-align: left; width: 100%; max-width: 320px; margin-bottom: 8px; }
             h1 { font-size: 1.6rem; }
             .title-row { flex-direction: column; align-items: flex-start; gap: 6px; }
             .meta { font-size: 0.95rem; }
@@ -261,7 +244,6 @@
             .multi-view-title { flex-direction: column; align-items: flex-start; gap: 6px; }
             .multi-controls { width: 100%; }
             .multi-toggle-button { width: 100%; justify-content: center; }
-            .ad-slot { margin-top: 12px; }
         }
 
         h3 { margin-top: 12px; margin-bottom: 8px; font-size: 1.1rem; }
@@ -594,11 +576,6 @@
             box-shadow: 0 14px 30px rgba(122, 162, 255, 0.5);
         }
 
-        .ad-slot {
-            margin: 16px 0 0;
-            text-align: center;
-        }
-
         .no-stream {
             margin-top: 30px;
             padding: 16px 14px;
@@ -701,7 +678,6 @@
             border-radius: 0;
         }
 
-        body.full-page-player .ad-slot { display: none; }
         body.full-page-player #stream-picker { display: none !important; }
 
         body.full-page-player .multi-view-title {
@@ -722,31 +698,6 @@
             box-shadow: 0 10px 25px rgba(0, 0, 0, 0.8);
         }
 
-        .left-rail-ad {
-            position: fixed;
-            left: 16px;
-            top: 200px;
-            width: 160px;
-            z-index: 2500;
-        }
-        .left-rail-ad .box {
-            width: 160px;
-            height: 300px;
-            border-radius: 14px;
-            overflow: hidden;
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            box-shadow: 0 14px 30px rgba(0, 0, 0, 0.8);
-            background: rgba(0,0,0,0.35);
-        }
-
-        /* hide on smaller screens to avoid overlap */
-        @media (max-width: 1280px) {
-            .left-rail-ad { display: none; }
-        }
-
-        /* hide in full-page mode */
-        body.full-page-player .left-rail-ad { display: none; }
-
         @media (prefers-reduced-motion: reduce) {
             .live-pill::before { animation: none !important; box-shadow: 0 0 0 0 rgba(255, 77, 106, 0.6); }
         }
@@ -763,22 +714,6 @@
 
         <header>
             <div class="header-container">
-                <div class="ad-slot-left">
-                    <script type="text/javascript">
-                      atOptions = {
-                        'key' : '5478f94711ce55d9b858433d3c49812f',
-                        'format' : 'iframe',
-                        'height' : 50,
-                        'width' : 320,
-                        'params' : {}
-                      };
-                    </script>
-                    <script
-                      type="text/javascript"
-                      src="//www.highperformanceformat.com/5478f94711ce55d9b858433d3c49812f/invoke.js"
-                    ></script>
-                </div>
-
                 <div class="header-text">
                     <div class="title-row">
                         <h1>{{ game.matchup }}</h1>
@@ -901,15 +836,6 @@
                         </button>
                     </div>
                 </div>
-
-                <div class="ad-slot">
-                    <script
-                      async="async"
-                      data-cfasync="false"
-                      src="//pl28213154.effectivegatecpm.com/ced6c8c8dbe2168bf17b0ffaa1cf5474/invoke.js"
-                    ></script>
-                    <div id="container-ced6c8c8dbe2168bf17b0ffaa1cf5474"></div>
-                </div>
             </div>
         {% else %}
             <div class="no-stream">
@@ -922,25 +848,6 @@
             Having issues with streams? <a href="https://x.com/thestreamden" target="_blank" rel="noopener">@TheStreamDen</a>
         </div>
 
-    </div>
-
-    <!-- FIXED banner OUTSIDE .page-wrapper so it never changes layout -->
-    <div class="left-rail-ad" aria-label="Left rail ad">
-        <div class="box">
-            <script type="text/javascript">
-              atOptions = {
-                'key' : '29ef845582924216c628b8930841e3bb',
-                'format' : 'iframe',
-                'height' : 300,
-                'width' : 160,
-                'params' : {}
-              };
-            </script>
-            <script
-              type="text/javascript"
-              src="https://broodbelongminiature.com/29ef845582924216c628b8930841e3bb/invoke.js"
-            ></script>
-        </div>
     </div>
 
     <!-- Chat: start closed by default (mobile handle visible). Desktop JS will open it. -->
@@ -1365,22 +1272,5 @@
     </script>
 
     <script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token": "643968b4db2b4d4c80a6f49718fcfcaa"}'></script>
-
-{% if open_ad %}
-<script>
-  window.addEventListener('load', function () {
-    try {
-      window.open(
-        'https://broodbelongminiature.com/d01t94kua?key=491dbdc350af1bf2b2f5c05ef1a574df',
-        '_blank'
-      );
-    } catch (e) {
-      if (window.console && console.debug) {
-        console.debug('Ad popunder blocked:', e);
-      }
-    }
-  });
-</script>
-{% endif %}
 </body>
 </html>
