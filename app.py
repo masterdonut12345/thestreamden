@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from gevent import monkey
+
+monkey.patch_all()
+
 import json
 import os
 import re
@@ -9,10 +13,6 @@ import time
 from collections import defaultdict, deque
 from datetime import datetime, timezone
 from typing import Optional
-
-import eventlet
-
-eventlet.monkey_patch()
 import redis
 from flask import (
     Flask,
@@ -54,7 +54,7 @@ app.config.update(
 
 socketio = SocketIO(
     app,
-    async_mode="eventlet",
+    async_mode="gevent",
     cors_allowed_origins="*",
     message_queue=REDIS_URL,
 )
