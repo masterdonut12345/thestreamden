@@ -26,7 +26,7 @@ import pandas as pd
 import pytz
 from apscheduler.schedulers.background import BackgroundScheduler
 from bs4 import BeautifulSoup
-from flask import Blueprint, abort, jsonify, make_response, redirect, render_template, request, session, url_for
+from flask import Blueprint, abort, g, jsonify, make_response, redirect, render_template, request, session, url_for
 import requests
 
 import scrape_games

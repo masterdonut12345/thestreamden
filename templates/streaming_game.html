@@ -951,23 +951,19 @@
     </div>
 
     <div class="den-cta" aria-label="Watch together">
-        {% if current_user %}
-            <div>Want to chat with friends? Create a den for this stream.</div>
-            <form method="POST" action="/dens/create" style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:8px;">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-                <input type="hidden" name="game_id" value="{{ game.id }}">
-                {% if game.streams and game.streams|length > 0 and game.streams[0].embed_url %}
-                    <input type="hidden" name="stream_url" value="{{ game.streams[0].embed_url }}">
-                {% endif %}
-                <input type="text" name="name" placeholder="e.g. {{ game.matchup }} with friends" required style="padding:10px 12px; border-radius:10px; border:1px solid rgba(255,255,255,0.15); background:rgba(255,255,255,0.04); color:#fff; min-width:220px;">
-                <label style="display:flex; align-items:center; gap:6px; color:#c7cffc; font-size:0.9rem;">
-                    <input type="checkbox" name="is_public" checked> Public den
-                </label>
-                <button type="submit" style="padding:10px 14px; border-radius:12px; border:none; background:#7aa2ff; color:#05060f; font-weight:700; cursor:pointer;">Create den</button>
-            </form>
-        {% else %}
-            <div>Log in or sign up on the homepage to create a den and chat.</div>
-        {% endif %}
+        <div>Want to chat with friends? Create a den for this stream.</div>
+        <form method="POST" action="/dens/create" style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:8px;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <input type="hidden" name="game_id" value="{{ game.id }}">
+            {% if game.streams and game.streams|length > 0 and game.streams[0].embed_url %}
+                <input type="hidden" name="stream_url" value="{{ game.streams[0].embed_url }}">
+            {% endif %}
+            <input type="text" name="name" placeholder="e.g. {{ game.matchup }} with friends" required style="padding:10px 12px; border-radius:10px; border:1px solid rgba(255,255,255,0.15); background:rgba(255,255,255,0.04); color:#fff; min-width:220px;">
+            <label style="display:flex; align-items:center; gap:6px; color:#c7cffc; font-size:0.9rem;">
+                <input type="checkbox" name="is_public" checked> Public den
+            </label>
+            <button type="submit" style="padding:10px 14px; border-radius:12px; border:none; background:#7aa2ff; color:#05060f; font-weight:700; cursor:pointer;">Create den</button>
+        </form>
     </div>
 
     <script>
