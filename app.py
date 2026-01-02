@@ -11,6 +11,8 @@ from collections import defaultdict, deque
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit, quote
+import eventlet
+eventlet.monkey_patch()
 from markupsafe import Markup
 from flask import (
     Flask,
@@ -1411,6 +1413,7 @@ def den_page(slug):
         first_stream = den_streams[0]
         if first_stream:
             active_stream_url = first_stream.get("embed_url") or first_stream.get("watch_url") or ""
+    games_for_dens = [g for g in load_games_cached() if g.get("streams")]
     share_url = request.url_root.rstrip("/") + url_for("den_page", slug=den.slug)
     invite_url = share_url
     if den.invite_code:
@@ -1427,6 +1430,7 @@ def den_page(slug):
         share_url=share_url,
         invite_url=invite_url,
         chat_max_length=CHAT_MAX_LENGTH,
+        games_for_dens=games_for_dens,
     )
 
 

@@ -21,7 +21,8 @@ from sqlalchemy.orm import declarative_base, relationship, sessionmaker
 
 from pathlib import Path
 
-DEFAULT_DB_URL = "sqlite:///data/app.db"
+DEFAULT_SQLITE_DIR = Path(os.environ.get("PERSISTENT_DATA_DIR", Path("data")))
+DEFAULT_DB_URL = f"sqlite:///{DEFAULT_SQLITE_DIR / 'app.db'}"
 DATABASE_URL = os.environ.get("DATABASE_URL", DEFAULT_DB_URL)
 
 connect_args = {}
