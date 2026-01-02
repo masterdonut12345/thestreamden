@@ -157,6 +157,31 @@
             border-color: rgba(255, 255, 255, 0.2);
         }
 
+        .owner-stream-form {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+            margin-top: 10px;
+        }
+        .owner-stream-form .search-field {
+            flex: 1 1 240px;
+            min-width: 200px;
+        }
+        .owner-stream-form input[type="search"] {
+            width: 100%;
+            padding: 10px 12px;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.14);
+            background: rgba(255, 255, 255, 0.04);
+            color: var(--text);
+            outline: none;
+        }
+        .owner-stream-form input[type="search"]:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 1px rgba(122, 162, 255, 0.6);
+        }
+
         .multi-controls {
             display: flex;
             gap: 8px;
@@ -382,19 +407,35 @@
                             {% endif %}
 
                             {% if current_user_id and den.owner_id == current_user_id %}
-                                <form method="POST" action="/dens/{{ den.slug }}/stream" style="display:flex; gap:8px; flex-wrap:wrap; margin-top:10px;">
+                                {% set active_label = namespace(val='') %}
+                                {% for s in den_streams %}
+                                    {% set candidate = s.embed_url or s.watch_url %}
+                                    {% if active_stream_url and candidate == active_stream_url and not active_label.val %}
+                                        {% set active_label.val = s.label or ('Stream ' ~ loop.index) %}
+                                    {% endif %}
+                                {% endfor %}
+                                <form method="POST" action="/dens/{{ den.slug }}/stream" class="owner-stream-form">
                                     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                                    <input type="hidden" name="stream_url" id="denStreamUrlHidden" value="{{ active_stream_url }}">
                                     {% if game %}
                                         <input type="hidden" name="game_id" value="{{ game.id }}">
                                     {% endif %}
-                                    <select name="preset_stream" id="presetStream" class="multi-slot-select" style="flex:1 1 200px;">
-                                        <option value="">Select stream from list</option>
-                                        {% for s in den_streams %}
-                                            {% set candidate = s.embed_url or s.watch_url %}
-                                            <option value="{{ candidate }}">{{ s.label or ('Stream ' ~ loop.index) }}</option>
-                                        {% endfor %}
-                                    </select>
-                                    <input type="url" name="stream_url" id="streamUrlInput" value="{{ active_stream_url }}" placeholder="Or paste another embed URL" style="padding:8px 10px; border-radius:10px; border:1px solid rgba(255,255,255,0.2); background:rgba(255,255,255,0.04); color:#f7f8ff; flex:2 1 240px;">
+                                    <div class="search-field">
+                                        <input
+                                            type="search"
+                                            id="denStreamSearch"
+                                            list="den-stream-options"
+                                            placeholder="Search for a stream to set"
+                                            value="{{ active_label.val }}"
+                                            autocomplete="off"
+                                        >
+                                        <datalist id="den-stream-options">
+                                            {% for s in den_streams %}
+                                                {% set candidate = s.embed_url or s.watch_url %}
+                                                <option value="{{ s.label or ('Stream ' ~ loop.index) }}" data-url="{{ candidate }}"></option>
+                                            {% endfor %}
+                                        </datalist>
+                                    </div>
                                     <button type="submit" class="share-btn">Set as den stream</button>
                                 </form>
                             {% endif %}
@@ -440,8 +481,9 @@
             const multiToggle  = document.getElementById('den-multi-toggle');
             const multiSlots   = document.getElementById('den-multi-slots');
             const extraSlots   = multiSlots ? multiSlots.querySelectorAll('.extra-slot') : [];
-            const presetSelect = document.getElementById('presetStream');
-            const streamInput  = document.getElementById('streamUrlInput');
+            const streamSearch = document.getElementById('denStreamSearch');
+            const streamHidden = document.getElementById('denStreamUrlHidden');
+            const streamOptions = document.querySelectorAll('#den-stream-options option');
 
             if (streamSelect && mainIframe) {
                 streamSelect.addEventListener('change', function () {
@@ -450,11 +492,27 @@
                 });
             }
 
-            if (presetSelect && streamInput) {
-                presetSelect.addEventListener('change', function () {
-                    const val = presetSelect.value || '';
-                    if (val) streamInput.value = val;
-                });
+            function syncOwnerStreamSelection() {
+                if (!streamSearch || !streamHidden) return;
+                const value = (streamSearch.value || '').trim();
+                let matchedUrl = '';
+                if (streamOptions && streamOptions.length) {
+                    streamOptions.forEach(opt => {
+                        if (opt.value === value) matchedUrl = opt.dataset.url || '';
+                    });
+                }
+                if (matchedUrl) {
+                    streamHidden.value = matchedUrl;
+                } else if (value) {
+                    streamHidden.value = value;
+                }
+            }
+
+            if (streamSearch) {
+                streamSearch.addEventListener('change', syncOwnerStreamSelection);
+                streamSearch.addEventListener('input', syncOwnerStreamSelection);
+                streamSearch.addEventListener('blur', syncOwnerStreamSelection);
+                syncOwnerStreamSelection();
             }
 
             if (playerLayout && multiToggle && multiSlots) {
