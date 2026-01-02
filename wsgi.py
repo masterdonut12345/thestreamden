@@ -1,5 +1,5 @@
-from gevent import monkey
+import eventlet
 
-monkey.patch_all()
+eventlet.monkey_patch()
 
 from app import app

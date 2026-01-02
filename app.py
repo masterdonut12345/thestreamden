@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from gevent import monkey
+import eventlet
 
-monkey.patch_all()
+eventlet.monkey_patch()
 
 import json
 import os
@@ -54,7 +54,7 @@ app.config.update(
 
 socketio = SocketIO(
     app,
-    async_mode="gevent",
+    async_mode="eventlet",
     cors_allowed_origins="*",
     message_queue=REDIS_URL,
 )
