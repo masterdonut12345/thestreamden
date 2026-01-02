@@ -181,6 +181,9 @@
             border-color: var(--accent);
             box-shadow: 0 0 0 1px rgba(122, 162, 255, 0.6);
         }
+        .owner-stream-select {
+            min-width: 200px;
+        }
 
         .multi-controls {
             display: flex;
@@ -408,6 +411,11 @@
 
                             {% if current_user_id and den.owner_id == current_user_id %}
                                 {% set active_label = namespace(val='') %}
+                                {% set owner_game_label = '' %}
+                                {% if game %}
+                                    {% set owner_game_label = game.matchup ~ ' — ' ~ (game.sport or 'Sport') %}
+                                    {% if game.time %}{% set owner_game_label = owner_game_label ~ ' • ' ~ game.time %}{% endif %}
+                                {% endif %}
                                 {% for s in den_streams %}
                                     {% set candidate = s.embed_url or s.watch_url %}
                                     {% if active_stream_url and candidate == active_stream_url and not active_label.val %}
@@ -417,25 +425,39 @@
                                 <form method="POST" action="/dens/{{ den.slug }}/stream" class="owner-stream-form">
                                     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                                     <input type="hidden" name="stream_url" id="denStreamUrlHidden" value="{{ active_stream_url }}">
-                                    {% if game %}
-                                        <input type="hidden" name="game_id" value="{{ game.id }}">
-                                    {% endif %}
+                                    <input type="hidden" name="game_id" id="denGameIdHidden" value="{{ game.id if game else '' }}">
                                     <div class="search-field">
                                         <input
                                             type="search"
-                                            id="denStreamSearch"
-                                            list="den-stream-options"
-                                            placeholder="Search for a stream to set"
-                                            value="{{ active_label.val }}"
+                                            id="ownerGameSearch"
+                                            list="owner-game-options"
+                                            placeholder="Search for a game to set as the den stream"
+                                            value="{{ owner_game_label }}"
                                             autocomplete="off"
                                         >
-                                        <datalist id="den-stream-options">
-                                            {% for s in den_streams %}
-                                                {% set candidate = s.embed_url or s.watch_url %}
-                                                <option value="{{ s.label or ('Stream ' ~ loop.index) }}" data-url="{{ candidate }}"></option>
+                                        <datalist id="owner-game-options">
+                                            {% for g in games_for_dens %}
+                                                {% set first_stream = (g.streams or [])|first %}
+                                                <option
+                                                    value="{{ g.matchup }} — {{ g.sport or 'Sport' }}{% if g.time %} • {{ g.time }}{% endif %}"
+                                                    data-id="{{ g.id }}"
+                                                    data-embed="{{ first_stream.embed_url if first_stream else '' }}"
+                                                    data-watch="{{ g.watch_url or '' }}"
+                                                    data-streams="{{ (g.streams or [])|tojson }}"
+                                                ></option>
                                             {% endfor %}
                                         </datalist>
                                     </div>
+                                    <select id="ownerGameStreamSelect" class="primary-select owner-stream-select" aria-label="Choose a stream for the selected game">
+                                        {% if den_streams %}
+                                            {% for s in den_streams %}
+                                                {% set candidate = s.embed_url or s.watch_url %}
+                                                <option value="{{ candidate }}" {% if candidate == active_stream_url %}selected{% endif %}>{{ s.label or ('Stream ' ~ loop.index) }}</option>
+                                            {% endfor %}
+                                        {% else %}
+                                            <option value="{{ active_stream_url }}">Active stream</option>
+                                        {% endif %}
+                                    </select>
                                     <button type="submit" class="share-btn">Set as den stream</button>
                                 </form>
                             {% endif %}
@@ -481,38 +503,98 @@
             const multiToggle  = document.getElementById('den-multi-toggle');
             const multiSlots   = document.getElementById('den-multi-slots');
             const extraSlots   = multiSlots ? multiSlots.querySelectorAll('.extra-slot') : [];
-            const streamSearch = document.getElementById('denStreamSearch');
+            const gameSearch = document.getElementById('ownerGameSearch');
+            const gameOptions = document.querySelectorAll('#owner-game-options option');
             const streamHidden = document.getElementById('denStreamUrlHidden');
-            const streamOptions = document.querySelectorAll('#den-stream-options option');
+            const streamSelect = document.getElementById('ownerGameStreamSelect');
+            const gameIdHidden = document.getElementById('denGameIdHidden');
 
             if (streamSelect && mainIframe) {
                 streamSelect.addEventListener('change', function () {
                     const url = streamSelect.value || '';
+                    if (streamHidden) streamHidden.value = url;
                     if (url) mainIframe.src = url;
                 });
             }
 
-            function syncOwnerStreamSelection() {
-                if (!streamSearch || !streamHidden) return;
-                const value = (streamSearch.value || '').trim();
-                let matchedUrl = '';
-                if (streamOptions && streamOptions.length) {
-                    streamOptions.forEach(opt => {
-                        if (opt.value === value) matchedUrl = opt.dataset.url || '';
+            function hydrateStreamSelect(streams, activeUrl) {
+                if (!streamSelect) return;
+                streamSelect.innerHTML = '';
+                const fallback = document.createElement('option');
+                const initialUrl = activeUrl || streamHidden.value || '';
+                let selectedUrl = '';
+
+                if (Array.isArray(streams) && streams.length) {
+                    streams.forEach((s, idx) => {
+                        const opt = document.createElement('option');
+                        const label = s.label || `Stream ${idx + 1}`;
+                        const url = s.embed_url || s.watch_url || '';
+                        opt.value = url;
+                        opt.textContent = label;
+                        if (url && url === initialUrl) {
+                            opt.selected = true;
+                            selectedUrl = url;
+                        }
+                        streamSelect.appendChild(opt);
                     });
+                    if (!selectedUrl) {
+                        const first = streams[0];
+                        selectedUrl = (first && (first.embed_url || first.watch_url)) || '';
+                        if (streamSelect.options.length && selectedUrl) {
+                            streamSelect.selectedIndex = 0;
+                        }
+                    }
+                } else if (initialUrl) {
+                    fallback.value = initialUrl;
+                    fallback.textContent = 'Active stream';
+                    fallback.selected = true;
+                    streamSelect.appendChild(fallback);
+                    selectedUrl = initialUrl;
                 }
-                if (matchedUrl) {
-                    streamHidden.value = matchedUrl;
-                } else if (value) {
-                    streamHidden.value = value;
+
+                streamSelect.disabled = streamSelect.options.length === 0;
+                if (selectedUrl) {
+                    streamHidden.value = selectedUrl;
                 }
             }
 
-            if (streamSearch) {
-                streamSearch.addEventListener('change', syncOwnerStreamSelection);
-                streamSearch.addEventListener('input', syncOwnerStreamSelection);
-                streamSearch.addEventListener('blur', syncOwnerStreamSelection);
-                syncOwnerStreamSelection();
+            function syncOwnerGameSelection() {
+                if (!gameSearch || !streamHidden) return;
+                const value = (gameSearch.value || '').trim();
+                let matchedOpt = null;
+
+                if (gameOptions && gameOptions.length) {
+                    gameOptions.forEach(opt => {
+                        if (opt.value === value) matchedOpt = opt;
+                    });
+                }
+
+                if (matchedOpt) {
+                    const streamsRaw = matchedOpt.dataset.streams || '[]';
+                    let streams = [];
+                    try { streams = JSON.parse(streamsRaw); } catch (err) { streams = []; }
+                    hydrateStreamSelect(streams, streamHidden.value);
+
+                    const fallbackUrl = matchedOpt.dataset.embed || matchedOpt.dataset.watch || '';
+                    if (!streamHidden.value && fallbackUrl) {
+                        streamHidden.value = fallbackUrl;
+                    }
+                    if (gameIdHidden) {
+                        gameIdHidden.value = matchedOpt.dataset.id || '';
+                    }
+                } else {
+                    hydrateStreamSelect([], streamHidden.value);
+                    if (gameIdHidden) {
+                        gameIdHidden.value = '';
+                    }
+                }
+            }
+
+            if (gameSearch) {
+                gameSearch.addEventListener('change', syncOwnerGameSelection);
+                gameSearch.addEventListener('input', syncOwnerGameSelection);
+                gameSearch.addEventListener('blur', syncOwnerGameSelection);
+                syncOwnerGameSelection();
             }
 
             if (playerLayout && multiToggle && multiSlots) {
