@@ -974,20 +974,7 @@
                 <span>The Stream Den</span>
             </div>
             <div class="top-nav-right">
-                {% if current_user %}
-                    <div class="pill-label">Signed in as {{ current_user.username }}</div>
-                    <a class="pill-button" href="/account">Account</a>
-                    <a class="pill-button" href="/logout">Logout</a>
-                {% else %}
-                    <form class="auth-inline" method="POST" action="/login" style="gap:6px;">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-                        <input type="hidden" name="next" value="/">
-                        <input type="text" name="username" placeholder="Username" required>
-                        <input type="password" name="password" placeholder="Password" required>
-                        <button type="submit">Login</button>
-                        <a class="pill-button" href="/signup" style="text-decoration:none; display:inline-flex; align-items:center;">Sign up</a>
-                    </form>
-                {% endif %}
+                <div class="pill-label">Create dens instantly — no account needed.</div>
             </div>
         </div>
 
@@ -1036,60 +1023,55 @@
                     <span class="accordion-icon">▼</span>
                 </summary>
                 <div class="accordion-body">
-                    {% if current_user %}
-                        <form class="den-panel" method="POST" action="/dens/create">
-                            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-                            <input type="hidden" name="stream_url" id="denStreamUrl">
-                            <input type="hidden" name="game_id" id="denGameId">
-                            <div>
-                                <label>Den name</label>
-                                <input type="text" name="name" maxlength="160" placeholder="e.g. Sunday Night Watch Party" required>
-                            </div>
-                            <div>
-                                <label>Find a stream to add</label>
-                                <input
-                                    type="search"
-                                    id="denGameSearch"
-                                    list="den-game-options"
-                                    placeholder="Search by matchup, league, or sport"
-                                    autocomplete="off"
-                                    required
-                                >
-                                <datalist id="den-game-options">
-                                    {% for game in games_for_dens %}
-                                        {% set first_stream = (game.streams or [])|first %}
-                                        <option
-                                            value="{{ game.matchup }} — {{ game.sport or 'Sport' }}{% if game.time %} • {{ game.time }}{% endif %}"
-                                            data-id="{{ game.id }}"
-                                            data-watch="{{ game.watch_url or '' }}"
-                                            data-embed="{{ first_stream.embed_url if first_stream else '' }}"
-                                        ></option>
-                                    {% endfor %}
-                                </datalist>
-                            </div>
-                            <div class="checkbox-row">
-                                <input type="checkbox" id="is_public" name="is_public" checked>
-                                <label for="is_public">Make this den public (any signed-in user with the link can join)</label>
-                            </div>
-                            <button type="submit">Create den</button>
-                        </form>
+                    <form class="den-panel" method="POST" action="/dens/create">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                        <input type="hidden" name="stream_url" id="denStreamUrl">
+                        <input type="hidden" name="game_id" id="denGameId">
+                        <div>
+                            <label>Den name</label>
+                            <input type="text" name="name" maxlength="160" placeholder="e.g. Sunday Night Watch Party" required>
+                        </div>
+                        <div>
+                            <label>Find a stream to add</label>
+                            <input
+                                type="search"
+                                id="denGameSearch"
+                                list="den-game-options"
+                                placeholder="Search by matchup, league, or sport"
+                                autocomplete="off"
+                            >
+                            <datalist id="den-game-options">
+                                {% for game in games_for_dens %}
+                                    {% set first_stream = (game.streams or [])|first %}
+                                    <option
+                                        value="{{ game.matchup }} — {{ game.sport or 'Sport' }}{% if game.time %} • {{ game.time }}{% endif %}"
+                                        data-id="{{ game.id }}"
+                                        data-watch="{{ game.watch_url or '' }}"
+                                        data-embed="{{ first_stream.embed_url if first_stream else '' }}"
+                                    ></option>
+                                {% endfor %}
+                            </datalist>
+                        </div>
+                        <div class="checkbox-row">
+                            <input type="checkbox" id="is_public" name="is_public" checked>
+                            <label for="is_public">Make this den public (anyone with the link can join)</label>
+                        </div>
+                        <button type="submit">Create den</button>
+                    </form>
 
-                        {% if owned_dens or joined_dens %}
-                            <div class="den-list">
-                                {% for den in owned_dens %}
-                                    <a class="den-pill" href="/dens/{{ den.slug }}">
-                                        {{ den.name }} <span class="meta">(Owner)</span>
-                                    </a>
-                                {% endfor %}
-                                {% for den in joined_dens %}
-                                    <a class="den-pill" href="/dens/{{ den.slug }}">
-                                        {{ den.name }} <span class="meta">(Member)</span>
-                                    </a>
-                                {% endfor %}
-                            </div>
-                        {% endif %}
-                    {% else %}
-                        <p class="den-empty">Log in or sign up above to create a den with your friends.</p>
+                    {% if owned_dens or joined_dens %}
+                        <div class="den-list">
+                            {% for den in owned_dens %}
+                                <a class="den-pill" href="/dens/{{ den.slug }}">
+                                    {{ den.name }} <span class="meta">(Owner)</span>
+                                </a>
+                            {% endfor %}
+                            {% for den in joined_dens %}
+                                <a class="den-pill" href="/dens/{{ den.slug }}">
+                                    {{ den.name }} <span class="meta">(Member)</span>
+                                </a>
+                            {% endfor %}
+                        </div>
                     {% endif %}
                 </div>
             </details>

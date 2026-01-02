@@ -26,12 +26,11 @@ import pandas as pd
 import pytz
 from apscheduler.schedulers.background import BackgroundScheduler
 from bs4 import BeautifulSoup
-from flask import Blueprint, abort, g, jsonify, make_response, redirect, render_template, request, session, url_for
+from flask import Blueprint, abort, jsonify, make_response, redirect, render_template, request, session, url_for
 import requests
-from sqlalchemy import select
 
 import scrape_games
-from db_models import SessionLocal, Den, DenMembership
+from den_store import den_store
 
 streaming_bp = Blueprint("streaming", __name__)
 
@@ -666,37 +665,9 @@ def get_most_viewed_games(all_games: list[dict[str, Any]], limit: int = 5) -> li
     return result
 
 
-def get_user_dens(user_id: int) -> tuple[list[Den], list[Den]]:
-    """Return dens owned by the user and dens they have joined."""
-    db = SessionLocal()
-    try:
-        cutoff = den_expiration_cutoff()
-        owned = (
-            db.execute(
-                select(Den)
-                .where(Den.owner_id == user_id, Den.created_at >= cutoff)
-                .order_by(Den.created_at.desc())
-            )
-            .scalars()
-            .all()
-        )
-        joined = (
-            db.execute(
-                select(Den)
-                .join(DenMembership, DenMembership.den_id == Den.id)
-                .where(
-                    DenMembership.user_id == user_id,
-                    Den.owner_id != user_id,
-                    Den.created_at >= cutoff,
-                )
-                .order_by(Den.created_at.desc())
-            )
-            .scalars()
-            .all()
-        )
-        return owned, joined
-    finally:
-        db.close()
+def get_user_dens(session_id: str) -> tuple[list, list]:
+    """Return dens owned by the session and dens they have joined."""
+    return den_store.dens_for_session(session_id)
 
 
 @streaming_bp.route("/")
@@ -733,31 +704,9 @@ def index():
 
     most_viewed_games = get_most_viewed_games(all_games, limit=5)
 
-    current_user = getattr(g, "current_user", None)
-    owned_dens: list[Den] = []
-    joined_dens: list[Den] = []
-    active_public_dens: list[Den] = []
-    db = SessionLocal()
-    if current_user:
-        try:
-            owned_dens, joined_dens = get_user_dens(current_user.id)
-        except Exception:
-            owned_dens, joined_dens = [], []
-    try:
-        active_public_dens = (
-            db.execute(
-                select(Den)
-                .where(Den.is_public.is_(True), Den.created_at >= cutoff)
-                .order_by(Den.created_at.desc())
-                .limit(20)
-            )
-            .scalars()
-            .all()
-        )
-    except Exception:
-        active_public_dens = []
-    finally:
-        db.close()
+    session_id = get_session_id()
+    owned_dens, joined_dens = get_user_dens(session_id)
+    active_public_dens = den_store.active_public(cutoff)
 
     return render_template(
         "streaming_index.html",
@@ -765,7 +714,7 @@ def index():
         search_query=q,
         live_only=live_only,
         most_viewed_games=most_viewed_games,
-        current_user=current_user,
+        current_session=session_id,
         owned_dens=owned_dens,
         joined_dens=joined_dens,
         active_public_dens=active_public_dens,

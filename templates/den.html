@@ -311,7 +311,7 @@
                 <h1 style="margin:6px 0 4px 0;">{{ den.name }}</h1>
                 <div class="pill" style="gap:10px;">
                     {% if den.is_public %}
-                        Public den — anyone signed in with this link can join.
+                        Public den — anyone with this link can join.
                     {% else %}
                         Private den — invite code required.
                     {% endif %}
@@ -319,8 +319,7 @@
             </div>
             <div style="display:flex; gap:8px; flex-wrap:wrap;">
                 <a class="pill" href="/">Back to games</a>
-                <a class="pill" href="/account">Account</a>
-                {% if current_user_id and den.owner_id == current_user_id %}
+                {% if current_user_id and den.owner_session == current_user_id %}
                     <form method="POST" action="/dens/{{ den.slug }}/delete" onsubmit="return confirm('Delete this den?');">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                         <button class="pill" type="submit" style="background:#2d1a20; border-color:rgba(255,77,106,0.35); color:#ffb7c5;">Delete den</button>
@@ -361,7 +360,7 @@
                                                 </option>
                                             {% endfor %}
                                         </select>
-                                        {% if current_user_id and den.owner_id == current_user_id and den_streams|length > 1 %}
+                                        {% if current_user_id and den.owner_session == current_user_id and den_streams|length > 1 %}
                                             <button type="button" class="multi-toggle-button" id="den-multi-toggle">Enable multi-view</button>
                                         {% endif %}
                                     </div>
@@ -380,7 +379,7 @@
                                 </div>
                             </div>
 
-                            {% if current_user_id and den.owner_id == current_user_id and den_streams and den_streams|length > 1 %}
+                            {% if current_user_id and den.owner_session == current_user_id and den_streams and den_streams|length > 1 %}
                                 <div class="multi-slots" id="den-multi-slots">
                                     <div class="extra-slot">
                                         <header>
@@ -409,7 +408,7 @@
                                 </div>
                             {% endif %}
 
-                            {% if current_user_id and den.owner_id == current_user_id %}
+                            {% if current_user_id and den.owner_session == current_user_id %}
                                 {% set active_label = namespace(val='') %}
                                 {% set owner_game_label = '' %}
                                 {% if game %}
@@ -674,7 +673,7 @@
             });
             socket.on("chat_message", addMessage);
             socket.on("chat_error", (err) => {
-                setStatus(err && err.error === "not_allowed" ? "You are not allowed in this den." : "Login required", "error");
+                setStatus(err && err.error === "not_allowed" ? "You are not allowed in this den." : "Access denied", "error");
             });
             socket.on("disconnect", () => setStatus("Disconnected", "warn"));
         }
