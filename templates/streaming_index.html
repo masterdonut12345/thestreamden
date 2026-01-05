@@ -112,6 +112,12 @@
             opacity: 0.9;
         }
 
+        .top-nav-actions {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
         .brand {
             display: flex;
             align-items: center;
@@ -185,6 +191,22 @@
             display: inline-flex;
             align-items: center;
             gap: 6px;
+            cursor: pointer;
+            transition: transform 0.1s ease, border-color 0.12s ease, background 0.12s ease;
+        }
+
+        .pill-button:hover {
+            border-color: rgba(122, 162, 255, 0.75);
+            background: rgba(122, 162, 255, 0.22);
+            transform: translateY(-1px);
+        }
+
+        .pill-button .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--accent);
+            box-shadow: 0 0 0 1px rgba(122, 162, 255, 0.6);
         }
 
         /* === HEADER === */
@@ -963,6 +985,42 @@
             * { transition: none !important; scroll-behavior: auto !important; }
             .live-pill::before { animation: none !important; box-shadow: 0 0 0 0 rgba(255, 77, 106, 0.6); }
         }
+
+        .toast {
+            position: fixed;
+            bottom: 18px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(8, 10, 18, 0.9);
+            color: #f7f7ff;
+            padding: 12px 16px;
+            border-radius: 12px;
+            border: 1px solid rgba(122, 162, 255, 0.4);
+            box-shadow: 0 18px 40px rgba(0, 0, 0, 0.45);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            min-width: 260px;
+            justify-content: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.18s ease, transform 0.18s ease;
+            z-index: 99;
+        }
+
+        .toast.show {
+            opacity: 1;
+            pointer-events: auto;
+            transform: translate(-50%, -4px);
+        }
+
+        .toast .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: var(--accent);
+            box-shadow: 0 0 0 1px rgba(122, 162, 255, 0.6);
+        }
     </style>
 </head>
 <body>
@@ -972,6 +1030,13 @@
             <div class="brand">
                 <div class="brand-logo"></div>
                 <span>The Stream Den</span>
+            </div>
+            <div class="top-nav-actions">
+                <button class="pill-button" id="saveLinkButton" type="button">
+                    <span class="dot" aria-hidden="true"></span>
+                    Save this site
+                </button>
+                <span class="pill-label">Copy or share the link for later</span>
             </div>
         </div>
 
@@ -1379,8 +1444,72 @@
         });
     </script>
 
+    <script>
+        (function () {
+            const button = document.getElementById('saveLinkButton');
+            const toast = document.getElementById('saveToast');
+            const toastMessage = document.getElementById('toastMessage');
+
+            function showToast(message) {
+                if (!toast || !toastMessage) return;
+                toastMessage.textContent = message;
+                toast.classList.add('show');
+                setTimeout(() => toast.classList.remove('show'), 2400);
+            }
+
+            async function copyToClipboard(text) {
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    try {
+                        await navigator.clipboard.writeText(text);
+                        return true;
+                    } catch (err) {
+                        return false;
+                    }
+                }
+                return false;
+            }
+
+            async function handleSaveClick() {
+                const url = window.location.href;
+                if (navigator.share) {
+                    try {
+                        await navigator.share({ title: 'The Stream Den', url });
+                        return;
+                    } catch (err) {
+                        // fall back to copy
+                    }
+                }
+
+                const copied = await copyToClipboard(url);
+                if (copied) {
+                    showToast('Link copied. Save it wherever you like.');
+                } else {
+                    const tempInput = document.createElement('input');
+                    tempInput.value = url;
+                    tempInput.setAttribute('readonly', '');
+                    tempInput.style.position = 'absolute';
+                    tempInput.style.left = '-9999px';
+                    document.body.appendChild(tempInput);
+                    tempInput.select();
+                    try { document.execCommand('copy'); } catch (err) { /* ignore */ }
+                    document.body.removeChild(tempInput);
+                    showToast('Link ready. Copy it manually if needed.');
+                }
+            }
+
+            if (button) {
+                button.addEventListener('click', handleSaveClick);
+            }
+        })();
+    </script>
+
     <!-- Cloudflare Web Analytics -->
     <script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token": "643968b4db2b4d4c80a6f49718fcfcaa"}'></script>
     <!-- End Cloudflare Web Analytics -->
+
+    <div class="toast" id="saveToast" role="status" aria-live="polite">
+        <span class="status-dot" aria-hidden="true"></span>
+        <span id="toastMessage">Link copied. Save it wherever you like.</span>
+    </div>
 </body>
 </html>
