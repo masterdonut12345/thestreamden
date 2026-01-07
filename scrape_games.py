@@ -650,7 +650,8 @@ def merge_streams(new, old):
     return _dedup_streams(manual + scraped)
 
 def main():
-    df_streamed = scrape_streamed_api()
+    # NOTE: Streamed.pk scraping is temporarily disabled (keep code dormant).
+    df_streamed = pd.DataFrame()
     df_topembed = scrape_topembed()
     df_shark = scrape_shark()
 
