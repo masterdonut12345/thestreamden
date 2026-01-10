@@ -6,7 +6,6 @@ scrape_games.py
 
 FAST + SAFE scraper for:
   - Streamed.pk Matches + Streams APIs (preferred, no HTML parsing)
-  - topembed.pw: today + tomorrow, ALL embeds
   - sharkstreams.net: today + next 7 days, 1 embed per game (legacy)
 
 Guarantees:
@@ -31,8 +30,6 @@ import hashlib
 
 # ---------------- CONFIG ----------------
 
-BASE_URL_TOP_EMBED = os.environ.get("TOP_EMBED_BASE", "https://topembed.pw")
-TOP_EMBED_EVENTS_PATH = os.environ.get("TOP_EMBED_EVENTS_PATH", "/api/events")
 BASE_URL_SHARK   = "https://sharkstreams.net/"
 HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; StreamScraper/1.0)"}
 REQUEST_TIMEOUT = 8  # seconds
@@ -214,8 +211,6 @@ _SPORT_KEYWORDS = [
     ("horse racing", "Horse Racing"),
 ]
 
-_IFRAME_RE = re.compile(r'https?://[^\s"\']+')
-_EMBED_LIKE_RE = re.compile(r"https?://[^\s\"']*(?:embed|player|channel|topembed|m3u8)[^\s\"']*", re.I)
 _CHAT_MARKERS = ("text-chat", "/chat", "chat_room", "chatroom", "chat.")
 
 
@@ -230,81 +225,10 @@ def _is_probable_stream_url(url: str) -> bool:
     if not url:
         return False
     u = url.lower()
-    keywords = ("topembed", "/channel/", "embed", "player", "m3u8", "hls", "manifest", ".m3u8")
+    keywords = ("/channel/", "embed", "player", "m3u8", "hls", "manifest", ".m3u8")
     return any(k in u for k in keywords)
 
 
-def _collect_embeds_from_html(base_url: str, soup: BeautifulSoup) -> list[dict]:
-    streams = []
-
-    # direct iframes
-    for iframe in soup.find_all("iframe"):
-        # Skip chat iframes explicitly housed in the chat container
-        if iframe.find_parent(id="chat-container") or "chat" in (iframe.get("id") or "").lower():
-            continue
-        src = iframe.get("src") or iframe.get("data-src")
-        if not src:
-            continue
-        full = urljoin(base_url, src)
-        if _looks_like_chat(full) or not _is_probable_stream_url(full):
-            continue
-        streams.append({
-            "label": "Stream",
-            "embed_url": _force_https(full),
-            "watch_url": base_url,
-            "origin": "scraped",
-        })
-
-    # script-embedded URLs
-    for script in soup.find_all("script"):
-        text = script.string or script.text or ""
-        for m in _IFRAME_RE.findall(text):
-            if ("embed" in m or "player" in m) and not _looks_like_chat(m) and _is_probable_stream_url(m):
-                streams.append({
-                    "label": "Stream",
-                    "embed_url": _force_https(urljoin(base_url, m)),
-                    "watch_url": base_url,
-                    "origin": "scraped",
-                })
-        for m in _EMBED_LIKE_RE.findall(text):
-            if not _looks_like_chat(m) and _is_probable_stream_url(m):
-                streams.append({
-                    "label": "Stream",
-                    "embed_url": _force_https(urljoin(base_url, m)),
-                    "watch_url": base_url,
-                    "origin": "scraped",
-                })
-
-    # embeds exposed via data- attributes on buttons/links
-    for el in soup.find_all(["a", "button"]):
-        for attr in ("data-embed", "data-src", "data-url", "data-href", "href", "src"):
-            val = el.get(attr)
-            if not val:
-                continue
-            full = urljoin(base_url, val)
-            if _looks_like_chat(full) or not _is_probable_stream_url(full):
-                continue
-            if "embed" in full or "channel" in full or "player" in full or full.startswith("http"):
-                streams.append({
-                    "label": (el.get_text(strip=True) or "Stream")[:64] or "Stream",
-                    "embed_url": _force_https(full),
-                    "watch_url": base_url,
-                    "origin": "scraped",
-                })
-
-    return streams
-
-
-_URL_RE = re.compile(r"https?://[^\s'\"<>]+", re.I)
-
-
-def _extract_first_url(text: str | None) -> str | None:
-    if not text:
-        return None
-    m = _URL_RE.search(text)
-    if not m:
-        return None
-    return _force_https(m.group(0))
 
 
 def _fetch_json(session, url: str):
@@ -386,7 +310,7 @@ def scrape_streamed_api() -> pd.DataFrame:
             continue
 
         event_dt = datetime.fromtimestamp(ts_ms / 1000, tz=UTC).astimezone(EST)
-        # keep today + a small lookahead (similar to topembed behavior)
+        # keep today + a small lookahead for upcoming matches
         if not _within_days(event_dt, days_ahead=1, days_behind=0):
             continue
 
@@ -418,132 +342,6 @@ def scrape_streamed_api() -> pd.DataFrame:
 
     return pd.DataFrame(rows)
 
-
-def _extract_topembed_streams(card, default_watch: str) -> list[dict]:
-    channels = card.select(".channel-item-compact")
-    streams: list[dict] = []
-    for idx, ch in enumerate(channels, start=1):
-        label = f"Stream {idx}"
-        copy_urls = []
-        for btn in ch.select(".btn-copy-icon"):
-            maybe_url = _extract_first_url(btn.get("onclick"))
-            if maybe_url:
-                copy_urls.append(maybe_url)
-        embed_url = copy_urls[0] if copy_urls else None
-        if not embed_url:
-            preview_btn = ch.select_one(".btn-preview-inline-small")
-            embed_url = _extract_first_url(preview_btn.get("onclick") if preview_btn else None)
-        if not embed_url:
-            continue
-        streams.append({
-            "label": label[:64] or "Stream",
-            "embed_url": embed_url,
-            "watch_url": embed_url or default_watch,
-            "origin": "api",
-        })
-    return _dedup_streams(streams)
-
-
-def scrape_topembed() -> pd.DataFrame:
-    session = _get_session()
-    events_url = urljoin(BASE_URL_TOP_EMBED, TOP_EMBED_EVENTS_PATH)
-    r = session.get(events_url, timeout=REQUEST_TIMEOUT)
-    if r.status_code != 200:
-        return pd.DataFrame()
-
-    soup = BeautifulSoup(r.text, "html.parser")
-    cards = soup.select(".event-card")
-    if not cards:
-        return pd.DataFrame()
-
-    rows = []
-    now_utc = datetime.now(UTC)
-
-    for card in cards:
-        try:
-            ts_sec = int(float(card.get("data-timestamp", "0")))
-            event_dt = datetime.fromtimestamp(ts_sec, tz=UTC).astimezone(EST)
-        except Exception:
-            continue
-
-        if not _within_days(event_dt, days_ahead=1):
-            continue
-
-        matchup_el = card.select_one(".event-title")
-        matchup = matchup_el.get_text(" ", strip=True) if matchup_el else "Unknown match"
-
-        league_attr = card.get("data-league") or ""
-        league_el = card.select_one(".event-league")
-        league_text = league_el.get_text(strip=True) if league_el else ""
-        league = league_attr or league_text or None
-
-        # Build watch URL from copy buttons or fallback to event slug
-        watch_url = None
-        event_embed_url = None
-        embed_actions = card.select_one(".event-embed-actions")
-        if embed_actions:
-            embed_action_urls: list[str] = []
-            for btn in embed_actions.find_all("button"):
-                onclick = btn.get("onclick") or ""
-                maybe_url = _extract_first_url(onclick)
-                if not maybe_url:
-                    continue
-                embed_action_urls.append(maybe_url)
-                if "showEmbed" in onclick:
-                    event_embed_url = event_embed_url or maybe_url
-                if not event_embed_url and "/event/" in maybe_url:
-                    event_embed_url = maybe_url
-            if embed_action_urls:
-                # Prefer the preview/showEmbed URL (typically the correct stream slug)
-                event_embed_url = event_embed_url or embed_action_urls[0]
-                watch_url = watch_url or event_embed_url or embed_action_urls[0]
-        if not watch_url:
-            channels_div = card.select_one(".event-channels")
-            slug = None
-            if channels_div and channels_div.has_attr("id"):
-                slug = channels_div["id"].replace("event-", "", 1)
-            if slug:
-                watch_url = urljoin(BASE_URL_TOP_EMBED, f"/event/{slug}")
-
-        channel_streams = _extract_topembed_streams(card, watch_url)
-
-        primary_url = event_embed_url or watch_url
-        streams = []
-        if primary_url:
-            streams.append({
-                "label": "Event Embed",
-                "embed_url": primary_url,
-                "watch_url": primary_url,
-                "origin": "api",
-            })
-        streams.extend(channel_streams)
-
-        streams = _dedup_streams(streams)
-        if not streams:
-            continue
-        embed_url = streams[0]["embed_url"]
-        resolved_watch = watch_url or streams[0]["watch_url"]
-
-        sport = card.get("data-category") or _guess_sport(matchup)
-        status = (card.get("data-status") or "").lower()
-        is_live = (status == "live") or ((event_dt - timedelta(minutes=15)) <= now_utc <= (event_dt + timedelta(hours=5)))
-
-        rows.append({
-            "source": "topembed",
-            "date_header": event_dt.strftime("%A, %B %d, %Y"),
-            "sport": sport,
-            "time_unix": ts_sec * 1000,
-            "time": event_dt,
-            "tournament": league,
-            "tournament_url": None,
-            "matchup": matchup,
-            "watch_url": resolved_watch,
-            "streams": streams,
-            "embed_url": embed_url,
-            "is_live": is_live,
-        })
-
-    return pd.DataFrame(rows)
 
 # ---------------- SHARKSTREAMS ----------------
 
@@ -650,18 +448,15 @@ def merge_streams(new, old):
     return _dedup_streams(manual + scraped)
 
 def main():
-    # NOTE: Streamed.pk scraping is temporarily disabled (keep code dormant).
-    df_streamed = pd.DataFrame()
-    df_topembed = scrape_topembed()
+    df_streamed = scrape_streamed_api()
     df_shark = scrape_shark()
 
     source_counts = {
         "streamed.pk": len(df_streamed),
-        "topembed": len(df_topembed),
         "sharkstreams": len(df_shark),
     }
 
-    scraped_frames = [df for df in (df_streamed, df_topembed, df_shark) if not df.empty]
+    scraped_frames = [df for df in (df_streamed, df_shark) if not df.empty]
     if not scraped_frames:
         print("[scraper] No games found.")
         return
@@ -730,7 +525,7 @@ def main():
         pd.DataFrame(out_rows)[CSV_COLS].to_csv(fh, index=False)
         fcntl.flock(fh, fcntl.LOCK_UN)
 
-    print(f"[scraper] Wrote {len(out_rows)} games (streamed.pk={source_counts['streamed.pk']}, topembed={source_counts['topembed']}, sharkstreams={source_counts['sharkstreams']})")
+    print(f"[scraper] Wrote {len(out_rows)} games (streamed.pk={source_counts['streamed.pk']}, sharkstreams={source_counts['sharkstreams']})")
 
 if __name__ == "__main__":
     main()
