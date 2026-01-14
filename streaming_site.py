@@ -701,6 +701,12 @@ def index():
     )
 
 
+@streaming_bp.route("/make-money")
+def make_money():
+    mark_active()
+    return render_template("make_money.html")
+
+
 def _build_games_from_df(df: pd.DataFrame):
     if df is None or df.empty:
         return []
