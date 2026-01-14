@@ -742,6 +742,59 @@
             box-shadow: 0 10px 25px rgba(0, 0, 0, 0.8);
         }
 
+        /* FIXED RIGHT RAIL BANNER — OUTSIDE FLOW, DOES NOT RESIZE ANYTHING */
+        .stake-rail {
+            position: fixed;
+            right: 16px;
+            top: 140px;
+            width: 160px;
+            z-index: 2500;
+        }
+
+        .left-rail-ad {
+            position: fixed;
+            left: 16px;
+            top: 200px;
+            width: 160px;
+            z-index: 2500;
+        }
+        .left-rail-ad .box {
+            width: 160px;
+            height: 300px;
+            border-radius: 14px;
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: 0 14px 30px rgba(0, 0, 0, 0.8);
+            background: rgba(0,0,0,0.35);
+        }
+
+        .stake-rail .box {
+            width: 160px;
+            height: 600px;
+            border-radius: 14px;
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: 0 18px 40px rgba(0, 0, 0, 0.85);
+            background: rgba(0,0,0,0.35);
+        }
+
+        .stake-rail a,
+        .stake-rail img {
+            display: block;
+            width: 160px;
+            height: 600px;
+        }
+
+        /* hide on smaller screens to avoid overlap */
+        @media (max-width: 1280px) {
+            .stake-rail { display: none; }
+            .left-rail-ad { display: none; }
+        }
+
+        /* hide in full-page mode */
+        body.full-page-player .stake-rail { display: none; }
+        body.full-page-player .left-rail-ad { display: none; }
+
         @media (prefers-reduced-motion: reduce) {
             .live-pill::before { animation: none !important; box-shadow: 0 0 0 0 rgba(255, 77, 106, 0.6); }
         }
@@ -926,8 +979,22 @@
             </div>
         {% endif %}
 
-        <div class="support-note-floating">
-            Having issues with streams? <a href="https://x.com/thestreamden" target="_blank" rel="noopener">@TheStreamDen</a>
+    <!-- FIXED banner OUTSIDE .page-wrapper so it never changes layout -->
+    <div class="left-rail-ad" aria-label="Left rail ad">
+        <div class="box">
+            <script type="text/javascript">
+              atOptions = {
+                'key' : '29ef845582924216c628b8930841e3bb',
+                'format' : 'iframe',
+                'height' : 300,
+                'width' : 160,
+                'params' : {}
+              };
+            </script>
+            <script
+              type="text/javascript"
+              src="https://broodbelongminiature.com/29ef845582924216c628b8930841e3bb/invoke.js"
+            ></script>
         </div>
 
     </div>
