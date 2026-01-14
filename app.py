@@ -66,6 +66,21 @@ def inject_csrf():
     return {"csrf_token": generate_csrf_token()}
 
 
+_cleanup_worker_lock = threading.Lock()
+_cleanup_worker_started = False
+
+
+def _start_cleanup_worker() -> None:
+    """Placeholder for background cleanup to avoid request-time failures."""
+    global _cleanup_worker_started
+    if _cleanup_worker_started:
+        return
+    with _cleanup_worker_lock:
+        if _cleanup_worker_started:
+            return
+        _cleanup_worker_started = True
+
+
 @app.before_request
 def before_any_request():
     generate_csrf_token()
