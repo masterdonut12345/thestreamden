@@ -30,7 +30,6 @@ from flask import Blueprint, abort, g, jsonify, make_response, redirect, render_
 import requests
 
 import scrape_games
-from den_store import den_store
 
 streaming_bp = Blueprint("streaming", __name__)
 
@@ -72,7 +71,6 @@ ACTIVE_VIEWERS: dict[str, datetime] = {}  # session_id → last_seen timestamp
 ACTIVE_PAGE_VIEWS: dict[tuple[str, str], datetime] = {}  # (session_id, path) → last_seen timestamp
 LAST_VIEWER_PRINT: datetime | None = None  # throttle printing
 
-DEN_EXPIRATION_HOURS = 6
 
 
 def get_session_id() -> str:
@@ -80,11 +78,6 @@ def get_session_id() -> str:
         session["sid"] = str(uuid.UUID(bytes=os.urandom(16)))
     return session["sid"]
 
-
-def den_expiration_cutoff() -> datetime:
-    """Return the cutoff timestamp for active dens."""
-
-    return datetime.now(timezone.utc) - timedelta(hours=DEN_EXPIRATION_HOURS)
 
 
 def mark_active() -> None:
@@ -665,18 +658,12 @@ def get_most_viewed_games(all_games: list[dict[str, Any]], limit: int = 5) -> li
     return result
 
 
-def get_user_dens(session_id: str) -> tuple[list, list]:
-    """Return dens owned by the session and dens they have joined."""
-    return den_store.dens_for_session(session_id)
-
-
 @streaming_bp.route("/")
 def index():
     mark_active()
 
     all_games = load_games_cached()
     games = list(all_games)
-    cutoff = den_expiration_cutoff()
 
     q = request.args.get("q", "").strip().lower()
     if q:
@@ -704,22 +691,13 @@ def index():
 
     most_viewed_games = get_most_viewed_games(all_games, limit=5)
 
-    session_id = get_session_id()
-    owned_dens, joined_dens = get_user_dens(session_id)
-    active_public_dens = den_store.active_public(cutoff)
-
     return render_template(
         "streaming_index.html",
         sections=sections,
         search_query=q,
         live_only=live_only,
         most_viewed_games=most_viewed_games,
-        current_session=session_id,
-        owned_dens=owned_dens,
-        joined_dens=joined_dens,
-        active_public_dens=active_public_dens,
-        den_expiration_hours=DEN_EXPIRATION_HOURS,
-        games_for_dens=games,
+        current_session=get_session_id(),
     )
 
 
