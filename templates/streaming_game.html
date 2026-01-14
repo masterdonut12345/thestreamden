@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>{{ game.matchup }} - {{ game.sport }}</title>
 
     <!-- Open Graph / Social Preview -->
@@ -135,10 +136,13 @@
             justify-content: flex-start;
             overflow: hidden;
         }
-        .ad-slot-left iframe {
-            width: 100% !important;
-            height: 100% !important;
-            display: block;
+        .ad-slot-left .ad-iframe {
+            width: 320px;
+            height: 50px;
+            border-radius: 8px;
+            border: 0;
+            overflow: hidden;
+            box-shadow: 0 8px 18px rgba(0, 0, 0, 0.45);
         }
 
         .header-text {
@@ -195,10 +199,19 @@
             color: #dde5ff;
             font-size: 0.84rem;
             max-width: 100%;
+            overflow-wrap: anywhere;
+            cursor: pointer;
         }
         .share-pill:hover {
             border-color: rgba(122, 162, 255, 0.75);
             background: rgba(122, 162, 255, 0.14);
+        }
+
+        .share-status {
+            font-size: 0.82rem;
+            color: #c7cffc;
+            margin-top: 4px;
+            min-height: 1em;
         }
 
         .support-note-floating {
@@ -233,11 +246,260 @@
         }
 
         @media (max-width: 700px) {
+            .page-wrapper { padding: 16px 14px 32px; }
+            header { padding: 14px; }
             .header-container { flex-direction: column; align-items: flex-start; }
-            .ad-slot-left { text-align: left; width: 100%; max-width: 320px; margin-bottom: 8px; }
+            h1 { font-size: 1.6rem; }
+            .title-row { flex-direction: column; align-items: flex-start; gap: 6px; }
+            .meta { font-size: 0.95rem; }
+            .share-links { width: 100%; flex-direction: column; align-items: stretch; gap: 6px; }
+            .share-pill { width: 100%; justify-content: space-between; }
+            .meta-chips { gap: 8px; }
+            .player-card { padding: 12px; }
+            .player-layout.multi { grid-template-columns: 1fr; }
+            .player-layout.single .player-slot[data-slot="0"] iframe { height: 360px; }
+            .stream-picker { flex-direction: column; }
+            .stream-button { width: 100%; justify-content: center; }
+            .multi-view-title { flex-direction: column; align-items: flex-start; gap: 6px; }
+            .multi-controls { width: 100%; }
+            .multi-toggle-button { width: 100%; justify-content: center; }
         }
 
         h3 { margin-top: 12px; margin-bottom: 8px; font-size: 1.1rem; }
+
+        .chat-panel {
+            background: var(--surface);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 16px;
+            padding: 12px;
+            box-shadow: var(--shadow-soft);
+            display: flex;
+            flex-direction: column;
+            height: 520px;
+        }
+
+        .chat-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+
+        .chat-title {
+            font-weight: 700;
+            font-size: 1rem;
+        }
+
+        .chat-subtitle {
+            font-size: 0.82rem;
+            color: var(--muted);
+            margin-top: 2px;
+        }
+
+        .chat-status {
+            font-size: 0.78rem;
+            padding: 4px 8px;
+            border-radius: 999px;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            background: rgba(122, 162, 255, 0.12);
+            color: #dfe7ff;
+            white-space: nowrap;
+        }
+
+        .chat-status[data-state="warn"] {
+            background: rgba(255, 195, 113, 0.14);
+            color: #ffe8c2;
+        }
+
+        .chat-status[data-state="error"] {
+            background: rgba(255, 93, 93, 0.14);
+            color: #ffd5d5;
+        }
+
+        .chat-messages {
+            background: var(--surface-2);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 12px;
+            min-height: 0;
+            flex: 1 1 auto;
+            overflow-y: auto;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .chat-message {
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 10px;
+            padding: 8px 10px;
+        }
+
+        .chat-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.78rem;
+            color: var(--muted);
+        }
+
+        .chat-text {
+            margin-top: 4px;
+            white-space: pre-wrap;
+            word-break: break-word;
+            font-size: 0.92rem;
+        }
+
+        .chat-form {
+            margin-top: 10px;
+            display: flex;
+            gap: 8px;
+        }
+
+        .chat-input {
+            flex: 1 1 auto;
+            padding: 10px 12px;
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            background: rgba(0, 0, 0, 0.35);
+            color: var(--text);
+            font-size: 1rem; /* keep 16px to prevent mobile zoom */
+        }
+
+        .chat-send {
+            padding: 10px 14px;
+            border-radius: 10px;
+            border: 1px solid rgba(122, 162, 255, 0.8);
+            background: var(--accent);
+            color: #050508;
+            font-weight: 700;
+            cursor: pointer;
+            transition: transform 0.1s ease, box-shadow 0.18s ease;
+        }
+
+        .chat-send:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 10px 20px rgba(122, 162, 255, 0.45);
+        }
+
+        .chat-tip {
+            margin-top: 6px;
+            font-size: 0.82rem;
+            color: var(--muted);
+        }
+
+        /* Desktop rail (unchanged behavior) */
+        .chat-rail {
+            position: fixed;
+            right: 0;
+            top: 140px;
+            width: 320px;
+            z-index: 2600;
+            transform: translateX(0);
+            transition: transform 0.25s ease;
+        }
+
+        .chat-rail.closed {
+            transform: translateX(100%);
+        }
+
+        .chat-toggle {
+            position: absolute;
+            left: -36px;
+            top: 32px;
+            width: 36px;
+            height: 76px;
+            background: var(--accent);
+            color: #050508;
+            font-weight: 800;
+            border-radius: 12px 0 0 12px;
+            border: 1px solid rgba(255, 255, 255, 0.25);
+            cursor: pointer;
+            box-shadow: 0 12px 30px rgba(0,0,0,0.4);
+            z-index: 2601;
+        }
+        .chat-rail.closed .chat-toggle {
+            transform: translateX(-100%);
+        }
+
+        /* MOBILE/TABLET: bottom sheet chat (visible handle) */
+        @media (max-width: 1280px) {
+            .chat-rail {
+                display: block;
+                position: fixed;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                top: auto;
+                width: 100%;
+                max-width: none;
+                z-index: 2600;
+
+                transform: translateY(calc(100% - 56px));
+                transition: transform 0.25s ease;
+            }
+
+            .chat-rail.open {
+                transform: translateY(0);
+            }
+
+            .chat-rail.closed {
+                transform: translateY(calc(100% - 56px));
+            }
+
+            .chat-panel {
+                height: min(60vh, 480px);
+                border-radius: 16px 16px 0 0;
+            }
+
+            .chat-toggle {
+                display: block;
+                position: absolute;
+                left: 50%;
+                top: -44px;
+                transform: translateX(-50%);
+                width: 140px;
+                height: 38px;
+                border-radius: 14px 14px 0 0;
+                border: 1px solid rgba(255,255,255,0.25);
+                background: var(--accent);
+                color: #050508;
+                font-weight: 800;
+                box-shadow: 0 12px 30px rgba(0,0,0,0.4);
+            }
+
+            /* don't slide the toggle off-screen on mobile */
+            .chat-rail.closed .chat-toggle {
+                transform: translateX(-50%);
+            }
+        }
+
+        /* Left floating 160x600 ad, hidden on small screens */
+        .left-rail-ad {
+            position: fixed;
+            top: 120px;
+            left: 20px;
+            width: 160px;
+            height: 600px;
+            max-width: none;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 16px 36px rgba(0, 0, 0, 0.85);
+            z-index: 900;
+        }
+        .left-rail-ad .ad-iframe {
+            width: 160px;
+            height: 600px;
+            border-radius: 12px;
+            border: 0;
+            overflow: hidden;
+        }
+        @media (max-width: 1200px) {
+            .left-rail-ad { display: none; }
+        }
 
         .player-card {
             margin-top: 4px;
@@ -357,11 +619,6 @@
             box-shadow: 0 14px 30px rgba(122, 162, 255, 0.5);
         }
 
-        .ad-slot {
-            margin: 16px 0 0;
-            text-align: center;
-        }
-
         .no-stream {
             margin-top: 30px;
             padding: 16px 14px;
@@ -464,8 +721,8 @@
             border-radius: 0;
         }
 
-        body.full-page-player .ad-slot { display: none; }
         body.full-page-player #stream-picker { display: none !important; }
+        body.full-page-player .ad-slot-left { display: none; }
 
         body.full-page-player .multi-view-title {
             position: fixed;
@@ -554,20 +811,13 @@
 
         <header>
             <div class="header-container">
-                <div class="ad-slot-left">
-                    <script type="text/javascript">
-                      atOptions = {
-                        'key' : '5478f94711ce55d9b858433d3c49812f',
-                        'format' : 'iframe',
-                        'height' : 50,
-                        'width' : 320,
-                        'params' : {}
-                      };
-                    </script>
-                    <script
-                      type="text/javascript"
-                      src="//www.highperformanceformat.com/5478f94711ce55d9b858433d3c49812f/invoke.js"
-                    ></script>
+                <div class="ad-slot-left" aria-label="Sponsored banner">
+                    <iframe
+                        class="ad-iframe"
+                        title="Top banner ad"
+                        sandbox="allow-scripts allow-same-origin"
+                        srcdoc='<!doctype html><html><head><meta charset="utf-8"></head><body style="margin:0;padding:0;display:flex;align-items:center;justify-content:center;background:transparent;"><script type="text/javascript">var atOptions={"key":"5478f94711ce55d9b858433d3c49812f","format":"iframe","height":50,"width":320,"params":{}};</script><script type="text/javascript" src="https://www.highperformanceformat.com/5478f94711ce55d9b858433d3c49812f/invoke.js"></script></body></html>'>
+                    </iframe>
                 </div>
 
                 <div class="header-text">
@@ -602,18 +852,23 @@
                             <span class="share-links">
                                 <a class="share-pill"
                                    href="{{ share_slug_url }}"
-                                   target="_blank" rel="noopener"
+                                   data-url="{{ share_slug_url }}"
+                                   data-label="Link 1"
+                                   role="button"
                                    title="{{ share_slug_url }}">
                                     Link 1
                                 </a>
 
                                 <a class="share-pill"
                                    href="{{ share_id_url }}"
-                                   target="_blank" rel="noopener"
+                                   data-url="{{ share_id_url }}"
+                                   data-label="Link 2"
+                                   role="button"
                                    title="{{ share_id_url }}">
                                     Link 2
                                 </a>
                             </span>
+                            <div class="share-status" id="share-status" aria-live="polite"></div>
                         </div>
                     </div>
 
@@ -628,11 +883,6 @@
 
         {% if game.streams and game.streams|length > 0 %}
             {% set first_stream = game.streams[0] %}
-        {% else %}
-            {% set first_stream = None %}
-        {% endif %}
-
-        {% if first_stream %}
             <div class="player-card">
                 <h3>Live Stream</h3>
 
@@ -654,27 +904,32 @@
                                 {% set _ = options.append(g) %}
                             {% endif %}
                         {% endfor %}
-
                         {% if options %}
-                            {% for slot_index in [1,2,3] %}
-                                <div class="player-slot extra-slot" data-slot="{{ slot_index }}">
+                            {% set extra_slot_count = 3 %}
+                            {% for slot_idx in range(1, extra_slot_count + 1) %}
+                                <div class="player-slot extra-slot" data-slot="{{ slot_idx }}">
                                     <div class="multi-slot-header">
                                         <span class="multi-slot-title">Empty slot</span>
-                                        <select class="multi-slot-select">
-                                            <option value="">Select a game...</option>
+                                        <select class="multi-slot-select" aria-label="Select stream for slot {{ slot_idx }}">
+                                            <option value="">Select another game…</option>
                                             {% for g in options %}
-                                                <option value="{{ g.streams[0].embed_url }}"
-                                                        data-title="{{ (g.matchup or 'Game ' ~ g.id) ~ ' - ' ~ (g.sport or '') }}">
-                                                    {{ g.matchup or ('Game ' ~ g.id) }}{% if g.sport %} ({{ g.sport }}){% endif %}
-                                                </option>
+                                                {% set first_extra_stream = g.streams[0] %}
+                                                {% if first_extra_stream %}
+                                                    <option
+                                                        value="{{ first_extra_stream.embed_url }}"
+                                                        data-title="{{ g.matchup or ('Stream ' ~ loop.index) }}"
+                                                    >
+                                                        {{ g.matchup or ('Stream ' ~ loop.index) }}
+                                                    </option>
+                                                {% endif %}
                                             {% endfor %}
                                         </select>
                                     </div>
                                     <iframe
                                         allowfullscreen
                                         scrolling="no"
-                                        allow="autoplay; encrypted-media; picture-in-picture; fullscreen">
-                                    </iframe>
+                                        allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
+                                    ></iframe>
                                 </div>
                             {% endfor %}
                         {% endif %}
@@ -716,15 +971,6 @@
                         </button>
                     </div>
                 </div>
-
-                <div class="ad-slot">
-                    <script
-                      async="async"
-                      data-cfasync="false"
-                      src="//pl28213154.effectivegatecpm.com/ced6c8c8dbe2168bf17b0ffaa1cf5474/invoke.js"
-                    ></script>
-                    <div id="container-ced6c8c8dbe2168bf17b0ffaa1cf5474"></div>
-                </div>
             </div>
         {% else %}
             <div class="no-stream">
@@ -732,11 +978,6 @@
                 Check back closer to game time or try another stream.
             </div>
         {% endif %}
-    </div>
-
-    <div class="support-note-floating">
-        Having issues with streams? <a href="https://x.com/thestreamden" target="_blank" rel="noopener">@TheStreamDen</a>
-    </div>
 
     <!-- FIXED banner OUTSIDE .page-wrapper so it never changes layout -->
     <div class="left-rail-ad" aria-label="Left rail ad">
@@ -755,20 +996,16 @@
               src="https://broodbelongminiature.com/29ef845582924216c628b8930841e3bb/invoke.js"
             ></script>
         </div>
+
     </div>
 
-    <div class="stake-rail" aria-label="Stake promo">
-        <div class="box">
-            <a href="https://stake.com/?c=thestreamden" target="_blank" rel="noopener noreferrer">
-                <img
-                    src="{{ url_for('static', filename='stake_vertical.svg') }}"
-                    width="160"
-                    height="600"
-                    alt="Stake promo"
-                    loading="lazy"
-                >
-            </a>
-        </div>
+    <div class="left-rail-ad" aria-label="Sidebar banner">
+        <iframe
+            class="ad-iframe"
+            title="Sidebar banner ad"
+            sandbox="allow-scripts allow-same-origin"
+            srcdoc='<!doctype html><html><head><meta charset="utf-8"></head><body style="margin:0;padding:0;display:flex;align-items:center;justify-content:center;background:transparent;"><script>atOptions={"key":"fea0e81c7727467a10d419a8e7d2f3d8","format":"iframe","height":600,"width":160,"params":{}};</script><script src="https://graduatedoutside.com/fea0e81c7727467a10d419a8e7d2f3d8/invoke.js"></script></body></html>'>
+        ></iframe>
     </div>
 
     <script>
@@ -829,6 +1066,7 @@
 
             if (playerLayout && multiToggle) {
                 let multiOn = false;
+                const extraSlots = playerLayout.querySelectorAll('.extra-slot');
 
                 multiToggle.addEventListener('click', function () {
                     multiOn = !multiOn;
@@ -836,6 +1074,14 @@
                         playerLayout.classList.remove('single');
                         playerLayout.classList.add('multi');
                         multiToggle.textContent = 'Disable multi-view';
+
+                        extraSlots.forEach((slot) => {
+                            const select = slot.querySelector('.multi-slot-select');
+                            if (select && !select.value && select.options.length > 1) {
+                                select.selectedIndex = 1;
+                                select.dispatchEvent(new Event('change'));
+                            }
+                        });
                     } else {
                         playerLayout.classList.remove('multi');
                         playerLayout.classList.add('single');
@@ -843,7 +1089,6 @@
                     }
                 });
 
-                const extraSlots = playerLayout.querySelectorAll('.extra-slot');
                 extraSlots.forEach(slot => {
                     const select = slot.querySelector('.multi-slot-select');
                     const titleEl = slot.querySelector('.multi-slot-title');
@@ -881,6 +1126,55 @@
 
     <script>
         (function () {
+            const shareButtons = document.querySelectorAll('.share-pill[data-url]');
+            const statusEl = document.getElementById('share-status');
+
+            const showStatus = (msg) => {
+                if (!statusEl) return;
+                statusEl.textContent = msg;
+            };
+
+            async function copyToClipboard(text) {
+                if (!text) return false;
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    await navigator.clipboard.writeText(text);
+                    return true;
+                }
+
+                const textarea = document.createElement('textarea');
+                textarea.value = text;
+                textarea.setAttribute('readonly', '');
+                textarea.style.position = 'absolute';
+                textarea.style.left = '-9999px';
+                document.body.appendChild(textarea);
+                textarea.select();
+                const ok = document.execCommand('copy');
+                textarea.remove();
+                return ok;
+            }
+
+            shareButtons.forEach((btn) => {
+                btn.addEventListener('click', async function (e) {
+                    e.preventDefault();
+                    const url = btn.getAttribute('data-url');
+                    const label = btn.getAttribute('data-label') || 'Link';
+                    try {
+                        const success = await copyToClipboard(url);
+                        if (success) {
+                            showStatus(`${label} copied to clipboard`);
+                        } else {
+                            showStatus('Copy failed. Tap and hold to copy.');
+                        }
+                    } catch (err) {
+                        showStatus('Copy failed. Tap and hold to copy.');
+                    }
+                });
+            });
+        })();
+    </script>
+
+    <script>
+        (function () {
             function sendHeartbeat() {
                 fetch("{{ url_for('streaming.heartbeat') }}", {
                     method: "POST",
@@ -897,22 +1191,5 @@
     </script>
 
     <script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token": "643968b4db2b4d4c80a6f49718fcfcaa"}'></script>
-
-{% if open_ad %}
-<script>
-  window.addEventListener('load', function () {
-    try {
-      window.open(
-        'https://broodbelongminiature.com/d01t94kua?key=491dbdc350af1bf2b2f5c05ef1a574df',
-        '_blank'
-      );
-    } catch (e) {
-      if (window.console && console.debug) {
-        console.debug('Ad popunder blocked:', e);
-      }
-    }
-  });
-</script>
-{% endif %}
 </body>
 </html>

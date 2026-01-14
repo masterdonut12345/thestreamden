@@ -26,7 +26,7 @@ import pandas as pd
 import pytz
 from apscheduler.schedulers.background import BackgroundScheduler
 from bs4 import BeautifulSoup
-from flask import Blueprint, abort, jsonify, make_response, redirect, render_template, request, session, url_for
+from flask import Blueprint, abort, g, jsonify, make_response, redirect, render_template, request, session, url_for
 import requests
 
 import scrape_games
@@ -63,6 +63,7 @@ ENABLE_VIEWER_TRACKING = os.environ.get("ENABLE_VIEWER_TRACKING", "1") == "1"
 # IMPORTANT: do not run scraper in the web process unless explicitly enabled
 ENABLE_SCRAPER_IN_WEB = os.environ.get("ENABLE_SCRAPER_IN_WEB", "1") == "1"
 SCRAPE_INTERVAL_MINUTES = int(os.environ.get("SCRAPE_INTERVAL_MINUTES", "10"))
+STARTUP_SCRAPE_ON_BOOT = os.environ.get("STARTUP_SCRAPE_ON_BOOT", "1") == "1"
 
 
 # ====================== ACTIVE VIEWER TRACKER ======================
@@ -71,10 +72,12 @@ ACTIVE_PAGE_VIEWS: dict[tuple[str, str], datetime] = {}  # (session_id, path) â†
 LAST_VIEWER_PRINT: datetime | None = None  # throttle printing
 
 
+
 def get_session_id() -> str:
     if "sid" not in session:
         session["sid"] = str(uuid.UUID(bytes=os.urandom(16)))
     return session["sid"]
+
 
 
 def mark_active() -> None:
@@ -674,23 +677,23 @@ def index():
     q = request.args.get("q", "").strip().lower()
     if q:
         games = [
-            g
-            for g in games
-            if q in safe_lower(g.get("matchup"))
-            or q in safe_lower(g.get("sport"))
-            or q in safe_lower(g.get("tournament"))
+            game
+            for game in games
+            if q in safe_lower(game.get("matchup"))
+            or q in safe_lower(game.get("sport"))
+            or q in safe_lower(game.get("tournament"))
         ]
 
     live_only = request.args.get("live_only", "").lower() in ("1", "true", "yes", "on")
     if live_only:
-        games = [g for g in games if g.get("is_live")]
+        games = [game for game in games if game.get("is_live")]
 
     sections_by_sport: dict[str, list[dict[str, Any]]] = {}
-    for g in games:
-        sport = normalize_sport_name(g.get("sport"))
+    for game in games:
+        sport = normalize_sport_name(game.get("sport"))
         if sport_is_invalid(sport):
             continue
-        sections_by_sport.setdefault(sport, []).append(g)
+        sections_by_sport.setdefault(sport, []).append(game)
 
     sections = [{"sport": s, "games": lst} for s, lst in sections_by_sport.items()]
     sections.sort(key=lambda s: normalize_sport_name(s["sport"]).lower())
@@ -703,7 +706,14 @@ def index():
         search_query=q,
         live_only=live_only,
         most_viewed_games=most_viewed_games,
+        current_session=get_session_id(),
     )
+
+
+@streaming_bp.route("/make-money")
+def make_money():
+    mark_active()
+    return render_template("make_money.html")
 
 
 def _build_games_from_df(df: pd.DataFrame):
@@ -1109,6 +1119,8 @@ def game_detail(game_id: int):
     share_slug_url = _absolute_url(url_for("streaming.game_by_slug", slug=slug))
     og_image_url = _absolute_url(url_for("static", filename="preview.svg"))
 
+    current_user = getattr(g, "current_user", None)
+
     return render_template(
         "streaming_game.html",
         game=game,
@@ -1118,6 +1130,7 @@ def game_detail(game_id: int):
         share_slug_url=share_slug_url,
         og_image_url=og_image_url,
         requested_stream_slug=requested_stream_slug,
+        current_user=current_user,
     )
 
 
@@ -1251,7 +1264,8 @@ def _maybe_start_scraper():
         should_start = False
 
     if should_start:
-        trigger_startup_scrape()
+        if STARTUP_SCRAPE_ON_BOOT or not DATA_PATH.exists():
+            trigger_startup_scrape()
         start_scheduler()
         _SCRAPER_STARTED = True
 

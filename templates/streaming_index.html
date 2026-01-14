@@ -112,6 +112,12 @@
             opacity: 0.9;
         }
 
+        .top-nav-actions {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
         .brand {
             display: flex;
             align-items: center;
@@ -144,10 +150,37 @@
             background: rgba(5, 5, 12, 0.85);
         }
 
-        .forum-link {
-            display: inline-flex;
+        .auth-inline {
+            display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 6px;
+            background: rgba(8, 9, 16, 0.85);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            padding: 6px 8px;
+            border-radius: 12px;
+        }
+        .auth-inline input {
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 8px;
+            padding: 8px 10px;
+            color: var(--text);
+            min-width: 120px;
+        }
+        .auth-inline button {
+            background: var(--accent);
+            border: none;
+            color: #05060f;
+            font-weight: 700;
+            padding: 9px 12px;
+            border-radius: 10px;
+            cursor: pointer;
+            box-shadow: 0 8px 18px rgba(122, 162, 255, 0.35);
+        }
+        .auth-inline button:hover {
+            filter: brightness(1.05);
+        }
+        .pill-button {
             padding: 8px 12px;
             border-radius: 10px;
             border: 1px solid rgba(122, 162, 255, 0.55);
@@ -155,12 +188,25 @@
             color: #eef2ff;
             text-decoration: none;
             font-weight: 600;
-            transition: transform 0.12s ease, background 0.15s ease, border-color 0.15s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            cursor: pointer;
+            transition: transform 0.1s ease, border-color 0.12s ease, background 0.12s ease;
         }
-        .forum-link:hover {
-            transform: translateY(-1px);
+
+        .pill-button:hover {
+            border-color: rgba(122, 162, 255, 0.75);
             background: rgba(122, 162, 255, 0.22);
-            border-color: rgba(122, 162, 255, 0.9);
+            transform: translateY(-1px);
+        }
+
+        .pill-button .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--accent);
+            box-shadow: 0 0 0 1px rgba(122, 162, 255, 0.6);
         }
 
         /* === HEADER === */
@@ -223,68 +269,63 @@
 
         .ad-slot-top-right {
             flex: 0 0 auto;
-            text-align: right;
             max-width: 728px;
+            display: flex;
+            justify-content: flex-end;
+            width: 100%;
+        }
+
+        .ad-iframe {
+            border: 0;
+            width: 100%;
+            max-width: 728px;
+            height: 90px;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 8px 18px rgba(0, 0, 0, 0.45);
         }
 
         @media (max-width: 900px) {
             .header-container { flex-direction: column; align-items: flex-start; }
-            .ad-slot-top-right { text-align: left; width: 100%; overflow-x: auto; }
+            .ad-slot-top-right { justify-content: flex-start; max-width: 100%; }
         }
 
-        /* === Cross-promo banner === */
-        .promo-strip {
-            margin: 14px 0 14px 0;
+        /* === Accordions === */
+        .accordion {
+            margin: 16px 0;
+            display: grid;
+            gap: 10px;
+        }
+        .accordion-item {
+            border: 1px solid rgba(122, 162, 255, 0.35);
+            border-radius: 14px;
+            background: rgba(7, 9, 18, 0.9);
+            color: #e8ecff;
+            box-shadow: 0 10px 28px rgba(0, 0, 0, 0.65);
+            overflow: hidden;
+        }
+        .accordion-item summary {
+            list-style: none;
             padding: 12px 14px;
-            border-radius: 16px;
-            background: radial-gradient(circle at top left, rgba(122, 162, 255, 0.22), rgba(5, 5, 18, 0.96));
-            border: 1px solid rgba(122, 162, 255, 0.45);
-            box-shadow: 0 14px 34px rgba(0, 0, 0, 0.75);
             display: flex;
             align-items: center;
-            justify-content: space-between;
-            gap: 12px;
+            gap: 10px;
+            cursor: pointer;
         }
-
-        .promo-left { display: flex; flex-direction: column; gap: 3px; }
-        .promo-title { font-size: 0.95rem; font-weight: 700; letter-spacing: 0.02em; color: #e8ecff; }
-        .promo-subtitle { font-size: 0.82rem; color: var(--muted); }
-
-        .promo-cta {
-            flex: 0 0 auto;
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            padding: 9px 14px;
-            border-radius: 999px;
-            border: 1px solid rgba(122, 162, 255, 0.65);
-            background: rgba(122, 162, 255, 0.14);
-            color: #eef2ff;
-            text-decoration: none;
-            font-size: 0.85rem;
-            font-weight: 600;
-            transition: transform 0.12s ease, background 0.15s ease, border-color 0.15s ease;
-            min-height: 40px; /* ✅ nicer tap target */
+        .accordion-item summary::-webkit-details-marker { display: none; }
+        .accordion-title-block { display: flex; flex-direction: column; gap: 4px; }
+        .accordion-title { font-size: 1rem; font-weight: 700; }
+        .accordion-subtitle { font-size: 0.9rem; color: #c7d2ff; }
+        .accordion-icon {
+            margin-left: auto;
+            font-weight: 700;
+            color: rgba(232, 236, 255, 0.85);
+            transition: transform 0.15s ease;
         }
-
-        .promo-cta:hover {
-            transform: translateY(-1px);
-            background: rgba(122, 162, 255, 0.22);
-            border-color: rgba(122, 162, 255, 0.9);
-        }
-
-        .promo-cta .pill {
-            font-size: 0.72rem;
-            padding: 2px 8px;
-            border-radius: 999px;
-            border: 1px solid rgba(255, 255, 255, 0.14);
-            background: rgba(0, 0, 0, 0.18);
-            color: #dbe4ff;
-        }
-
-        @media (max-width: 650px) {
-            .promo-strip { flex-direction: column; align-items: flex-start; }
-            .promo-cta { width: 100%; justify-content: center; }
+        details[open] .accordion-icon { transform: rotate(180deg); }
+        .accordion-body {
+            border-top: 1px solid rgba(122, 162, 255, 0.2);
+            padding: 12px 14px;
         }
 
         /* search bar */
@@ -684,6 +725,12 @@
             overflow: hidden;
             box-shadow: 0 16px 36px rgba(0, 0, 0, 0.85);
         }
+        .vertical-ad-fixed .ad-iframe {
+            width: 160px;
+            height: 600px;
+            max-width: none;
+            border-radius: 12px;
+        }
         @media (max-width: 1100px) { .vertical-ad-fixed { display: none; } }
 
         /* Most viewed hidden under 1400 already */
@@ -795,10 +842,27 @@
 
             h1 { font-size: 1.6rem; }
 
-            .top-nav { font-size: 0.8rem; }
+            .top-nav {
+                font-size: 0.8rem;
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 6px;
+            }
+            .top-nav-right {
+                width: 100%;
+                justify-content: flex-start;
+                flex-wrap: wrap;
+                gap: 8px;
+            }
             .pill-label { display: none; } /* ✅ declutter */
 
             header { padding: 14px 14px 12px; border-radius: 18px; }
+            .header-container { gap: 12px; }
+            .header-subline {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 6px;
+            }
 
             .search-shell { margin: 12px 0 8px; }
             .search-bar { padding: 10px; gap: 10px; }
@@ -820,22 +884,78 @@
 
             /* ✅ Game grid becomes single column */
             .sport-games-grid { grid-template-columns: 1fr; gap: 10px; }
+            .game-card { padding: 12px; }
 
             /* ✅ Reduce heavy hover transforms on mobile */
             .game-card:hover { transform: none; }
             .now-playing-item:hover { transform: none; }
+            .now-playing-list { flex-direction: column; }
+            .now-playing-item { width: 100%; justify-content: space-between; }
 
             /* ✅ Now playing matchup fits narrower screens */
             .now-playing-matchup { max-width: 150px; }
 
             /* ✅ Remove sticky search on tiny screens to avoid “jumping” with browser UI */
             .search-shell { position: static; top: auto; }
+
+            /* ✅ Keep sport headers and cards from cramping */
+            .sport-header {
+                align-items: flex-start;
+                gap: 8px;
+            }
+            .sport-toggle-icon { margin-left: auto; padding: 4px; }
+            .game-tags-row {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 6px;
+            }
+            .game-time {
+                text-align: left;
+                white-space: normal;
+                width: 100%;
+            }
         }
 
         /* ✅ Respect reduced motion */
         @media (prefers-reduced-motion: reduce) {
             * { transition: none !important; scroll-behavior: auto !important; }
             .live-pill::before { animation: none !important; box-shadow: 0 0 0 0 rgba(255, 77, 106, 0.6); }
+        }
+
+        .toast {
+            position: fixed;
+            bottom: 18px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(8, 10, 18, 0.9);
+            color: #f7f7ff;
+            padding: 12px 16px;
+            border-radius: 12px;
+            border: 1px solid rgba(122, 162, 255, 0.4);
+            box-shadow: 0 18px 40px rgba(0, 0, 0, 0.45);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            min-width: 260px;
+            justify-content: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.18s ease, transform 0.18s ease;
+            z-index: 99;
+        }
+
+        .toast.show {
+            opacity: 1;
+            pointer-events: auto;
+            transform: translate(-50%, -4px);
+        }
+
+        .toast .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: var(--accent);
+            box-shadow: 0 0 0 1px rgba(122, 162, 255, 0.6);
         }
     </style>
 </head>
@@ -847,9 +967,15 @@
                 <div class="brand-logo"></div>
                 <span>The Stream Den</span>
             </div>
-            <div class="top-nav-right">
-                <a class="forum-link" href="/forum">Community Forum ↗</a>
-                <div class="pill-label">live sports</div>
+            <div class="top-nav-actions">
+                <a class="pill-button" href="{{ url_for('streaming.make_money') }}">
+                    Make money
+                </a>
+                <button class="pill-button" id="saveLinkButton" type="button">
+                    <span class="dot" aria-hidden="true"></span>
+                    Save this site
+                </button>
+                <span class="pill-label">Copy or share the link for later</span>
             </div>
         </div>
 
@@ -874,23 +1000,14 @@
                     </div>
                 </div>
 
-                <div class="ad-slot-top-right">
-                    <script type="text/javascript">
-                      atOptions = {
-                      	'key' : '404cd50590d1227fb3038749119d5034',
-                      	'format' : 'iframe',
-                      	'height' : 90,
-                      	'width' : 728,
-                      	'params' : {}
-                      };
-                    </script>
-                    <script
-                      type="text/javascript"
-                      src="https://broodbelongminiature.com/404cd50590d1227fb3038749119d5034/invoke.js"
-                    ></script>
+                <div class="ad-slot-top-right" aria-label="Sponsored banner">
+                    <iframe
+                        class="ad-iframe"
+                        title="Top banner ad"
+                        sandbox="allow-scripts allow-same-origin"
+                        srcdoc='<!doctype html><html><head><meta charset="utf-8"></head><body style="margin:0;padding:0;display:flex;align-items:center;justify-content:center;background:transparent;"><script type="text/javascript">var atOptions={"key":"404cd50590d1227fb3038749119d5034","format":"iframe","height":90,"width":728,"params":{}};</script><script type="text/javascript" src="https://broodbelongminiature.com/404cd50590d1227fb3038749119d5034/invoke.js"></script></body></html>'>
+                    </iframe>
                 </div>
-            </div>
-        </header>
 
         <div class="promo-strip">
             <div class="promo-left">
@@ -899,11 +1016,7 @@
                     Join TheStreamDen community forum for movies, TV shows, and more.
                 </div>
             </div>
-
-            <a class="promo-cta" href="/forum">
-                Visit the forum<span class="pill">↗</span>
-            </a>
-        </div>
+        </header>
 
         <div class="search-shell">
             <form class="search-bar" method="get" action="{{ url_for('streaming.index') }}">
@@ -917,13 +1030,13 @@
                     autocomplete="off"
                 >
                 <div class="search-actions">
-                    <button type="submit">🔍 Search</button>
+                    <button type="submit">Search</button>
 
                     <button
                         type="button"
                         class="live-filter-button {% if live_only %}active{% endif %}"
                         onclick="toggleLiveOnly({{ 'true' if live_only else 'false' }})">
-                        🔴 Live only
+                        Live only
                     </button>
 
                     {% if search_query %}
@@ -943,11 +1056,11 @@
 
             <div class="quick-filters">
                 <span class="quick-filters-label">Quick filters:</span>
-                <button class="filter-chip" type="button" onclick="applyFilterChip('NFL')"><span class="emoji">🏈</span> NFL</button>
-                <button class="filter-chip" type="button" onclick="applyFilterChip('Basketball')"><span class="emoji">🏀</span> Basketball</button>
-                <button class="filter-chip" type="button" onclick="applyFilterChip('ICE HOCKEY')"><span class="emoji">🏒</span> ICE HOCKEY</button>
-                <button class="filter-chip" type="button" onclick="applyFilterChip('MLB')"><span class="emoji">⚾</span> MLB</button>
-                <button class="filter-chip" type="button" onclick="applyFilterChip('Soccer')"><span class="emoji">⚽</span> Soccer</button>
+                <button class="filter-chip" type="button" onclick="applyFilterChip('NFL')">NFL</button>
+                <button class="filter-chip" type="button" onclick="applyFilterChip('Basketball')">Basketball</button>
+                <button class="filter-chip" type="button" onclick="applyFilterChip('ICE HOCKEY')">Ice Hockey</button>
+                <button class="filter-chip" type="button" onclick="applyFilterChip('MLB')">MLB</button>
+                <button class="filter-chip" type="button" onclick="applyFilterChip('Soccer')">Soccer</button>
                 <button class="filter-chip" type="button" onclick="applyFilterChip('')">Clear</button>
             </div>
         </div>
@@ -1060,20 +1173,13 @@
         {% endif %}
     </div>
 
-    <div class="vertical-ad-fixed">
-        <script type="text/javascript">
-          atOptions = {
-          	'key' : '29ef845582924216c628b8930841e3bb',
-          	'format' : 'iframe',
-          	'height' : 600,
-          	'width' : 160,
-          	'params' : {}
-          };
-        </script>
-        <script
-          type="text/javascript"
-          src="https://broodbelongminiature.com/29ef845582924216c628b8930841e3bb/invoke.js"
-        ></script>
+    <div class="vertical-ad-fixed" aria-label="Sidebar banner">
+        <iframe
+            class="ad-iframe"
+            title="Sidebar banner ad"
+            sandbox="allow-scripts allow-same-origin"
+            srcdoc='<!doctype html><html><head><meta charset="utf-8"></head><body style="margin:0;padding:0;display:flex;align-items:center;justify-content:center;background:transparent;"><script type="text/javascript">var atOptions={"key":"29ef845582924216c628b8930841e3bb","format":"iframe","height":600,"width":160,"params":{}};</script><script type="text/javascript" src="https://broodbelongminiature.com/29ef845582924216c628b8930841e3bb/invoke.js"></script></body></html>'>
+        </iframe>
     </div>
 
     {% if most_viewed_games %}
@@ -1147,24 +1253,76 @@
 
                 if (index === 0) sec.classList.add('open');
             });
+
         });
+    </script>
+
+    <script>
+        (function () {
+            const button = document.getElementById('saveLinkButton');
+            const toast = document.getElementById('saveToast');
+            const toastMessage = document.getElementById('toastMessage');
+
+            function showToast(message) {
+                if (!toast || !toastMessage) return;
+                toastMessage.textContent = message;
+                toast.classList.add('show');
+                setTimeout(() => toast.classList.remove('show'), 2400);
+            }
+
+            async function copyToClipboard(text) {
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    try {
+                        await navigator.clipboard.writeText(text);
+                        return true;
+                    } catch (err) {
+                        return false;
+                    }
+                }
+                return false;
+            }
+
+            async function handleSaveClick() {
+                const url = window.location.href;
+                if (navigator.share) {
+                    try {
+                        await navigator.share({ title: 'The Stream Den', url });
+                        return;
+                    } catch (err) {
+                        // fall back to copy
+                    }
+                }
+
+                const copied = await copyToClipboard(url);
+                if (copied) {
+                    showToast('Link copied. Save it wherever you like.');
+                } else {
+                    const tempInput = document.createElement('input');
+                    tempInput.value = url;
+                    tempInput.setAttribute('readonly', '');
+                    tempInput.style.position = 'absolute';
+                    tempInput.style.left = '-9999px';
+                    document.body.appendChild(tempInput);
+                    tempInput.select();
+                    try { document.execCommand('copy'); } catch (err) { /* ignore */ }
+                    document.body.removeChild(tempInput);
+                    showToast('Link ready. Copy it manually if needed.');
+                }
+            }
+
+            if (button) {
+                button.addEventListener('click', handleSaveClick);
+            }
+        })();
     </script>
 
     <!-- Cloudflare Web Analytics -->
     <script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token": "643968b4db2b4d4c80a6f49718fcfcaa"}'></script>
     <!-- End Cloudflare Web Analytics -->
 
-    <!-- Adsterra Social Bar -->
-    <script
-      type="text/javascript"
-      src="https://broodbelongminiature.com/0f/a2/4c/0fa24c36bd8ef534a07b2aebe1ba89c3.js"
-    ></script>
-
-    <!-- NEW: Adsterra ad unit (added) -->
-    <script
-      type="text/javascript"
-      defer
-      src="https://graduatedoutside.com/10/0b/5c/100b5c0f06c917d350ecd499f4f7fa16.js"
-    ></script>
+    <div class="toast" id="saveToast" role="status" aria-live="polite">
+        <span class="status-dot" aria-hidden="true"></span>
+        <span id="toastMessage">Link copied. Save it wherever you like.</span>
+    </div>
 </body>
 </html>
