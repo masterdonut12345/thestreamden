@@ -19,6 +19,7 @@ from flask import (
     redirect,
     render_template,
     request,
+    send_from_directory,
     session,
     url_for,
 )
@@ -46,6 +47,11 @@ app.config.update(
 )
 
 app.register_blueprint(streaming_bp)
+
+
+@app.route("/robots.txt")
+def robots_txt():
+    return send_from_directory(app.static_folder, "robots.txt")
 
 
 # -----------------------------
