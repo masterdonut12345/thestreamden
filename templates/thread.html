@@ -135,10 +135,9 @@
           <div style="font-weight:700; margin-bottom:6px;">Stream</div>
           {% if embed_info.type == "iframe" %}
             <iframe
-              src="{{ embed_info.src }}"
+              src="{{ stream_proxy_url(embed_info.src) }}"
               title="{{ embed_info.title or 'Stream' }}"
               allowfullscreen
-              sandbox="allow-scripts allow-same-origin"
             ></iframe>
             <div style="margin-top:6px;"><a href="{{ thread.stream_link }}" target="_blank" rel="noopener">Open stream link</a></div>
           {% elif embed_info.type == "x" %}

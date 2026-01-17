@@ -16,6 +16,7 @@ from flask import (
     abort,
     g,
     jsonify,
+    make_response,
     redirect,
     render_template,
     request,
@@ -23,6 +24,7 @@ from flask import (
     session,
     url_for,
 )
+import requests
 from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import joinedload
@@ -47,6 +49,122 @@ app.config.update(
 )
 
 app.register_blueprint(streaming_bp)
+
+STREAM_PROXY_TIMEOUT = 12
+STREAM_PROXY_UA = (
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/143.0.0.0 Safari/537.36"
+)
+
+
+def stream_proxy_url(raw_url: str) -> str:
+    if not raw_url:
+        return ""
+    try:
+        parsed = urlsplit(raw_url)
+    except Exception:
+        return raw_url
+    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        return raw_url
+    return url_for("stream_proxy", url=raw_url)
+
+
+def _inject_popup_guard(html: str, base_url: str) -> str:
+    guard = """
+    <script>
+      (() => {
+        const noop = () => null;
+        try {
+          Object.defineProperty(window, "open", {
+            value: noop,
+            writable: false,
+            configurable: false,
+          });
+        } catch (e) {
+          window.open = noop;
+        }
+        try {
+          Object.defineProperty(Window.prototype, "open", {
+            value: noop,
+            writable: false,
+            configurable: false,
+          });
+        } catch (e) {}
+
+        document.addEventListener("click", (event) => {
+          const anchor = event.target?.closest?.("a");
+          if (!anchor) return;
+          const target = (anchor.getAttribute("target") || "").toLowerCase();
+          if (target === "_blank" || target === "_new") {
+            event.preventDefault();
+            event.stopPropagation();
+          }
+        }, true);
+
+        try {
+          const locationProto = Object.getPrototypeOf(window.location);
+          if (locationProto) {
+            ["assign", "replace"].forEach((name) => {
+              try {
+                Object.defineProperty(window.location, name, {
+                  value: noop,
+                  writable: false,
+                  configurable: false,
+                });
+              } catch (e) {}
+            });
+          }
+        } catch (e) {}
+      })();
+    </script>
+    """
+    base = f'<base href="{base_url}">'
+    head_match = re.search(r"<head[^>]*>", html, re.IGNORECASE)
+    if head_match:
+        insert_at = head_match.end()
+        return html[:insert_at] + base + guard + html[insert_at:]
+    body_match = re.search(r"<body[^>]*>", html, re.IGNORECASE)
+    if body_match:
+        insert_at = body_match.end()
+        return html[:insert_at] + guard + html[insert_at:]
+    return base + guard + html
+
+
+@app.route("/stream-proxy")
+def stream_proxy():
+    raw_url = (request.args.get("url") or "").strip()
+    if not raw_url:
+        abort(400)
+
+    parsed = urlsplit(raw_url)
+    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        abort(400)
+
+    try:
+        resp = requests.get(
+            raw_url,
+            headers={"User-Agent": STREAM_PROXY_UA, "Accept": "*/*"},
+            timeout=STREAM_PROXY_TIMEOUT,
+            allow_redirects=True,
+        )
+    except requests.RequestException:
+        abort(502)
+
+    content_type = resp.headers.get("Content-Type", "")
+    body = resp.content
+    if "text/html" in content_type.lower():
+        html = resp.text
+        injected = _inject_popup_guard(html, str(resp.url))
+        body = injected.encode(resp.encoding or "utf-8", errors="replace")
+
+    response = make_response(body, resp.status_code)
+    response.headers["Content-Type"] = content_type or "text/html; charset=utf-8"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    return response
+
+
+app.jinja_env.globals["stream_proxy_url"] = stream_proxy_url
 
 
 @app.route("/robots.txt")

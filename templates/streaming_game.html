@@ -890,7 +890,7 @@
                     <div class="player-slot" data-slot="0">
                         <iframe
                             id="game-iframe"
-                            src="{{ first_stream.embed_url }}"
+                            src="{{ stream_proxy_url(first_stream.embed_url) }}"
                             allowfullscreen
                             scrolling="no"
                             allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
@@ -917,7 +917,7 @@
                                                 {% set first_extra_stream = g.streams[0] %}
                                                 {% if first_extra_stream %}
                                                     <option
-                                                        value="{{ first_extra_stream.embed_url }}"
+                                                        value="{{ stream_proxy_url(first_extra_stream.embed_url) }}"
                                                         data-title="{{ g.matchup or ('Stream ' ~ loop.index) }}"
                                                     >
                                                         {{ g.matchup or ('Stream ' ~ loop.index) }}
@@ -944,7 +944,7 @@
                             <button
                                 type="button"
                                 class="stream-button {% if loop.first %}active{% endif %}"
-                                data-embed-url="{{ s.embed_url }}"
+                                data-embed-url="{{ stream_proxy_url(s.embed_url) }}"
                                 data-stream-slug="{{ s.slug }}"
                             >
                                 {{ s.label or ('Stream ' ~ loop.index) }}
