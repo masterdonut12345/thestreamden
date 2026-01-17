@@ -27,6 +27,8 @@ import ast
 import os
 import fcntl
 import hashlib
+import subprocess
+from playwright.sync_api import sync_playwright
 
 # ---------------- CONFIG ----------------
 
@@ -36,8 +38,12 @@ REQUEST_TIMEOUT = 8  # seconds
 STREAMED_API_BASE = os.environ.get("STREAMED_API_BASE", "https://streamed.pk")
 STREAMED_MATCHES_PATH = os.environ.get("STREAMED_MATCHES_PATH", "/api/matches/all-today")
 STREAMED_SPORTS_PATH = os.environ.get("STREAMED_SPORTS_PATH", "/api/sports")
+M3U8_WAIT_SECONDS = float(os.environ.get("M3U8_WAIT_SECONDS", "3.5"))
+M3U8_TIMEOUT_SECONDS = float(os.environ.get("M3U8_TIMEOUT_SECONDS", "15"))
+SHARK_M3U8_MAX_LOOKUPS = int(os.environ.get("SHARK_M3U8_MAX_LOOKUPS", "10"))
 
 _SESSION = None
+_PLAYWRIGHT_INSTALL_ATTEMPTED = False
 
 
 def _get_session():
@@ -46,6 +52,29 @@ def _get_session():
         _SESSION = requests.Session()
         _SESSION.headers.update(HEADERS)
     return _SESSION
+
+
+def _ensure_playwright_chromium() -> bool:
+    global _PLAYWRIGHT_INSTALL_ATTEMPTED
+    if _PLAYWRIGHT_INSTALL_ATTEMPTED:
+        return False
+    _PLAYWRIGHT_INSTALL_ATTEMPTED = True
+    try:
+        result = subprocess.run(
+            ["playwright", "install", "chromium"],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+    except FileNotFoundError:
+        print("[scraper] Playwright CLI not found; cannot install Chromium.")
+        return False
+    if result.returncode != 0:
+        err = (result.stderr or result.stdout or "").strip()
+        msg = f" Details: {err}" if err else ""
+        print(f"[scraper] Failed to install Playwright Chromium.{msg}")
+        return False
+    return True
 
 EST = pytz.timezone("US/Eastern")
 UTC = pytz.UTC
@@ -348,6 +377,69 @@ def scrape_streamed_api() -> pd.DataFrame:
 _OPENEMBED_RE = re.compile(r"openEmbed\(\s*[\"']([^\"']+)[\"']\s*\)", re.I)
 _WINDOWOPEN_RE = re.compile(r"window\.open\(\s*[\"']([^\"']+)[\"']\s*,", re.I)
 _HREF_URL_RE = re.compile(r"https?://[^\\s\"']+", re.I)
+_M3U8_RE = re.compile(r"""https?://[^\s"'<>]+?\.m3u8[^\s"'<>]*""", re.IGNORECASE)
+
+
+def _is_m3u8_url(url: str) -> bool:
+    return ".m3u8" in (url or "").lower()
+
+
+def _find_m3u8_from_page(
+    url: str,
+    *,
+    browser,
+    wait_seconds: float,
+    timeout_seconds: float,
+) -> str | None:
+    found: set[str] = set()
+
+    def add(maybe_url: str | None) -> None:
+        if not maybe_url:
+            return
+        if _is_m3u8_url(maybe_url):
+            found.add(maybe_url)
+
+    try:
+        ctx = browser.new_context()
+        page = ctx.new_page()
+
+        def on_request(req):
+            add(req.url)
+
+        page.on("request", on_request)
+
+        def on_response(res):
+            add(res.url)
+            try:
+                ct = (res.headers.get("content-type") or "").lower()
+                if any(x in ct for x in ("text", "json", "javascript", "xml", "mpegurl")):
+                    body = res.text()
+                    if body and len(body) <= 2_000_000:
+                        for m in _M3U8_RE.findall(body):
+                            add(m)
+                        for rel in re.findall(r"""[^\s"'<>]+\.m3u8[^\s"'<>]*""", body, flags=re.I):
+                            if rel.lower().startswith("http"):
+                                add(rel)
+                            else:
+                                add(urljoin(res.url, rel))
+            except Exception:
+                pass
+
+        page.on("response", on_response)
+
+        page.goto(url, wait_until="domcontentloaded", timeout=int(timeout_seconds * 1000))
+        page.wait_for_load_state("networkidle", timeout=int(timeout_seconds * 1000))
+        page.wait_for_timeout(int(wait_seconds * 1000))
+
+        page.close()
+        ctx.close()
+    except Exception:
+        return None
+
+    matches = [u for u in found if "chunks.m3u8" in u.lower()]
+    if matches:
+        return sorted(matches)[0]
+    return None
 
 def scrape_shark() -> pd.DataFrame:
     session = _get_session()
@@ -357,7 +449,43 @@ def scrape_shark() -> pd.DataFrame:
 
     soup = BeautifulSoup(r.text, "html.parser")
     rows = []
+    m3u8_cache: dict[str, str | None] = {}
+    lookup_count = 0
+    browser = None
+    playwright = None
 
+    if SHARK_M3U8_MAX_LOOKUPS > 0:
+        try:
+            playwright = sync_playwright().start()
+            browser = playwright.chromium.launch(
+                headless=True,
+                args=["--no-sandbox", "--disable-dev-shm-usage"],
+            )
+        except Exception as exc:
+            installed = _ensure_playwright_chromium()
+            if installed:
+                try:
+                    playwright = sync_playwright().start()
+                    browser = playwright.chromium.launch(
+                        headless=True,
+                        args=["--no-sandbox", "--disable-dev-shm-usage"],
+                    )
+                except Exception as retry_exc:
+                    print(
+                        "[scraper] SharkStreams m3u8 lookups disabled (Playwright failed to launch "
+                        "after attempting Chromium install). Error: "
+                        f"{retry_exc}"
+                    )
+                    browser = None
+            else:
+                print(
+                    "[scraper] SharkStreams m3u8 lookups disabled (Playwright failed to launch). "
+                    "Ensure Playwright browsers are installed (e.g. `playwright install chromium`) "
+                    f"and required system deps are available. Error: {exc}"
+                )
+                browser = None
+
+    eligible = []
     for div in soup.find_all("div", class_="row"):
         date_span = div.find("span", class_="ch-date")
         name_span = div.find("span", class_="ch-name")
@@ -372,6 +500,17 @@ def scrape_shark() -> pd.DataFrame:
 
         if not _within_days(dt, days_ahead=7):
             continue
+
+        eligible.append((div, dt, name_span, cat_span))
+
+    total_items = len(eligible)
+    for idx, (div, dt, name_span, cat_span) in enumerate(eligible, start=1):
+        if total_items:
+            bar_len = 24
+            filled = int(bar_len * idx / total_items)
+            bar = "=" * filled + "-" * (bar_len - filled)
+            percent = int(idx * 100 / total_items)
+            print(f"[scraper] SharkStreams progress [{bar}] {idx}/{total_items} ({percent}%)")
 
         embed_urls = []
         for a in div.find_all("a"):
@@ -416,12 +555,31 @@ def scrape_shark() -> pd.DataFrame:
         if not norm_urls:
             continue
 
+        resolved_urls = []
+        for u in norm_urls:
+            cached = m3u8_cache.get(u)
+            if cached is None and u not in m3u8_cache:
+                if browser and lookup_count < SHARK_M3U8_MAX_LOOKUPS:
+                    cached = _find_m3u8_from_page(
+                        u,
+                        browser=browser,
+                        wait_seconds=M3U8_WAIT_SECONDS,
+                        timeout_seconds=M3U8_TIMEOUT_SECONDS,
+                    )
+                    lookup_count += 1
+                m3u8_cache[u] = cached
+            if cached:
+                resolved_urls.append((u, cached))
+
+        if not resolved_urls:
+            continue
+
         streams = [{
             "label": "SharkStreams",
-            "embed_url": u,
-            "watch_url": u,
+            "embed_url": resolved,
+            "watch_url": original,
             "origin": "scraped",
-        } for u in norm_urls]
+        } for original, resolved in resolved_urls]
 
         rows.append({
             "source": "sharkstreams",
@@ -432,11 +590,22 @@ def scrape_shark() -> pd.DataFrame:
             "tournament": None,
             "tournament_url": None,
             "matchup": name_span.text.strip(),
-            "watch_url": norm_urls[0],
+            "watch_url": resolved_urls[0][0],
             "streams": streams,
-            "embed_url": norm_urls[0],
+            "embed_url": resolved_urls[0][1],
             "is_live": False,
         })
+
+    if browser:
+        try:
+            browser.close()
+        except Exception:
+            pass
+        try:
+            if playwright:
+                playwright.stop()
+        except Exception:
+            pass
 
     return pd.DataFrame(rows)
 
