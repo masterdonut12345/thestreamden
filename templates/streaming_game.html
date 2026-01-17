@@ -889,7 +889,7 @@
                     <div class="player-slot" data-slot="0">
                         <iframe
                             id="game-iframe"
-                            src="{{ stream_proxy_url(first_stream.embed_url) }}"
+                            src="{{ first_stream.embed_url }}"
                             allowfullscreen
                             scrolling="no"
                             allow="autoplay; encrypted-media; picture-in-picture; fullscreen">
@@ -915,7 +915,7 @@
                                                 {% set first_extra_stream = g.streams[0] %}
                                                 {% if first_extra_stream %}
                                                     <option
-                                                        value="{{ stream_proxy_url(first_extra_stream.embed_url) }}"
+                                                        value="{{ first_extra_stream.embed_url }}"
                                                         data-title="{{ g.matchup or ('Stream ' ~ loop.index) }}"
                                                     >
                                                         {{ g.matchup or ('Stream ' ~ loop.index) }}
@@ -941,7 +941,7 @@
                             <button
                                 type="button"
                                 class="stream-button {% if loop.first %}active{% endif %}"
-                                data-embed-url="{{ stream_proxy_url(s.embed_url) }}"
+                                data-embed-url="{{ s.embed_url }}"
                                 data-stream-slug="{{ s.slug }}"
                             >
                                 {{ s.label or ('Stream ' ~ loop.index) }}
@@ -1004,6 +1004,34 @@
             title="Sidebar banner ad"
             srcdoc='<!doctype html><html><head><meta charset="utf-8"></head><body style="margin:0;padding:0;display:flex;align-items:center;justify-content:center;background:transparent;"><script>atOptions={"key":"fea0e81c7727467a10d419a8e7d2f3d8","format":"iframe","height":600,"width":160,"params":{}};</script><script src="https://graduatedoutside.com/fea0e81c7727467a10d419a8e7d2f3d8/invoke.js"></script></body></html>'>
         ></iframe>
+    </div>
+
+    <div class="chat-rail closed" id="chat-rail" data-game-id="{{ game.id }}">
+        <button class="chat-toggle" id="chat-toggle" type="button" aria-expanded="false">
+            Chat
+        </button>
+        <div class="chat-panel" role="region" aria-label="Live chat">
+            <div class="chat-header">
+                <div>
+                    <div class="chat-title">Live chat</div>
+                    <div class="chat-subtitle">{{ game.matchup }}</div>
+                </div>
+                <span class="chat-status" id="chat-status" data-state="warn">Connecting…</span>
+            </div>
+            <div class="chat-messages" id="chat-messages" role="log" aria-live="polite"></div>
+            <form class="chat-form" id="chat-form">
+                <input
+                    class="chat-input"
+                    id="chat-input"
+                    type="text"
+                    maxlength="280"
+                    autocomplete="off"
+                    placeholder="Say something about this game…"
+                >
+                <button class="chat-send" type="submit">Send</button>
+            </form>
+            <div class="chat-tip">Be respectful. Messages are visible only for this game.</div>
+        </div>
     </div>
 
     <script>
@@ -1197,6 +1225,136 @@
                     fullscreenToggle.textContent = fullOn ? 'Exit full-page' : 'Enter full-page';
                 });
             }
+        })();
+    </script>
+
+    <script>
+        (function () {
+            const rail = document.getElementById("chat-rail");
+            if (!rail) return;
+
+            const toggle = document.getElementById("chat-toggle");
+            const messagesEl = document.getElementById("chat-messages");
+            const form = document.getElementById("chat-form");
+            const input = document.getElementById("chat-input");
+            const statusEl = document.getElementById("chat-status");
+
+            const gameId = rail.getAttribute("data-game-id");
+            const endpoint = "{{ url_for('streaming.game_chat_messages', game_id=game.id) }}";
+            let lastId = 0;
+            let fetching = false;
+
+            function setStatus(text, state) {
+                if (!statusEl) return;
+                statusEl.textContent = text;
+                statusEl.setAttribute("data-state", state);
+            }
+
+            function formatTime(iso) {
+                const date = new Date(iso);
+                if (Number.isNaN(date.getTime())) return "";
+                return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+            }
+
+            function renderMessage(msg) {
+                const wrap = document.createElement("div");
+                wrap.className = "chat-message";
+
+                const meta = document.createElement("div");
+                meta.className = "chat-meta";
+
+                const user = document.createElement("span");
+                user.textContent = msg.user || "Anonymous";
+
+                const time = document.createElement("span");
+                time.textContent = formatTime(msg.created_at);
+
+                meta.appendChild(user);
+                meta.appendChild(time);
+
+                const text = document.createElement("div");
+                text.className = "chat-text";
+                text.textContent = msg.body || "";
+
+                wrap.appendChild(meta);
+                wrap.appendChild(text);
+                messagesEl.appendChild(wrap);
+            }
+
+            function scrollToBottom() {
+                messagesEl.scrollTop = messagesEl.scrollHeight;
+            }
+
+            function setOpenState(isOpen) {
+                rail.classList.toggle("open", isOpen);
+                rail.classList.toggle("closed", !isOpen);
+                if (toggle) toggle.setAttribute("aria-expanded", String(isOpen));
+            }
+
+            if (toggle) {
+                toggle.addEventListener("click", () => {
+                    const isOpen = rail.classList.contains("open");
+                    setOpenState(!isOpen);
+                });
+            }
+
+            setOpenState(window.innerWidth > 1280);
+
+            async function fetchMessages({ initial = false } = {}) {
+                if (fetching) return;
+                fetching = true;
+                const url = new URL(endpoint, window.location.origin);
+                if (lastId) url.searchParams.set("after_id", String(lastId));
+                if (initial) url.searchParams.set("limit", "50");
+
+                try {
+                    const resp = await fetch(url.toString(), { headers: { Accept: "application/json" } });
+                    if (!resp.ok) throw new Error("bad response");
+                    const data = await resp.json();
+                    const msgs = data.messages || [];
+                    if (msgs.length) {
+                        msgs.forEach(renderMessage);
+                        lastId = data.latest_id || msgs[msgs.length - 1].id;
+                        scrollToBottom();
+                    }
+                    setStatus("Live", "ok");
+                } catch (err) {
+                    setStatus("Offline", "error");
+                } finally {
+                    fetching = false;
+                }
+            }
+
+            if (form && input) {
+                form.addEventListener("submit", async (event) => {
+                    event.preventDefault();
+                    const body = input.value.trim();
+                    if (!body) return;
+                    input.value = "";
+                    setStatus("Sending…", "warn");
+
+                    try {
+                        const resp = await fetch(endpoint, {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ body }),
+                        });
+                        const data = await resp.json();
+                        if (!resp.ok || !data.ok) throw new Error("send failed");
+                        if (data.message) {
+                            renderMessage(data.message);
+                            lastId = data.message.id;
+                            scrollToBottom();
+                        }
+                        setStatus("Live", "ok");
+                    } catch (err) {
+                        setStatus("Failed to send", "error");
+                    }
+                });
+            }
+
+            fetchMessages({ initial: true });
+            setInterval(fetchMessages, 5000);
         })();
     </script>
 
