@@ -182,6 +182,27 @@ def _inject_popup_guard(html: str, base_url: str) -> str:
           scanOverlays();
         }
 
+        const lockLocation = (loc) => {
+          if (!loc) return;
+          try {
+            ["assign", "replace"].forEach((name) => {
+              try {
+                Object.defineProperty(loc, name, {
+                  value: noop,
+                  writable: false,
+                  configurable: false,
+                });
+              } catch (e) {}
+            });
+          } catch (e) {}
+
+          try {
+            Object.defineProperty(loc, "href", {
+              set: () => {},
+            });
+          } catch (e) {}
+        };
+
         try {
           const locationProto = Object.getPrototypeOf(window.location);
           if (locationProto) {
@@ -197,11 +218,9 @@ def _inject_popup_guard(html: str, base_url: str) -> str:
           }
         } catch (e) {}
 
-        try {
-          Object.defineProperty(Location.prototype, "href", {
-            set: () => {},
-          });
-        } catch (e) {}
+        lockLocation(window.location);
+        try { if (window.parent) lockLocation(window.parent.location); } catch (e) {}
+        try { if (window.top) lockLocation(window.top.location); } catch (e) {}
       })();
     </script>
     """
