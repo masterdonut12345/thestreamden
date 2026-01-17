@@ -128,6 +128,14 @@ def _inject_popup_guard(html: str, base_url: str) -> str:
           } catch (e) {}
         };
 
+        const scanOverlays = (root = document) => {
+          try {
+            root.querySelectorAll("div,section,iframe,span").forEach((node) => {
+              if (isLikelyOverlay(node)) disableOverlay(node);
+            });
+          } catch (e) {}
+        };
+
         document.addEventListener("click", (event) => {
           const anchor = event.target?.closest?.("a");
           const target = anchor
@@ -168,6 +176,12 @@ def _inject_popup_guard(html: str, base_url: str) -> str:
         });
         overlayObserver.observe(document.documentElement, { childList: true, subtree: true });
 
+        if (document.readyState === "loading") {
+          document.addEventListener("DOMContentLoaded", () => scanOverlays(), { once: true });
+        } else {
+          scanOverlays();
+        }
+
         try {
           const locationProto = Object.getPrototypeOf(window.location);
           if (locationProto) {
@@ -181,6 +195,12 @@ def _inject_popup_guard(html: str, base_url: str) -> str:
               } catch (e) {}
             });
           }
+        } catch (e) {}
+
+        try {
+          Object.defineProperty(Location.prototype, "href", {
+            set: () => {},
+          });
         } catch (e) {}
       })();
     </script>
@@ -243,6 +263,10 @@ def stream_proxy():
 
     response = make_response(body, resp.status_code)
     response.headers["Content-Type"] = content_type or "text/html; charset=utf-8"
+    response.headers["Content-Security-Policy"] = (
+        "sandbox allow-scripts allow-same-origin allow-forms allow-presentation; "
+        "base-uri *; form-action *"
+    )
     response.headers["X-Content-Type-Options"] = "nosniff"
     return response
 
