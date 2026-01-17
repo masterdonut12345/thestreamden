@@ -156,7 +156,12 @@ def normalize_sport_name(value: Any) -> str:
     """Normalize sport values so grouping/sorting never mixes types."""
     if isinstance(value, str):
         value = value.strip()
-        return value or "Other"
+        if not value:
+            return "Other"
+        compact = re.sub(r"[\s_-]+", " ", value).strip().lower()
+        if compact == "american football":
+            return "American Football"
+        return value
     try:
         text = str(value).strip()
         return text or "Other"
