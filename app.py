@@ -81,6 +81,7 @@ def _inject_popup_guard(html: str, base_url: str) -> str:
     <script>
       (() => {
         const noop = () => null;
+        const overlayCoverage = 0.75;
         try {
           Object.defineProperty(window, "open", {
             value: noop,
@@ -98,15 +99,74 @@ def _inject_popup_guard(html: str, base_url: str) -> str:
           });
         } catch (e) {}
 
+        const getRect = (el) => {
+          try {
+            return el.getBoundingClientRect();
+          } catch (e) {
+            return null;
+          }
+        };
+
+        const isLikelyOverlay = (el) => {
+          if (!(el instanceof Element)) return false;
+          const rect = getRect(el);
+          if (!rect || !window.innerWidth || !window.innerHeight) return false;
+          const coversWidth = rect.width >= window.innerWidth * overlayCoverage;
+          const coversHeight = rect.height >= window.innerHeight * overlayCoverage;
+          if (!coversWidth || !coversHeight) return false;
+          const style = window.getComputedStyle(el);
+          const positioned = style.position === "fixed" || style.position === "absolute";
+          const zIndex = parseInt(style.zIndex || "0", 10);
+          return positioned && (zIndex >= 10 || style.pointerEvents !== "none");
+        };
+
+        const disableOverlay = (el) => {
+          if (!(el instanceof Element)) return;
+          try {
+            el.style.setProperty("display", "none", "important");
+            el.style.setProperty("pointer-events", "none", "important");
+          } catch (e) {}
+        };
+
         document.addEventListener("click", (event) => {
           const anchor = event.target?.closest?.("a");
-          if (!anchor) return;
-          const target = (anchor.getAttribute("target") || "").toLowerCase();
-          if (target === "_blank" || target === "_new") {
+          const target = anchor
+            ? (anchor.getAttribute("target") || "").toLowerCase()
+            : "";
+          if (anchor && (target === "_blank" || target === "_new")) {
             event.preventDefault();
             event.stopPropagation();
+            event.stopImmediatePropagation();
+            return;
+          }
+
+          const path = event.composedPath ? event.composedPath() : [];
+          for (const node of path) {
+            if (node instanceof Element && isLikelyOverlay(node)) {
+              disableOverlay(node);
+              event.preventDefault();
+              event.stopPropagation();
+              event.stopImmediatePropagation();
+              return;
+            }
           }
         }, true);
+
+        const overlayObserver = new MutationObserver((mutations) => {
+          for (const mutation of mutations) {
+            mutation.addedNodes?.forEach?.((node) => {
+              if (!(node instanceof Element)) return;
+              if (isLikelyOverlay(node)) {
+                disableOverlay(node);
+                return;
+              }
+              node.querySelectorAll?.("*").forEach((child) => {
+                if (isLikelyOverlay(child)) disableOverlay(child);
+              });
+            });
+          }
+        });
+        overlayObserver.observe(document.documentElement, { childList: true, subtree: true });
 
         try {
           const locationProto = Object.getPrototypeOf(window.location);
