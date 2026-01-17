@@ -436,6 +436,7 @@ def scrape_shark() -> pd.DataFrame:
         except Exception:
             browser = None
 
+    eligible = []
     for div in soup.find_all("div", class_="row"):
         date_span = div.find("span", class_="ch-date")
         name_span = div.find("span", class_="ch-name")
@@ -450,6 +451,17 @@ def scrape_shark() -> pd.DataFrame:
 
         if not _within_days(dt, days_ahead=7):
             continue
+
+        eligible.append((div, dt, name_span, cat_span))
+
+    total_items = len(eligible)
+    for idx, (div, dt, name_span, cat_span) in enumerate(eligible, start=1):
+        if total_items:
+            bar_len = 24
+            filled = int(bar_len * idx / total_items)
+            bar = "=" * filled + "-" * (bar_len - filled)
+            percent = int(idx * 100 / total_items)
+            print(f"[scraper] SharkStreams progress [{bar}] {idx}/{total_items} ({percent}%)")
 
         embed_urls = []
         for a in div.find_all("a"):
