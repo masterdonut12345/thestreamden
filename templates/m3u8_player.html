@@ -86,6 +86,15 @@
             return;
           }
 
+          function attemptPlay() {
+            const playPromise = video.play();
+            if (playPromise && typeof playPromise.catch === "function") {
+              playPromise.catch(function () {
+                // Autoplay can be blocked; user can start manually.
+              });
+            }
+          }
+
           if (window.Hls && window.Hls.isSupported()) {
             const hls = new window.Hls({
               capLevelToPlayerSize: true,
@@ -96,6 +105,9 @@
                 showFallback();
               }
             });
+            hls.on(window.Hls.Events.MANIFEST_PARSED, function () {
+              attemptPlay();
+            });
             hls.loadSource(src);
             hls.attachMedia(video);
             return;
@@ -103,6 +115,7 @@
 
           video.src = src;
           video.addEventListener("error", showFallback, { once: true });
+          video.addEventListener("loadedmetadata", attemptPlay, { once: true });
         })();
       </script>
     {% endif %}
