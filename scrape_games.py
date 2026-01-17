@@ -37,6 +37,9 @@ REQUEST_TIMEOUT = 8  # seconds
 STREAMED_API_BASE = os.environ.get("STREAMED_API_BASE", "https://streamed.pk")
 STREAMED_MATCHES_PATH = os.environ.get("STREAMED_MATCHES_PATH", "/api/matches/all-today")
 STREAMED_SPORTS_PATH = os.environ.get("STREAMED_SPORTS_PATH", "/api/sports")
+M3U8_WAIT_SECONDS = float(os.environ.get("M3U8_WAIT_SECONDS", "3.5"))
+M3U8_TIMEOUT_SECONDS = float(os.environ.get("M3U8_TIMEOUT_SECONDS", "15"))
+SHARK_M3U8_MAX_LOOKUPS = int(os.environ.get("SHARK_M3U8_MAX_LOOKUPS", "10"))
 
 _SESSION = None
 
@@ -356,7 +359,13 @@ def _is_m3u8_url(url: str) -> bool:
     return ".m3u8" in (url or "").lower()
 
 
-def _find_m3u8_from_page(url: str, *, wait_seconds: float = 8.0, timeout_seconds: float = 30.0) -> str | None:
+def _find_m3u8_from_page(
+    url: str,
+    *,
+    browser,
+    wait_seconds: float,
+    timeout_seconds: float,
+) -> str | None:
     found: set[str] = set()
 
     def add(maybe_url: str | None) -> None:
@@ -366,40 +375,39 @@ def _find_m3u8_from_page(url: str, *, wait_seconds: float = 8.0, timeout_seconds
             found.add(maybe_url)
 
     try:
-        with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True)
-            ctx = browser.new_context()
-            page = ctx.new_page()
+        ctx = browser.new_context()
+        page = ctx.new_page()
 
-            def on_request(req):
-                add(req.url)
+        def on_request(req):
+            add(req.url)
 
-            page.on("request", on_request)
+        page.on("request", on_request)
 
-            def on_response(res):
-                add(res.url)
-                try:
-                    ct = (res.headers.get("content-type") or "").lower()
-                    if any(x in ct for x in ("text", "json", "javascript", "xml", "mpegurl")):
-                        body = res.text()
-                        if body and len(body) <= 2_000_000:
-                            for m in _M3U8_RE.findall(body):
-                                add(m)
-                            for rel in re.findall(r"""[^\s"'<>]+\.m3u8[^\s"'<>]*""", body, flags=re.I):
-                                if rel.lower().startswith("http"):
-                                    add(rel)
-                                else:
-                                    add(urljoin(res.url, rel))
-                except Exception:
-                    pass
+        def on_response(res):
+            add(res.url)
+            try:
+                ct = (res.headers.get("content-type") or "").lower()
+                if any(x in ct for x in ("text", "json", "javascript", "xml", "mpegurl")):
+                    body = res.text()
+                    if body and len(body) <= 2_000_000:
+                        for m in _M3U8_RE.findall(body):
+                            add(m)
+                        for rel in re.findall(r"""[^\s"'<>]+\.m3u8[^\s"'<>]*""", body, flags=re.I):
+                            if rel.lower().startswith("http"):
+                                add(rel)
+                            else:
+                                add(urljoin(res.url, rel))
+            except Exception:
+                pass
 
-            page.on("response", on_response)
+        page.on("response", on_response)
 
-            page.goto(url, wait_until="domcontentloaded", timeout=int(timeout_seconds * 1000))
-            page.wait_for_load_state("networkidle", timeout=int(timeout_seconds * 1000))
-            page.wait_for_timeout(int(wait_seconds * 1000))
+        page.goto(url, wait_until="domcontentloaded", timeout=int(timeout_seconds * 1000))
+        page.wait_for_load_state("networkidle", timeout=int(timeout_seconds * 1000))
+        page.wait_for_timeout(int(wait_seconds * 1000))
 
-            browser.close()
+        page.close()
+        ctx.close()
     except Exception:
         return None
 
@@ -417,6 +425,16 @@ def scrape_shark() -> pd.DataFrame:
     soup = BeautifulSoup(r.text, "html.parser")
     rows = []
     m3u8_cache: dict[str, str | None] = {}
+    lookup_count = 0
+    browser = None
+    playwright = None
+
+    if SHARK_M3U8_MAX_LOOKUPS > 0:
+        try:
+            playwright = sync_playwright().start()
+            browser = playwright.chromium.launch(headless=True)
+        except Exception:
+            browser = None
 
     for div in soup.find_all("div", class_="row"):
         date_span = div.find("span", class_="ch-date")
@@ -480,7 +498,14 @@ def scrape_shark() -> pd.DataFrame:
         for u in norm_urls:
             cached = m3u8_cache.get(u)
             if cached is None and u not in m3u8_cache:
-                cached = _find_m3u8_from_page(u)
+                if browser and lookup_count < SHARK_M3U8_MAX_LOOKUPS:
+                    cached = _find_m3u8_from_page(
+                        u,
+                        browser=browser,
+                        wait_seconds=M3U8_WAIT_SECONDS,
+                        timeout_seconds=M3U8_TIMEOUT_SECONDS,
+                    )
+                    lookup_count += 1
                 m3u8_cache[u] = cached
             if cached:
                 resolved_urls.append((u, cached))
@@ -509,6 +534,17 @@ def scrape_shark() -> pd.DataFrame:
             "embed_url": resolved_urls[0][1],
             "is_live": False,
         })
+
+    if browser:
+        try:
+            browser.close()
+        except Exception:
+            pass
+        try:
+            if playwright:
+                playwright.stop()
+        except Exception:
+            pass
 
     return pd.DataFrame(rows)
 
