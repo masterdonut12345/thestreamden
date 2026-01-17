@@ -163,9 +163,9 @@ def stream_proxy():
             allow_redirects=True,
         )
     except requests.RequestException:
-        abort(502)
+        return redirect(raw_url, code=302)
     except Exception:
-        abort(502)
+        return redirect(raw_url, code=302)
 
     content_type = resp.headers.get("Content-Type", "")
     body = resp.content
