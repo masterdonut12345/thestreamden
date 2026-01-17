@@ -20,7 +20,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlencode, urlparse
 
 import pandas as pd
 import pytz
@@ -183,6 +183,7 @@ TEAM_SEP_REGEX = re.compile(r"\bvs\b|\bvs.\b|\bv\b|\bv.\b| - | – | — | @ ", 
 SLUG_CLEAN_QUOTES = re.compile(r"['\"`]")
 SLUG_NON_ALNUM = re.compile(r"[^a-z0-9]+")
 SLUG_MULTI_DASH = re.compile(r"-{2,}")
+M3U8_SUFFIX = ".m3u8"
 
 
 def safe_lower(value: Any) -> str:
@@ -204,6 +205,27 @@ def normalize_sport_name(value: Any) -> str:
         return text or "Other"
     except Exception:
         return "Other"
+
+
+def is_m3u8_url(value: str) -> bool:
+    return M3U8_SUFFIX in (value or "").lower()
+
+
+def build_m3u8_player_url(src: str) -> str:
+    if not src:
+        return ""
+    if not is_m3u8_url(src):
+        return src
+    return f"/m3u8_player?{urlencode({'src': src})}"
+
+
+def normalize_m3u8_src(value: str) -> str:
+    if not value or not is_m3u8_url(value):
+        return ""
+    parsed = urlparse(value)
+    if parsed.scheme not in ("http", "https"):
+        return ""
+    return value
 
 
 INVALID_SPORT_MARKERS = {"other", "unknown", "nan", "n/a", "none", "null", ""}
@@ -758,6 +780,12 @@ def make_money():
     return render_template("make_money.html")
 
 
+@streaming_bp.route("/m3u8_player")
+def m3u8_player():
+    src = normalize_m3u8_src((request.args.get("src") or "").strip())
+    return render_template("m3u8_player.html", src=src)
+
+
 def _build_games_from_df(df: pd.DataFrame):
     if df is None or df.empty:
         return []
@@ -799,6 +827,17 @@ def _build_games_from_df(df: pd.DataFrame):
                     "watch_url": rowd.get("watch_url") or embed_url,
                 }
             ]
+        if streams:
+            fixed_streams = []
+            for stream in streams:
+                if not isinstance(stream, dict):
+                    continue
+                fixed = dict(stream)
+                embed = fixed.get("embed_url")
+                if isinstance(embed, str) and embed:
+                    fixed["embed_url"] = build_m3u8_player_url(embed)
+                fixed_streams.append(fixed)
+            streams = fixed_streams
         game_id = make_stable_id(rowd)
 
         raw_sport = rowd.get("sport")
