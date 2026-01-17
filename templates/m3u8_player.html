@@ -54,10 +54,6 @@
             <source src="{{ proxy_src or src }}" type="application/vnd.apple.mpegurl">
             <source src="{{ proxy_src or src }}" type="application/x-mpegURL">
           </video>
-          <div class="fallback" id="hls-fallback" hidden>
-            <strong>Stream unavailable.</strong>
-            <div>Try opening the stream directly: <a href="{{ src }}" target="_blank" rel="noopener">Open m3u8</a></div>
-          </div>
         </div>
       {% else %}
         <div class="fallback">
@@ -72,20 +68,7 @@
         (function () {
           const src = "{{ proxy_src|e }}";
           const video = document.getElementById("hls-video");
-          const fallback = document.getElementById("hls-fallback");
           if (!video || !src) return;
-
-          function showFallback() {
-            if (fallback) {
-              fallback.hidden = false;
-            }
-          }
-
-          function hideFallback() {
-            if (fallback) {
-              fallback.hidden = true;
-            }
-          }
 
           if (video.canPlayType("application/vnd.apple.mpegurl")) {
             video.src = src;
@@ -108,7 +91,7 @@
             });
             hls.on(window.Hls.Events.ERROR, function (_, data) {
               if (data && data.fatal) {
-                showFallback();
+                console.warn("Fatal HLS error", data);
               }
             });
             hls.on(window.Hls.Events.MANIFEST_PARSED, function () {
@@ -120,10 +103,7 @@
           }
 
           video.src = src;
-          video.addEventListener("error", showFallback, { once: true });
           video.addEventListener("loadedmetadata", attemptPlay, { once: true });
-          video.addEventListener("playing", hideFallback);
-          video.addEventListener("play", hideFallback);
         })();
       </script>
     {% endif %}
