@@ -51,8 +51,8 @@
       {% if src %}
         <div class="player-stack">
           <video id="hls-video" controls autoplay playsinline crossorigin="anonymous">
-            <source src="{{ src }}" type="application/vnd.apple.mpegurl">
-            <source src="{{ src }}" type="application/x-mpegURL">
+            <source src="{{ proxy_src or src }}" type="application/vnd.apple.mpegurl">
+            <source src="{{ proxy_src or src }}" type="application/x-mpegURL">
           </video>
           <div class="fallback" id="hls-fallback" hidden>
             <strong>Stream unavailable.</strong>
@@ -70,7 +70,7 @@
       <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.8"></script>
       <script>
         (function () {
-          const src = "{{ src|e }}";
+          const src = "{{ proxy_src|e }}";
           const video = document.getElementById("hls-video");
           const fallback = document.getElementById("hls-fallback");
           if (!video || !src) return;
