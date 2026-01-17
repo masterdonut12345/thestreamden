@@ -27,6 +27,7 @@ import ast
 import os
 import fcntl
 import hashlib
+import subprocess
 from playwright.sync_api import sync_playwright
 
 # ---------------- CONFIG ----------------
@@ -42,6 +43,7 @@ M3U8_TIMEOUT_SECONDS = float(os.environ.get("M3U8_TIMEOUT_SECONDS", "15"))
 SHARK_M3U8_MAX_LOOKUPS = int(os.environ.get("SHARK_M3U8_MAX_LOOKUPS", "10"))
 
 _SESSION = None
+_PLAYWRIGHT_INSTALL_ATTEMPTED = False
 
 
 def _get_session():
@@ -50,6 +52,29 @@ def _get_session():
         _SESSION = requests.Session()
         _SESSION.headers.update(HEADERS)
     return _SESSION
+
+
+def _ensure_playwright_chromium() -> bool:
+    global _PLAYWRIGHT_INSTALL_ATTEMPTED
+    if _PLAYWRIGHT_INSTALL_ATTEMPTED:
+        return False
+    _PLAYWRIGHT_INSTALL_ATTEMPTED = True
+    try:
+        result = subprocess.run(
+            ["playwright", "install", "chromium"],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+    except FileNotFoundError:
+        print("[scraper] Playwright CLI not found; cannot install Chromium.")
+        return False
+    if result.returncode != 0:
+        err = (result.stderr or result.stdout or "").strip()
+        msg = f" Details: {err}" if err else ""
+        print(f"[scraper] Failed to install Playwright Chromium.{msg}")
+        return False
+    return True
 
 EST = pytz.timezone("US/Eastern")
 UTC = pytz.UTC
@@ -432,9 +457,33 @@ def scrape_shark() -> pd.DataFrame:
     if SHARK_M3U8_MAX_LOOKUPS > 0:
         try:
             playwright = sync_playwright().start()
-            browser = playwright.chromium.launch(headless=True)
-        except Exception:
-            browser = None
+            browser = playwright.chromium.launch(
+                headless=True,
+                args=["--no-sandbox", "--disable-dev-shm-usage"],
+            )
+        except Exception as exc:
+            installed = _ensure_playwright_chromium()
+            if installed:
+                try:
+                    playwright = sync_playwright().start()
+                    browser = playwright.chromium.launch(
+                        headless=True,
+                        args=["--no-sandbox", "--disable-dev-shm-usage"],
+                    )
+                except Exception as retry_exc:
+                    print(
+                        "[scraper] SharkStreams m3u8 lookups disabled (Playwright failed to launch "
+                        "after attempting Chromium install). Error: "
+                        f"{retry_exc}"
+                    )
+                    browser = None
+            else:
+                print(
+                    "[scraper] SharkStreams m3u8 lookups disabled (Playwright failed to launch). "
+                    "Ensure Playwright browsers are installed (e.g. `playwright install chromium`) "
+                    f"and required system deps are available. Error: {exc}"
+                )
+                browser = None
 
     eligible = []
     for div in soup.find_all("div", class_="row"):
