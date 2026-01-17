@@ -71,6 +71,12 @@ def stream_proxy_url(raw_url: str) -> str:
 
 
 def _inject_popup_guard(html: str, base_url: str) -> str:
+    html = re.sub(
+        r"<meta[^>]+http-equiv=[\"']?Content-Security-Policy[\"']?[^>]*>",
+        "",
+        html,
+        flags=re.IGNORECASE,
+    )
     guard = """
     <script>
       (() => {
@@ -137,19 +143,19 @@ def stream_proxy():
     if not raw_url:
         abort(400)
 
-    parsed = urlsplit(raw_url)
-    if parsed.scheme not in ("http", "https") or not parsed.netloc:
-        abort(400)
-
-    headers = {
-        "User-Agent": STREAM_PROXY_UA,
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.9",
-        "Referer": raw_url,
-        "Origin": f"{parsed.scheme}://{parsed.netloc}",
-    }
-
     try:
+        parsed = urlsplit(raw_url)
+        if parsed.scheme not in ("http", "https") or not parsed.netloc:
+            abort(400)
+
+        headers = {
+            "User-Agent": STREAM_PROXY_UA,
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Referer": raw_url,
+            "Origin": f"{parsed.scheme}://{parsed.netloc}",
+        }
+
         resp = requests.get(
             raw_url,
             headers=headers,
@@ -157,6 +163,8 @@ def stream_proxy():
             allow_redirects=True,
         )
     except requests.RequestException:
+        abort(502)
+    except Exception:
         abort(502)
 
     content_type = resp.headers.get("Content-Type", "")
@@ -166,9 +174,12 @@ def stream_proxy():
         snippet = body[:500].lstrip()
         is_html = snippet.startswith(b"<") or snippet.startswith(b"<!doctype")
     if is_html:
-        html = resp.text
-        injected = _inject_popup_guard(html, str(resp.url))
-        body = injected.encode(resp.encoding or "utf-8", errors="replace")
+        try:
+            html = resp.text
+            injected = _inject_popup_guard(html, str(resp.url))
+            body = injected.encode(resp.encoding or "utf-8", errors="replace")
+        except Exception:
+            body = resp.content
 
     response = make_response(body, resp.status_code)
     response.headers["Content-Type"] = content_type or "text/html; charset=utf-8"
