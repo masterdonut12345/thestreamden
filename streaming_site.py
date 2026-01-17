@@ -909,6 +909,9 @@ def _build_games_from_df(df: pd.DataFrame):
                     continue
                 fixed = dict(stream)
                 embed = fixed.get("embed_url")
+                if rowd.get("source") == "sharkstreams":
+                    if not (isinstance(embed, str) and (is_m3u8_url(embed) or "/m3u8_player" in embed)):
+                        continue
                 if isinstance(embed, str) and embed:
                     fixed["embed_url"] = build_m3u8_player_url(embed)
                 fixed_streams.append(fixed)
