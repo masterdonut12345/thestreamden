@@ -1012,52 +1012,43 @@
         (() => {
             "use strict";
 
-            const TRUST_WINDOW_MS = 300;
-
             function installPopupGuards(targetWindow) {
                 if (!targetWindow || targetWindow.__popBlockInstalled) return;
                 targetWindow.__popBlockInstalled = true;
 
-                let lastTrusted = 0;
-                const markTrusted = (event) => {
-                    if (event && event.isTrusted) lastTrusted = Date.now();
-                };
-
-                ["click", "mousedown", "touchstart", "keydown"].forEach(type => {
-                    targetWindow.addEventListener(type, markTrusted, true);
-                });
-
-                const allowIfTrusted = () => (Date.now() - lastTrusted) <= TRUST_WINDOW_MS;
-
-                const realOpen = targetWindow.open;
                 targetWindow.open = function () {
-                    if (!allowIfTrusted()) return null;
-                    return realOpen ? realOpen.apply(this, arguments) : null;
+                    return null;
                 };
 
                 const realAClick = targetWindow.HTMLAnchorElement && targetWindow.HTMLAnchorElement.prototype.click;
                 if (realAClick) {
                     targetWindow.HTMLAnchorElement.prototype.click = function () {
-                        if (!allowIfTrusted()) return;
-                        return realAClick.apply(this, arguments);
+                        return;
                     };
                 }
 
                 try {
                     const locationProto = Object.getPrototypeOf(targetWindow.location);
-                    const realAssign = locationProto.assign;
-                    const realReplace = locationProto.replace;
                     locationProto.assign = function () {
-                        if (!allowIfTrusted()) return;
-                        return realAssign.apply(this, arguments);
+                        return;
                     };
                     locationProto.replace = function () {
-                        if (!allowIfTrusted()) return;
-                        return realReplace.apply(this, arguments);
+                        return;
                     };
                 } catch (e) {
                     // Some browsers disallow overriding location methods.
                 }
+
+                targetWindow.addEventListener('click', (event) => {
+                    const link = event.target && event.target.closest
+                        ? event.target.closest('a')
+                        : null;
+                    if (!link) return;
+                    if (link.target === '_blank' || link.rel?.includes('popup')) {
+                        event.preventDefault();
+                        event.stopPropagation();
+                    }
+                }, true);
             }
 
             function hardenIframe(iframe) {
