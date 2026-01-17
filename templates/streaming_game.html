@@ -1012,36 +1012,8 @@
         (() => {
             "use strict";
 
-            const BAD_SRC_PATTERNS = [
-                /suurl\d*\.php/i,
-                /adcash/i,
-                /popunder/i,
-                /tabswap/i
-            ];
-
-            const SAFE_SANDBOX = "allow-scripts allow-forms allow-same-origin";
-
-            const looksBad = (src) => {
-                if (!src) return false;
-                return BAD_SRC_PATTERNS.some(r => r.test(src));
-            };
-
             function hardenIframe(iframe) {
                 if (!(iframe instanceof HTMLIFrameElement)) return;
-
-                const src = iframe.getAttribute("src") || "";
-
-                if (looksBad(src)) {
-                    iframe.remove();
-                    return;
-                }
-
-                iframe.setAttribute("sandbox", SAFE_SANDBOX);
-                iframe.setAttribute("referrerpolicy", "no-referrer");
-                iframe.setAttribute(
-                    "allow",
-                    "fullscreen 'none'; camera 'none'; microphone 'none'; geolocation 'none'"
-                );
 
                 try {
                     const w = iframe.contentWindow;
@@ -1064,7 +1036,7 @@
                         }
                     }
                 } catch (e) {
-                    // Cross-origin: can't patch inside. Sandbox enforcement above is the main defense.
+                    // Cross-origin: can't patch inside.
                 }
             }
 
