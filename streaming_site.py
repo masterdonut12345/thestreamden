@@ -20,13 +20,26 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlencode, urlparse
 
 import pandas as pd
 import pytz
 from apscheduler.schedulers.background import BackgroundScheduler
 from bs4 import BeautifulSoup
-from flask import Blueprint, abort, g, jsonify, make_response, redirect, render_template, request, session, url_for
+from flask import (
+    Blueprint,
+    Response,
+    abort,
+    g,
+    jsonify,
+    make_response,
+    redirect,
+    render_template,
+    request,
+    session,
+    stream_with_context,
+    url_for,
+)
 import requests
 
 import scrape_games
@@ -183,6 +196,8 @@ TEAM_SEP_REGEX = re.compile(r"\bvs\b|\bvs.\b|\bv\b|\bv.\b| - | – | — | @ ", 
 SLUG_CLEAN_QUOTES = re.compile(r"['\"`]")
 SLUG_NON_ALNUM = re.compile(r"[^a-z0-9]+")
 SLUG_MULTI_DASH = re.compile(r"-{2,}")
+M3U8_SUFFIX = ".m3u8"
+M3U8_PROXY_TIMEOUT = int(os.environ.get("M3U8_PROXY_TIMEOUT", "12"))
 
 
 def safe_lower(value: Any) -> str:
@@ -204,6 +219,39 @@ def normalize_sport_name(value: Any) -> str:
         return text or "Other"
     except Exception:
         return "Other"
+
+
+def is_m3u8_url(value: str) -> bool:
+    return M3U8_SUFFIX in (value or "").lower()
+
+
+def build_m3u8_player_url(src: str) -> str:
+    if not src:
+        return ""
+    if not is_m3u8_url(src):
+        return src
+    return f"/m3u8_player?{urlencode({'src': src})}"
+
+
+def build_m3u8_proxy_url(src: str) -> str:
+    if not src:
+        return ""
+    return f"/m3u8_proxy?{urlencode({'src': src})}"
+
+
+def normalize_http_url(value: str) -> str:
+    if not value:
+        return ""
+    parsed = urlparse(value)
+    if parsed.scheme not in ("http", "https"):
+        return ""
+    return value
+
+
+def normalize_m3u8_src(value: str) -> str:
+    if not value or not is_m3u8_url(value):
+        return ""
+    return normalize_http_url(value)
 
 
 INVALID_SPORT_MARKERS = {"other", "unknown", "nan", "n/a", "none", "null", ""}
@@ -758,6 +806,61 @@ def make_money():
     return render_template("make_money.html")
 
 
+@streaming_bp.route("/m3u8_player")
+def m3u8_player():
+    src = normalize_m3u8_src((request.args.get("src") or "").strip())
+    proxy_src = build_m3u8_proxy_url(src) if src else ""
+    return render_template("m3u8_player.html", src=src, proxy_src=proxy_src)
+
+
+@streaming_bp.route("/m3u8_proxy")
+def m3u8_proxy():
+    src = normalize_http_url((request.args.get("src") or "").strip())
+    if not src:
+        return abort(400)
+
+    try:
+        resp = requests.get(src, timeout=M3U8_PROXY_TIMEOUT, stream=True)
+    except Exception:
+        return abort(502)
+
+    content_type = resp.headers.get("content-type", "application/octet-stream")
+    status = resp.status_code
+    base_url = resp.url
+
+    if is_m3u8_url(base_url) or "mpegurl" in content_type.lower():
+        try:
+            text = resp.text
+        except Exception:
+            return abort(502)
+
+        lines = text.splitlines()
+        rewritten = []
+        for line in lines:
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#"):
+                rewritten.append(line)
+                continue
+            absolute = urljoin(base_url, stripped)
+            rewritten.append(build_m3u8_proxy_url(absolute))
+
+        body = "\n".join(rewritten)
+        proxy_resp = make_response(body, status)
+        proxy_resp.headers["Content-Type"] = "application/vnd.apple.mpegurl"
+        proxy_resp.headers["Access-Control-Allow-Origin"] = "*"
+        return proxy_resp
+
+    def generate():
+        for chunk in resp.iter_content(chunk_size=256 * 1024):
+            if chunk:
+                yield chunk
+
+    proxy_resp = Response(stream_with_context(generate()), status=status)
+    proxy_resp.headers["Content-Type"] = content_type
+    proxy_resp.headers["Access-Control-Allow-Origin"] = "*"
+    return proxy_resp
+
+
 def _build_games_from_df(df: pd.DataFrame):
     if df is None or df.empty:
         return []
@@ -799,6 +902,17 @@ def _build_games_from_df(df: pd.DataFrame):
                     "watch_url": rowd.get("watch_url") or embed_url,
                 }
             ]
+        if streams:
+            fixed_streams = []
+            for stream in streams:
+                if not isinstance(stream, dict):
+                    continue
+                fixed = dict(stream)
+                embed = fixed.get("embed_url")
+                if isinstance(embed, str) and embed:
+                    fixed["embed_url"] = build_m3u8_player_url(embed)
+                fixed_streams.append(fixed)
+            streams = fixed_streams
         game_id = make_stable_id(rowd)
 
         raw_sport = rowd.get("sport")
