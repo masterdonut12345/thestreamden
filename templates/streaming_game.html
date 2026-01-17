@@ -1009,6 +1009,89 @@
     </div>
 
     <script>
+        (() => {
+            "use strict";
+
+            const BAD_SRC_PATTERNS = [
+                /suurl\d*\.php/i,
+                /adcash/i,
+                /popunder/i,
+                /tabswap/i
+            ];
+
+            const SAFE_SANDBOX = "allow-scripts allow-forms allow-same-origin";
+
+            const looksBad = (src) => {
+                if (!src) return false;
+                return BAD_SRC_PATTERNS.some(r => r.test(src));
+            };
+
+            function hardenIframe(iframe) {
+                if (!(iframe instanceof HTMLIFrameElement)) return;
+
+                const src = iframe.getAttribute("src") || "";
+
+                if (looksBad(src)) {
+                    iframe.remove();
+                    return;
+                }
+
+                iframe.setAttribute("sandbox", SAFE_SANDBOX);
+                iframe.setAttribute("referrerpolicy", "no-referrer");
+                iframe.setAttribute(
+                    "allow",
+                    "fullscreen 'none'; camera 'none'; microphone 'none'; geolocation 'none'"
+                );
+
+                try {
+                    const w = iframe.contentWindow;
+                    if (w && !w.__popBlockInstalled) {
+                        w.__popBlockInstalled = true;
+
+                        w.open = function () { return null; };
+
+                        const realAClick = w.HTMLAnchorElement && w.HTMLAnchorElement.prototype.click;
+                        if (realAClick) {
+                            let lastTrusted = 0;
+                            ["click", "mousedown", "touchstart", "keydown"].forEach(t =>
+                                w.addEventListener(t, e => { if (e && e.isTrusted) lastTrusted = Date.now(); }, true)
+                            );
+
+                            w.HTMLAnchorElement.prototype.click = function () {
+                                if ((Date.now() - lastTrusted) > 300) return;
+                                return realAClick.apply(this, arguments);
+                            };
+                        }
+                    }
+                } catch (e) {
+                    // Cross-origin: can't patch inside. Sandbox enforcement above is the main defense.
+                }
+            }
+
+            function scanAndHarden() {
+                document.querySelectorAll("iframe").forEach(hardenIframe);
+            }
+
+            const mo = new MutationObserver((mutations) => {
+                for (const m of mutations) {
+                    for (const n of m.addedNodes) {
+                        if (n instanceof HTMLIFrameElement) hardenIframe(n);
+                        else if (n instanceof Element) n.querySelectorAll?.("iframe").forEach(hardenIframe);
+                    }
+                }
+            });
+
+            mo.observe(document.documentElement, { childList: true, subtree: true });
+
+            if (document.readyState === "loading") {
+                document.addEventListener("DOMContentLoaded", scanAndHarden, { once: true });
+            } else {
+                scanAndHarden();
+            }
+        })();
+    </script>
+
+    <script>
         (function() {
             const mainIframe       = document.getElementById('game-iframe');
             const picker           = document.getElementById('stream-picker');
