@@ -1012,29 +1012,59 @@
         (() => {
             "use strict";
 
+            const TRUST_WINDOW_MS = 300;
+
+            function installPopupGuards(targetWindow) {
+                if (!targetWindow || targetWindow.__popBlockInstalled) return;
+                targetWindow.__popBlockInstalled = true;
+
+                let lastTrusted = 0;
+                const markTrusted = (event) => {
+                    if (event && event.isTrusted) lastTrusted = Date.now();
+                };
+
+                ["click", "mousedown", "touchstart", "keydown"].forEach(type => {
+                    targetWindow.addEventListener(type, markTrusted, true);
+                });
+
+                const allowIfTrusted = () => (Date.now() - lastTrusted) <= TRUST_WINDOW_MS;
+
+                const realOpen = targetWindow.open;
+                targetWindow.open = function () {
+                    if (!allowIfTrusted()) return null;
+                    return realOpen ? realOpen.apply(this, arguments) : null;
+                };
+
+                const realAClick = targetWindow.HTMLAnchorElement && targetWindow.HTMLAnchorElement.prototype.click;
+                if (realAClick) {
+                    targetWindow.HTMLAnchorElement.prototype.click = function () {
+                        if (!allowIfTrusted()) return;
+                        return realAClick.apply(this, arguments);
+                    };
+                }
+
+                try {
+                    const locationProto = Object.getPrototypeOf(targetWindow.location);
+                    const realAssign = locationProto.assign;
+                    const realReplace = locationProto.replace;
+                    locationProto.assign = function () {
+                        if (!allowIfTrusted()) return;
+                        return realAssign.apply(this, arguments);
+                    };
+                    locationProto.replace = function () {
+                        if (!allowIfTrusted()) return;
+                        return realReplace.apply(this, arguments);
+                    };
+                } catch (e) {
+                    // Some browsers disallow overriding location methods.
+                }
+            }
+
             function hardenIframe(iframe) {
                 if (!(iframe instanceof HTMLIFrameElement)) return;
 
                 try {
-                    const w = iframe.contentWindow;
-                    if (w && !w.__popBlockInstalled) {
-                        w.__popBlockInstalled = true;
-
-                        w.open = function () { return null; };
-
-                        const realAClick = w.HTMLAnchorElement && w.HTMLAnchorElement.prototype.click;
-                        if (realAClick) {
-                            let lastTrusted = 0;
-                            ["click", "mousedown", "touchstart", "keydown"].forEach(t =>
-                                w.addEventListener(t, e => { if (e && e.isTrusted) lastTrusted = Date.now(); }, true)
-                            );
-
-                            w.HTMLAnchorElement.prototype.click = function () {
-                                if ((Date.now() - lastTrusted) > 300) return;
-                                return realAClick.apply(this, arguments);
-                            };
-                        }
-                    }
+                    installPopupGuards(iframe.contentWindow);
                 } catch (e) {
                     // Cross-origin: can't patch inside.
                 }
@@ -1054,6 +1084,8 @@
             });
 
             mo.observe(document.documentElement, { childList: true, subtree: true });
+
+            installPopupGuards(window);
 
             if (document.readyState === "loading") {
                 document.addEventListener("DOMContentLoaded", scanAndHarden, { once: true });
