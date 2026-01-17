@@ -135,7 +135,7 @@
           <div style="font-weight:700; margin-bottom:6px;">Stream</div>
           {% if embed_info.type == "iframe" %}
             <iframe
-              src="{{ stream_proxy_url(embed_info.src) }}"
+              src="{{ embed_info.src }}"
               title="{{ embed_info.title or 'Stream' }}"
               allowfullscreen
             ></iframe>
