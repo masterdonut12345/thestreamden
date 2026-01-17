@@ -71,6 +71,13 @@ ACTIVE_VIEWERS: dict[str, datetime] = {}  # session_id → last_seen timestamp
 ACTIVE_PAGE_VIEWS: dict[tuple[str, str], datetime] = {}  # (session_id, path) → last_seen timestamp
 LAST_VIEWER_PRINT: datetime | None = None  # throttle printing
 
+CHAT_LOCK = threading.Lock()
+GAME_CHAT: dict[int, list[dict[str, Any]]] = {}
+GAME_CHAT_COUNTER: dict[int, int] = {}
+CHAT_FETCH_LIMIT = int(os.environ.get("CHAT_FETCH_LIMIT", "50"))
+CHAT_MAX_MESSAGES_PER_GAME = int(os.environ.get("CHAT_MAX_MESSAGES_PER_GAME", "200"))
+CHAT_MESSAGE_MAX_LEN = int(os.environ.get("CHAT_MESSAGE_MAX_LEN", "280"))
+
 
 
 def get_session_id() -> str:
@@ -94,6 +101,36 @@ def mark_active() -> None:
     for s, ts in list(ACTIVE_VIEWERS.items()):
         if ts < cutoff:
             del ACTIVE_VIEWERS[s]
+
+
+def _get_chat_display_name() -> str:
+    user = getattr(g, "current_user", None)
+    if user and getattr(user, "username", None):
+        return user.username
+    username = session.get("username")
+    if username:
+        return username
+    sid = session.get("sid") or get_session_id()
+    return f"Guest-{sid[:4]}"
+
+
+def _append_chat_message(game_id: int, username: str, body: str) -> dict[str, Any]:
+    now = datetime.now(timezone.utc)
+    message = {
+        "id": 0,
+        "user": username,
+        "body": body,
+        "created_at": now.isoformat(),
+    }
+    with CHAT_LOCK:
+        next_id = GAME_CHAT_COUNTER.get(game_id, 0) + 1
+        GAME_CHAT_COUNTER[game_id] = next_id
+        message["id"] = next_id
+        messages = GAME_CHAT.setdefault(game_id, [])
+        messages.append(message)
+        if len(messages) > CHAT_MAX_MESSAGES_PER_GAME:
+            del messages[: len(messages) - CHAT_MAX_MESSAGES_PER_GAME]
+    return message
 
 
 @streaming_bp.route("/heartbeat", methods=["POST"])
@@ -1102,6 +1139,46 @@ def api_games_clear_streams():
         GAMES_CACHE["mtime"] = 0
 
     return jsonify({"ok": True, "rows": int(len(df))})
+
+
+def _game_exists(game_id: int) -> bool:
+    games = load_games_cached()
+    return any(g["id"] == game_id for g in games)
+
+
+@streaming_bp.route("/api/games/<int:game_id>/chat", methods=["GET", "POST"])
+def game_chat_messages(game_id: int):
+    if not _game_exists(game_id):
+        return jsonify({"ok": False, "error": "game not found"}), 404
+
+    if request.method == "POST":
+        payload = request.get_json(silent=True) or {}
+        body = (payload.get("body") or "").strip()
+
+        if not body:
+            return jsonify({"ok": False, "error": "empty"}), 400
+        if len(body) > CHAT_MESSAGE_MAX_LEN:
+            return jsonify({"ok": False, "error": "too_long"}), 400
+
+        username = _get_chat_display_name()
+        message = _append_chat_message(game_id, username, body)
+        return jsonify({"ok": True, "message": message, "latest_id": message["id"]})
+
+    after_id = request.args.get("after_id", type=int)
+    limit = request.args.get("limit", type=int) or CHAT_FETCH_LIMIT
+    limit = max(1, min(limit, CHAT_FETCH_LIMIT))
+
+    with CHAT_LOCK:
+        messages = list(GAME_CHAT.get(game_id, []))
+
+    if after_id:
+        messages = [msg for msg in messages if msg["id"] > after_id]
+
+    if len(messages) > limit:
+        messages = messages[-limit:]
+
+    latest_id = messages[-1]["id"] if messages else (after_id or 0)
+    return jsonify({"ok": True, "messages": messages, "latest_id": latest_id})
 
 
 @streaming_bp.route("/game/<int:game_id>")
