@@ -482,7 +482,11 @@ def scrape_shark() -> pd.DataFrame:
             if cached is None and u not in m3u8_cache:
                 cached = _find_m3u8_from_page(u)
                 m3u8_cache[u] = cached
-            resolved_urls.append((u, cached or u))
+            if cached:
+                resolved_urls.append((u, cached))
+
+        if not resolved_urls:
+            continue
 
         streams = [{
             "label": "SharkStreams",
@@ -500,7 +504,7 @@ def scrape_shark() -> pd.DataFrame:
             "tournament": None,
             "tournament_url": None,
             "matchup": name_span.text.strip(),
-            "watch_url": norm_urls[0],
+            "watch_url": resolved_urls[0][0],
             "streams": streams,
             "embed_url": resolved_urls[0][1],
             "is_live": False,
