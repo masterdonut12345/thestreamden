@@ -27,6 +27,7 @@ import ast
 import os
 import fcntl
 import hashlib
+from playwright.sync_api import sync_playwright
 
 # ---------------- CONFIG ----------------
 
@@ -348,6 +349,64 @@ def scrape_streamed_api() -> pd.DataFrame:
 _OPENEMBED_RE = re.compile(r"openEmbed\(\s*[\"']([^\"']+)[\"']\s*\)", re.I)
 _WINDOWOPEN_RE = re.compile(r"window\.open\(\s*[\"']([^\"']+)[\"']\s*,", re.I)
 _HREF_URL_RE = re.compile(r"https?://[^\\s\"']+", re.I)
+_M3U8_RE = re.compile(r"""https?://[^\s"'<>]+?\.m3u8[^\s"'<>]*""", re.IGNORECASE)
+
+
+def _is_m3u8_url(url: str) -> bool:
+    return ".m3u8" in (url or "").lower()
+
+
+def _find_m3u8_from_page(url: str, *, wait_seconds: float = 8.0, timeout_seconds: float = 30.0) -> str | None:
+    found: set[str] = set()
+
+    def add(maybe_url: str | None) -> None:
+        if not maybe_url:
+            return
+        if _is_m3u8_url(maybe_url):
+            found.add(maybe_url)
+
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            ctx = browser.new_context()
+            page = ctx.new_page()
+
+            def on_request(req):
+                add(req.url)
+
+            page.on("request", on_request)
+
+            def on_response(res):
+                add(res.url)
+                try:
+                    ct = (res.headers.get("content-type") or "").lower()
+                    if any(x in ct for x in ("text", "json", "javascript", "xml", "mpegurl")):
+                        body = res.text()
+                        if body and len(body) <= 2_000_000:
+                            for m in _M3U8_RE.findall(body):
+                                add(m)
+                            for rel in re.findall(r"""[^\s"'<>]+\.m3u8[^\s"'<>]*""", body, flags=re.I):
+                                if rel.lower().startswith("http"):
+                                    add(rel)
+                                else:
+                                    add(urljoin(res.url, rel))
+                except Exception:
+                    pass
+
+            page.on("response", on_response)
+
+            page.goto(url, wait_until="domcontentloaded", timeout=int(timeout_seconds * 1000))
+            page.wait_for_load_state("networkidle", timeout=int(timeout_seconds * 1000))
+            page.wait_for_timeout(int(wait_seconds * 1000))
+
+            browser.close()
+    except Exception:
+        return None
+
+    matches = [u for u in found if "chunks.m3u8" in u.lower()]
+    if matches:
+        return sorted(matches)[0]
+    return None
 
 def scrape_shark() -> pd.DataFrame:
     session = _get_session()
@@ -357,6 +416,7 @@ def scrape_shark() -> pd.DataFrame:
 
     soup = BeautifulSoup(r.text, "html.parser")
     rows = []
+    m3u8_cache: dict[str, str | None] = {}
 
     for div in soup.find_all("div", class_="row"):
         date_span = div.find("span", class_="ch-date")
@@ -416,12 +476,20 @@ def scrape_shark() -> pd.DataFrame:
         if not norm_urls:
             continue
 
+        resolved_urls = []
+        for u in norm_urls:
+            cached = m3u8_cache.get(u)
+            if cached is None and u not in m3u8_cache:
+                cached = _find_m3u8_from_page(u)
+                m3u8_cache[u] = cached
+            resolved_urls.append((u, cached or u))
+
         streams = [{
             "label": "SharkStreams",
-            "embed_url": u,
-            "watch_url": u,
+            "embed_url": resolved,
+            "watch_url": original,
             "origin": "scraped",
-        } for u in norm_urls]
+        } for original, resolved in resolved_urls]
 
         rows.append({
             "source": "sharkstreams",
@@ -434,7 +502,7 @@ def scrape_shark() -> pd.DataFrame:
             "matchup": name_span.text.strip(),
             "watch_url": norm_urls[0],
             "streams": streams,
-            "embed_url": norm_urls[0],
+            "embed_url": resolved_urls[0][1],
             "is_live": False,
         })
 
