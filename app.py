@@ -141,10 +141,18 @@ def stream_proxy():
     if parsed.scheme not in ("http", "https") or not parsed.netloc:
         abort(400)
 
+    headers = {
+        "User-Agent": STREAM_PROXY_UA,
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Referer": raw_url,
+        "Origin": f"{parsed.scheme}://{parsed.netloc}",
+    }
+
     try:
         resp = requests.get(
             raw_url,
-            headers={"User-Agent": STREAM_PROXY_UA, "Accept": "*/*"},
+            headers=headers,
             timeout=STREAM_PROXY_TIMEOUT,
             allow_redirects=True,
         )
@@ -153,7 +161,11 @@ def stream_proxy():
 
     content_type = resp.headers.get("Content-Type", "")
     body = resp.content
-    if "text/html" in content_type.lower():
+    is_html = "text/html" in content_type.lower()
+    if not is_html:
+        snippet = body[:500].lstrip()
+        is_html = snippet.startswith(b"<") or snippet.startswith(b"<!doctype")
+    if is_html:
         html = resp.text
         injected = _inject_popup_guard(html, str(resp.url))
         body = injected.encode(resp.encoding or "utf-8", errors="replace")
