@@ -67,7 +67,7 @@ GAMES_CACHE: dict[str, Any] = {
 GAMES_CACHE_LOCK = threading.Lock()
 
 # Refresh at most every N seconds OR when file mtime changes
-GAMES_CACHE_TTL_SECONDS = int(os.environ.get("GAMES_CACHE_TTL_SECONDS", "10"))
+GAMES_CACHE_TTL_SECONDS = int(os.environ.get("GAMES_CACHE_TTL_SECONDS", "1800"))
 
 # Cloudflare / browser caching for HTML (keep short to avoid stale)
 HTML_CACHE_SECONDS = int(os.environ.get("HTML_CACHE_SECONDS", "30"))
@@ -78,7 +78,7 @@ ENABLE_VIEWER_TRACKING = os.environ.get("ENABLE_VIEWER_TRACKING", "1") == "1"
 # IMPORTANT: do not run scraper in the web process unless explicitly enabled
 ENABLE_SCRAPER_IN_WEB = os.environ.get("ENABLE_SCRAPER_IN_WEB", "0") == "1"
 SCRAPER_SUBPROCESS = os.environ.get("SCRAPER_SUBPROCESS", "1") == "1"
-SCRAPE_INTERVAL_MINUTES = int(os.environ.get("SCRAPE_INTERVAL_MINUTES", "10"))
+SCRAPE_INTERVAL_MINUTES = int(os.environ.get("SCRAPE_INTERVAL_MINUTES", "180"))
 STARTUP_SCRAPE_ON_BOOT = os.environ.get("STARTUP_SCRAPE_ON_BOOT", "1") == "1"
 
 
@@ -201,6 +201,12 @@ SLUG_NON_ALNUM = re.compile(r"[^a-z0-9]+")
 SLUG_MULTI_DASH = re.compile(r"-{2,}")
 M3U8_SUFFIX = ".m3u8"
 M3U8_PROXY_TIMEOUT = int(os.environ.get("M3U8_PROXY_TIMEOUT", "12"))
+M3U8_PROXY_PLAYLIST_CACHE_SECONDS = int(
+    os.environ.get("M3U8_PROXY_PLAYLIST_CACHE_SECONDS", "3")
+)
+M3U8_PROXY_SEGMENT_CACHE_SECONDS = int(
+    os.environ.get("M3U8_PROXY_SEGMENT_CACHE_SECONDS", "60")
+)
 
 
 def safe_lower(value: Any) -> str:
@@ -870,9 +876,10 @@ def m3u8_proxy():
         proxy_resp = make_response(body, status)
         proxy_resp.headers["Content-Type"] = "application/vnd.apple.mpegurl"
         proxy_resp.headers["Access-Control-Allow-Origin"] = "*"
-        proxy_resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
-        proxy_resp.headers["Pragma"] = "no-cache"
-        proxy_resp.headers["Expires"] = "0"
+        proxy_resp.headers["Cache-Control"] = (
+            "public, max-age={max_age}, s-maxage={max_age}, "
+            "stale-while-revalidate=10"
+        ).format(max_age=M3U8_PROXY_PLAYLIST_CACHE_SECONDS)
         return proxy_resp
 
     def generate():
@@ -883,9 +890,9 @@ def m3u8_proxy():
     proxy_resp = Response(stream_with_context(generate()), status=status)
     proxy_resp.headers["Content-Type"] = content_type
     proxy_resp.headers["Access-Control-Allow-Origin"] = "*"
-    proxy_resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
-    proxy_resp.headers["Pragma"] = "no-cache"
-    proxy_resp.headers["Expires"] = "0"
+    proxy_resp.headers["Cache-Control"] = (
+        "public, max-age={max_age}, s-maxage={max_age}, stale-while-revalidate=60"
+    ).format(max_age=M3U8_PROXY_SEGMENT_CACHE_SECONDS)
     return proxy_resp
 
 
