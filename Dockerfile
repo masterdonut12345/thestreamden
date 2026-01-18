@@ -2,7 +2,9 @@ FROM python:3.11-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PLAYWRIGHT_BROWSERS_PATH=0
+    PLAYWRIGHT_BROWSERS_PATH=0 \
+    GAMES_CACHE_TTL_SECONDS=1800 \
+    M3U8_PROXY_TIMEOUT=30
 
 RUN apt-get update && apt-get install -y \
     libnss3 libnspr4 libatk1.0-0 libatk-bridge2.0-0 libdrm2 libgbm1 \
