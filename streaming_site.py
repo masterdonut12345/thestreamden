@@ -823,7 +823,15 @@ def m3u8_proxy():
         return abort(400)
 
     try:
-        resp = requests.get(src, timeout=M3U8_PROXY_TIMEOUT, stream=True)
+        resp = requests.get(
+            src,
+            timeout=M3U8_PROXY_TIMEOUT,
+            stream=True,
+            headers={
+                "Cache-Control": "no-cache",
+                "Pragma": "no-cache",
+            },
+        )
     except Exception:
         return abort(502)
 
@@ -851,6 +859,9 @@ def m3u8_proxy():
         proxy_resp = make_response(body, status)
         proxy_resp.headers["Content-Type"] = "application/vnd.apple.mpegurl"
         proxy_resp.headers["Access-Control-Allow-Origin"] = "*"
+        proxy_resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        proxy_resp.headers["Pragma"] = "no-cache"
+        proxy_resp.headers["Expires"] = "0"
         return proxy_resp
 
     def generate():
@@ -861,6 +872,9 @@ def m3u8_proxy():
     proxy_resp = Response(stream_with_context(generate()), status=status)
     proxy_resp.headers["Content-Type"] = content_type
     proxy_resp.headers["Access-Control-Allow-Origin"] = "*"
+    proxy_resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    proxy_resp.headers["Pragma"] = "no-cache"
+    proxy_resp.headers["Expires"] = "0"
     return proxy_resp
 
 
