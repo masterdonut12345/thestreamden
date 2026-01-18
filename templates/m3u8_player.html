@@ -168,6 +168,24 @@
             });
             hls.loadSource(src);
             hls.attachMedia(video);
+            video.addEventListener("timeupdate", function () {
+              lastProgressTs = Date.now();
+              lastTime = video.currentTime;
+            });
+            video.addEventListener("waiting", function () {
+              waitingSince = Date.now();
+            });
+            video.addEventListener("playing", function () {
+              waitingSince = null;
+              lastProgressTs = Date.now();
+            });
+            video.addEventListener("stalled", function () {
+              reloadStream("stalled");
+            });
+            video.addEventListener("error", function () {
+              reloadStream("video-error");
+            });
+            startStallMonitor();
             return;
           }
 
@@ -175,6 +193,24 @@
             video.src = src;
           }
           video.addEventListener("loadedmetadata", attemptPlay, { once: true });
+          video.addEventListener("timeupdate", function () {
+            lastProgressTs = Date.now();
+            lastTime = video.currentTime;
+          });
+          video.addEventListener("waiting", function () {
+            waitingSince = Date.now();
+          });
+          video.addEventListener("playing", function () {
+            waitingSince = null;
+            lastProgressTs = Date.now();
+          });
+          video.addEventListener("stalled", function () {
+            reloadStream("stalled");
+          });
+          video.addEventListener("error", function () {
+            reloadStream("video-error");
+          });
+          startStallMonitor();
         })();
       </script>
     {% endif %}
