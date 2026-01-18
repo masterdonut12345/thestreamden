@@ -69,10 +69,20 @@
           const src = "{{ proxy_src|e }}";
           const video = document.getElementById("hls-video");
           if (!video || !src) return;
+          const minReloadGapMs = 15000;
+          let hls = null;
+          let lastReloadTs = 0;
 
-          if (video.canPlayType("application/vnd.apple.mpegurl")) {
+          function withCacheBust(url) {
+            if (!url) return url;
+            const sep = url.includes("?") ? "&" : "?";
+            return `${url}${sep}reload=${Date.now()}`;
+          }
+
+          const canUseNative = video.canPlayType("application/vnd.apple.mpegurl");
+          const shouldUseHls = window.Hls && window.Hls.isSupported();
+          if (canUseNative && !shouldUseHls) {
             video.src = src;
-            return;
           }
 
           function attemptPlay() {
@@ -84,14 +94,72 @@
             }
           }
 
-          if (window.Hls && window.Hls.isSupported()) {
-            const hls = new window.Hls({
+          function reloadStream(reason) {
+            const now = Date.now();
+            if (now - lastReloadTs < minReloadGapMs) {
+              return;
+            }
+            lastReloadTs = now;
+            const newSrc = withCacheBust(src);
+            console.warn("Reloading HLS stream", reason || "");
+            const resumeTime = video.currentTime;
+            const restorePosition = function () {
+              if (!Number.isFinite(resumeTime)) {
+                return;
+              }
+              if (video.seekable && video.seekable.length > 0) {
+                const maxSeek = video.seekable.end(video.seekable.length - 1);
+                if (resumeTime <= maxSeek) {
+                  video.currentTime = resumeTime;
+                }
+              }
+            };
+            if (hls) {
+              hls.stopLoad();
+              hls.detachMedia();
+              hls.loadSource(newSrc);
+              hls.attachMedia(video);
+              hls.startLoad();
+              video.addEventListener("loadedmetadata", restorePosition, { once: true });
+              attemptPlay();
+              return;
+            }
+            video.src = newSrc;
+            video.load();
+            video.addEventListener("loadedmetadata", restorePosition, { once: true });
+            attemptPlay();
+          }
+
+          if (shouldUseHls) {
+            hls = new window.Hls({
+              enableWorker: true,
               capLevelToPlayerSize: true,
               maxBufferLength: 30,
+              backBufferLength: 30,
+              maxBufferSize: 30 * 1000 * 1000,
+              liveSyncDurationCount: 3,
+              lowLatencyMode: false,
             });
             hls.on(window.Hls.Events.ERROR, function (_, data) {
               if (data && data.fatal) {
                 console.warn("Fatal HLS error", data);
+                if (data.type === window.Hls.ErrorTypes.NETWORK_ERROR) {
+                  hls.startLoad();
+                  reloadStream("network-error");
+                  return;
+                }
+                if (data.type === window.Hls.ErrorTypes.MEDIA_ERROR) {
+                  hls.recoverMediaError();
+                  return;
+                }
+                hls.destroy();
+                hls = null;
+                if (canUseNative) {
+                  video.src = src;
+                  attemptPlay();
+                  return;
+                }
+                reloadStream("fatal-error");
               }
             });
             hls.on(window.Hls.Events.MANIFEST_PARSED, function () {
@@ -102,7 +170,9 @@
             return;
           }
 
-          video.src = src;
+          if (!canUseNative) {
+            video.src = src;
+          }
           video.addEventListener("loadedmetadata", attemptPlay, { once: true });
         })();
       </script>
