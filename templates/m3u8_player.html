@@ -86,7 +86,12 @@
 
           const canUseNative = video.canPlayType("application/vnd.apple.mpegurl");
           const shouldUseHls = window.Hls && window.Hls.isSupported();
-          if (canUseNative && !shouldUseHls) {
+          if (shouldUseHls) {
+            video.removeAttribute("src");
+            while (video.firstChild) {
+              video.removeChild(video.firstChild);
+            }
+          } else if (canUseNative) {
             video.src = directSrc;
           }
 
@@ -98,8 +103,6 @@
             }
             return directSrc;
           }
-
-          const liveLagSeconds = 60;
 
           function attemptPlay() {
             const playPromise = video.play();
