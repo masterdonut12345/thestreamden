@@ -201,6 +201,7 @@ SLUG_NON_ALNUM = re.compile(r"[^a-z0-9]+")
 SLUG_MULTI_DASH = re.compile(r"-{2,}")
 M3U8_SUFFIX = ".m3u8"
 M3U8_PROXY_TIMEOUT = int(os.environ.get("M3U8_PROXY_TIMEOUT", "12"))
+ENABLE_M3U8_PROXY = os.environ.get("ENABLE_M3U8_PROXY", "1") == "1"
 
 
 def safe_lower(value: Any) -> str:
@@ -812,7 +813,7 @@ def make_money():
 @streaming_bp.route("/m3u8_player")
 def m3u8_player():
     src = normalize_m3u8_src((request.args.get("src") or "").strip())
-    proxy_src = build_m3u8_proxy_url(src) if src else ""
+    proxy_src = build_m3u8_proxy_url(src) if src and ENABLE_M3U8_PROXY else ""
     return render_template("m3u8_player.html", src=src, proxy_src=proxy_src)
 
 
