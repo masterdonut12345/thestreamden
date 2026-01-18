@@ -428,8 +428,11 @@ def _find_m3u8_from_page(
         page.on("response", on_response)
 
         page.goto(url, wait_until="domcontentloaded", timeout=int(timeout_seconds * 1000))
-        page.wait_for_load_state("networkidle", timeout=int(timeout_seconds * 1000))
-        page.wait_for_timeout(int(wait_seconds * 1000))
+        elapsed = 0.0
+        step = 0.25
+        while elapsed < wait_seconds and not found:
+            page.wait_for_timeout(int(step * 1000))
+            elapsed += step
 
         page.close()
         ctx.close()
