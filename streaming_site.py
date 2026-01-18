@@ -822,15 +822,21 @@ def m3u8_proxy():
     if not src:
         return abort(400)
 
+    upstream_headers = {
+        "Cache-Control": "no-cache",
+        "Pragma": "no-cache",
+    }
+    for header_name in ("User-Agent", "Referer", "Origin"):
+        header_value = request.headers.get(header_name)
+        if header_value:
+            upstream_headers[header_name] = header_value
+
     try:
         resp = requests.get(
             src,
             timeout=M3U8_PROXY_TIMEOUT,
             stream=True,
-            headers={
-                "Cache-Control": "no-cache",
-                "Pragma": "no-cache",
-            },
+            headers=upstream_headers,
         )
     except Exception:
         return abort(502)
