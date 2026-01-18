@@ -50,9 +50,9 @@
     <div class="player-wrap">
       {% if src %}
         <div class="player-stack">
-          <video id="hls-video" controls autoplay playsinline crossorigin="anonymous">
-            <source src="{{ proxy_src or src }}" type="application/vnd.apple.mpegurl">
-            <source src="{{ proxy_src or src }}" type="application/x-mpegURL">
+          <video id="hls-video" controls autoplay playsinline crossorigin="anonymous" data-direct-src="{{ src|e }}" data-proxy-src="{{ proxy_src|e }}">
+            <source src="{{ src }}" type="application/vnd.apple.mpegurl">
+            <source src="{{ src }}" type="application/x-mpegURL">
           </video>
         </div>
       {% else %}
@@ -66,15 +66,17 @@
       <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.8"></script>
       <script>
         (function () {
-          const src = "{{ proxy_src|e }}";
+          const directSrc = "{{ src|e }}";
+          const proxySrc = "{{ proxy_src|e }}";
           const video = document.getElementById("hls-video");
-          if (!video || !src) return;
+          if (!video || !directSrc) return;
           const minReloadGapMs = 15000;
           const stallCheckIntervalMs = 5000;
           const stallThresholdMs = 20000;
           let hls = null;
           let lastReloadTs = 0;
           let lastProgressTs = Date.now();
+          let usingProxy = false;
 
           function withCacheBust(url) {
             if (!url) return url;
@@ -85,7 +87,16 @@
           const canUseNative = video.canPlayType("application/vnd.apple.mpegurl");
           const shouldUseHls = window.Hls && window.Hls.isSupported();
           if (canUseNative && !shouldUseHls) {
-            video.src = src;
+            video.src = directSrc;
+          }
+
+          const liveLagSeconds = 60;
+
+          function currentSrc() {
+            if (usingProxy && proxySrc) {
+              return proxySrc;
+            }
+            return directSrc;
           }
 
           const liveLagSeconds = 60;
@@ -99,13 +110,16 @@
             }
           }
 
-          function reloadStream(reason) {
+          function reloadStream(reason, options) {
             const now = Date.now();
             if (now - lastReloadTs < minReloadGapMs) {
               return;
             }
             lastReloadTs = now;
-            const newSrc = withCacheBust(src);
+            const nextUsingProxy = options && typeof options.useProxy === "boolean" ? options.useProxy : usingProxy;
+            usingProxy = nextUsingProxy;
+            const baseSrc = currentSrc();
+            const newSrc = usingProxy ? withCacheBust(baseSrc) : baseSrc;
             console.warn("Reloading HLS stream", reason || "");
             const resumeTime = video.currentTime;
             const restorePosition = function () {
@@ -151,6 +165,14 @@
             }, stallCheckIntervalMs);
           }
 
+          function fallbackToProxy(reason) {
+            if (!proxySrc || usingProxy) {
+              return false;
+            }
+            reloadStream(reason, { useProxy: true });
+            return true;
+          }
+
           if (shouldUseHls) {
             hls = new window.Hls({
               enableWorker: true,
@@ -167,7 +189,9 @@
                 console.warn("Fatal HLS error", data);
                 if (data.type === window.Hls.ErrorTypes.NETWORK_ERROR) {
                   hls.startLoad();
-                  reloadStream("network-error");
+                  if (!fallbackToProxy("network-error-proxy")) {
+                    reloadStream("network-error");
+                  }
                   return;
                 }
                 if (data.type === window.Hls.ErrorTypes.MEDIA_ERROR) {
@@ -177,11 +201,13 @@
                 hls.destroy();
                 hls = null;
                 if (canUseNative) {
-                  video.src = src;
+                  video.src = directSrc;
                   attemptPlay();
                   return;
                 }
-                reloadStream("fatal-error");
+                if (!fallbackToProxy("fatal-error-proxy")) {
+                  reloadStream("fatal-error");
+                }
               }
             });
             hls.on(window.Hls.Events.MANIFEST_PARSED, function () {
@@ -203,21 +229,27 @@
                 video.currentTime = target;
               }
             });
-            hls.loadSource(src);
+            hls.loadSource(currentSrc());
             hls.attachMedia(video);
             video.addEventListener("timeupdate", markProgress);
             video.addEventListener("playing", markProgress);
             video.addEventListener("loadedmetadata", markProgress);
+            video.addEventListener("error", function () {
+              fallbackToProxy("video-error");
+            });
             startStallMonitor();
             return;
           }
 
           if (!canUseNative) {
-            video.src = src;
+            video.src = directSrc;
           }
           video.addEventListener("loadedmetadata", attemptPlay, { once: true });
           video.addEventListener("timeupdate", markProgress);
           video.addEventListener("playing", markProgress);
+          video.addEventListener("error", function () {
+            fallbackToProxy("video-error");
+          });
           startStallMonitor();
         })();
       </script>
