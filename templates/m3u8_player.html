@@ -70,8 +70,11 @@
           const video = document.getElementById("hls-video");
           if (!video || !src) return;
           const minReloadGapMs = 15000;
+          const stallCheckIntervalMs = 5000;
+          const stallThresholdMs = 20000;
           let hls = null;
           let lastReloadTs = 0;
+          let lastProgressTs = Date.now();
 
           function withCacheBust(url) {
             if (!url) return url;
@@ -130,16 +133,32 @@
             attemptPlay();
           }
 
+          function markProgress() {
+            lastProgressTs = Date.now();
+          }
+
+          function startStallMonitor() {
+            setInterval(function () {
+              if (video.paused || video.ended || video.seeking) {
+                return;
+              }
+              if (Date.now() - lastProgressTs > stallThresholdMs) {
+                reloadStream("stall-timeout");
+                lastProgressTs = Date.now();
+              }
+            }, stallCheckIntervalMs);
+          }
+
           if (shouldUseHls) {
             hls = new window.Hls({
               enableWorker: true,
               capLevelToPlayerSize: true,
-              maxBufferLength: 60,
+              maxBufferLength: 90,
               backBufferLength: 30,
-              maxBufferSize: 40 * 1000 * 1000,
-              liveSyncDurationCount: 2,
-              liveMaxLatencyDurationCount: 4,
-              lowLatencyMode: true,
+              maxBufferSize: 50 * 1000 * 1000,
+              liveSyncDurationCount: 4,
+              liveMaxLatencyDurationCount: 8,
+              lowLatencyMode: false,
             });
             hls.on(window.Hls.Events.ERROR, function (_, data) {
               if (data && data.fatal) {
@@ -168,23 +187,9 @@
             });
             hls.loadSource(src);
             hls.attachMedia(video);
-            video.addEventListener("timeupdate", function () {
-              lastProgressTs = Date.now();
-              lastTime = video.currentTime;
-            });
-            video.addEventListener("waiting", function () {
-              waitingSince = Date.now();
-            });
-            video.addEventListener("playing", function () {
-              waitingSince = null;
-              lastProgressTs = Date.now();
-            });
-            video.addEventListener("stalled", function () {
-              reloadStream("stalled");
-            });
-            video.addEventListener("error", function () {
-              reloadStream("video-error");
-            });
+            video.addEventListener("timeupdate", markProgress);
+            video.addEventListener("playing", markProgress);
+            video.addEventListener("loadedmetadata", markProgress);
             startStallMonitor();
             return;
           }
@@ -193,23 +198,8 @@
             video.src = src;
           }
           video.addEventListener("loadedmetadata", attemptPlay, { once: true });
-          video.addEventListener("timeupdate", function () {
-            lastProgressTs = Date.now();
-            lastTime = video.currentTime;
-          });
-          video.addEventListener("waiting", function () {
-            waitingSince = Date.now();
-          });
-          video.addEventListener("playing", function () {
-            waitingSince = null;
-            lastProgressTs = Date.now();
-          });
-          video.addEventListener("stalled", function () {
-            reloadStream("stalled");
-          });
-          video.addEventListener("error", function () {
-            reloadStream("video-error");
-          });
+          video.addEventListener("timeupdate", markProgress);
+          video.addEventListener("playing", markProgress);
           startStallMonitor();
         })();
       </script>

@@ -828,9 +828,10 @@ def m3u8_proxy():
         "Cache-Control": "no-cache",
         "Pragma": "no-cache",
     }
-    user_agent = request.headers.get("User-Agent")
-    if user_agent:
-        upstream_headers["User-Agent"] = user_agent
+    for header_name in ("User-Agent", "Accept", "Accept-Language", "Cookie"):
+        header_value = request.headers.get(header_name)
+        if header_value:
+            upstream_headers[header_name] = header_value
     if upstream_origin:
         upstream_headers["Referer"] = upstream_origin
         upstream_headers["Origin"] = upstream_origin
