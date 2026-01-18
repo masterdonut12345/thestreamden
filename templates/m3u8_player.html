@@ -50,10 +50,7 @@
     <div class="player-wrap">
       {% if src %}
         <div class="player-stack">
-          <video id="hls-video" controls autoplay playsinline crossorigin="anonymous" data-direct-src="{{ src|e }}" data-proxy-src="{{ proxy_src|e }}">
-            <source src="{{ src }}" type="application/vnd.apple.mpegurl">
-            <source src="{{ src }}" type="application/x-mpegURL">
-          </video>
+          <video id="hls-video" controls autoplay playsinline crossorigin="anonymous" data-direct-src="{{ src|e }}" data-proxy-src="{{ proxy_src|e }}"></video>
         </div>
       {% else %}
         <div class="fallback">
