@@ -76,6 +76,7 @@
           let lastTime = 0;
           let lastProgressTs = Date.now();
           let lastReloadTs = 0;
+          let waitingSince = null;
 
           function withCacheBust(url) {
             if (!url) return url;
@@ -121,19 +122,19 @@
 
           function startStallMonitor() {
             setInterval(function () {
-              if (video.paused || video.ended) {
-                lastTime = video.currentTime;
-                lastProgressTs = Date.now();
+              const now = Date.now();
+              if (waitingSince && now - waitingSince > stallThresholdMs) {
+                reloadStream("waiting-timeout");
+                waitingSince = null;
+                lastProgressTs = now;
                 return;
               }
-              if (video.currentTime !== lastTime) {
+              if (!video.ended && !video.seeking && video.currentTime !== lastTime) {
                 lastTime = video.currentTime;
-                lastProgressTs = Date.now();
-                return;
-              }
-              if (Date.now() - lastProgressTs > stallThresholdMs) {
+                lastProgressTs = now;
+              } else if (!video.ended && !video.seeking && now - lastProgressTs > stallThresholdMs) {
                 reloadStream("playback-stall");
-                lastProgressTs = Date.now();
+                lastProgressTs = now;
               }
             }, stallCheckIntervalMs);
           }
@@ -165,6 +166,17 @@
             });
             hls.loadSource(src);
             hls.attachMedia(video);
+            video.addEventListener("timeupdate", function () {
+              lastProgressTs = Date.now();
+              lastTime = video.currentTime;
+            });
+            video.addEventListener("waiting", function () {
+              waitingSince = Date.now();
+            });
+            video.addEventListener("playing", function () {
+              waitingSince = null;
+              lastProgressTs = Date.now();
+            });
             video.addEventListener("stalled", function () {
               reloadStream("stalled");
             });
@@ -179,6 +191,17 @@
             video.src = src;
           }
           video.addEventListener("loadedmetadata", attemptPlay, { once: true });
+          video.addEventListener("timeupdate", function () {
+            lastProgressTs = Date.now();
+            lastTime = video.currentTime;
+          });
+          video.addEventListener("waiting", function () {
+            waitingSince = Date.now();
+          });
+          video.addEventListener("playing", function () {
+            waitingSince = null;
+            lastProgressTs = Date.now();
+          });
           video.addEventListener("stalled", function () {
             reloadStream("stalled");
           });
