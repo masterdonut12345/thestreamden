@@ -99,6 +99,8 @@
             return directSrc;
           }
 
+          const liveLagSeconds = 60;
+
           function attemptPlay() {
             const playPromise = video.play();
             if (playPromise && typeof playPromise.catch === "function") {
