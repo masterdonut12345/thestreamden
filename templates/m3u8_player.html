@@ -88,6 +88,8 @@
             video.src = src;
           }
 
+          const liveLagSeconds = 20;
+
           function attemptPlay() {
             const playPromise = video.play();
             if (playPromise && typeof playPromise.catch === "function") {
@@ -184,6 +186,22 @@
             });
             hls.on(window.Hls.Events.MANIFEST_PARSED, function () {
               attemptPlay();
+            });
+            hls.on(window.Hls.Events.LEVEL_LOADED, function (_, data) {
+              if (!data || !data.details || !data.details.live) {
+                return;
+              }
+              if (video.seeking || video.readyState < 1) {
+                return;
+              }
+              const edge = data.details.edge;
+              if (!Number.isFinite(edge)) {
+                return;
+              }
+              const target = Math.max(0, edge - liveLagSeconds);
+              if (target > 0 && (!Number.isFinite(video.currentTime) || video.currentTime < target - 2)) {
+                video.currentTime = target;
+              }
             });
             hls.loadSource(src);
             hls.attachMedia(video);
