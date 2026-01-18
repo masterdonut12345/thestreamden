@@ -822,14 +822,18 @@ def m3u8_proxy():
     if not src:
         return abort(400)
 
+    parsed_src = urlparse(src)
+    upstream_origin = f"{parsed_src.scheme}://{parsed_src.netloc}" if parsed_src.scheme else ""
     upstream_headers = {
         "Cache-Control": "no-cache",
         "Pragma": "no-cache",
     }
-    for header_name in ("User-Agent", "Referer", "Origin"):
-        header_value = request.headers.get(header_name)
-        if header_value:
-            upstream_headers[header_name] = header_value
+    user_agent = request.headers.get("User-Agent")
+    if user_agent:
+        upstream_headers["User-Agent"] = user_agent
+    if upstream_origin:
+        upstream_headers["Referer"] = upstream_origin
+        upstream_headers["Origin"] = upstream_origin
 
     try:
         resp = requests.get(
