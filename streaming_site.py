@@ -822,8 +822,22 @@ def m3u8_proxy():
     if not src:
         return abort(400)
 
+    upstream_headers = {
+        "Cache-Control": "no-cache",
+        "Pragma": "no-cache",
+    }
+    for header_name in ("User-Agent", "Referer", "Origin"):
+        header_value = request.headers.get(header_name)
+        if header_value:
+            upstream_headers[header_name] = header_value
+
     try:
-        resp = requests.get(src, timeout=M3U8_PROXY_TIMEOUT, stream=True)
+        resp = requests.get(
+            src,
+            timeout=M3U8_PROXY_TIMEOUT,
+            stream=True,
+            headers=upstream_headers,
+        )
     except Exception:
         return abort(502)
 
@@ -851,6 +865,9 @@ def m3u8_proxy():
         proxy_resp = make_response(body, status)
         proxy_resp.headers["Content-Type"] = "application/vnd.apple.mpegurl"
         proxy_resp.headers["Access-Control-Allow-Origin"] = "*"
+        proxy_resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        proxy_resp.headers["Pragma"] = "no-cache"
+        proxy_resp.headers["Expires"] = "0"
         return proxy_resp
 
     def generate():
@@ -861,6 +878,9 @@ def m3u8_proxy():
     proxy_resp = Response(stream_with_context(generate()), status=status)
     proxy_resp.headers["Content-Type"] = content_type
     proxy_resp.headers["Access-Control-Allow-Origin"] = "*"
+    proxy_resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    proxy_resp.headers["Pragma"] = "no-cache"
+    proxy_resp.headers["Expires"] = "0"
     return proxy_resp
 
 
@@ -905,6 +925,20 @@ def _build_games_from_df(df: pd.DataFrame):
                     "watch_url": rowd.get("watch_url") or embed_url,
                 }
             ]
+        shark_stream_source = rowd.get("source") == "sharkstreams"
+        has_shark_m3u8 = False
+        if shark_stream_source:
+            if isinstance(embed_url, str) and is_m3u8_url(embed_url):
+                has_shark_m3u8 = True
+            else:
+                for stream in streams:
+                    if not isinstance(stream, dict):
+                        continue
+                    embed = stream.get("embed_url")
+                    if isinstance(embed, str) and is_m3u8_url(embed):
+                        has_shark_m3u8 = True
+                        break
+
         if streams:
             fixed_streams = []
             for stream in streams:
@@ -912,7 +946,7 @@ def _build_games_from_df(df: pd.DataFrame):
                     continue
                 fixed = dict(stream)
                 embed = fixed.get("embed_url")
-                if rowd.get("source") == "sharkstreams":
+                if shark_stream_source:
                     if not (isinstance(embed, str) and (is_m3u8_url(embed) or "/m3u8_player" in embed)):
                         continue
                 if isinstance(embed, str) and embed:
@@ -1009,6 +1043,12 @@ def _build_games_from_df(df: pd.DataFrame):
             except Exception:
                 time_display = None
 
+        matchup = rowd.get("matchup")
+        if shark_stream_source and has_shark_m3u8 and isinstance(matchup, str):
+            suffix = " - Ad free"
+            if not matchup.endswith(suffix):
+                matchup = f"{matchup}{suffix}"
+
         game_obj = {
             "id": game_id,
             "date_header": rowd.get("date_header"),
@@ -1017,7 +1057,7 @@ def _build_games_from_df(df: pd.DataFrame):
             "time": time_display,
             "tournament": rowd.get("tournament"),
             "tournament_url": rowd.get("tournament_url"),
-            "matchup": rowd.get("matchup"),
+            "matchup": matchup,
             "watch_url": rowd.get("watch_url"),
             "streams": streams,
             "is_live": is_live,
