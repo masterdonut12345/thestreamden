@@ -134,11 +134,12 @@
             hls = new window.Hls({
               enableWorker: true,
               capLevelToPlayerSize: true,
-              maxBufferLength: 30,
+              maxBufferLength: 60,
               backBufferLength: 30,
-              maxBufferSize: 30 * 1000 * 1000,
-              liveSyncDurationCount: 3,
-              lowLatencyMode: false,
+              maxBufferSize: 40 * 1000 * 1000,
+              liveSyncDurationCount: 2,
+              liveMaxLatencyDurationCount: 4,
+              lowLatencyMode: true,
             });
             hls.on(window.Hls.Events.ERROR, function (_, data) {
               if (data && data.fatal) {
