@@ -18,4 +18,4 @@ COPY . .
 RUN pip install --no-cache-dir -r requirements.txt \
  && python -m playwright install chromium
 
-CMD ["gunicorn", "-w", "2", "--bind", "0.0.0.0:$PORT", "wsgi:app"]
+CMD ["sh", "-c", "gunicorn -w 2 --bind 0.0.0.0:${PORT} wsgi:app"]
