@@ -69,10 +69,23 @@
           const src = "{{ proxy_src|e }}";
           const video = document.getElementById("hls-video");
           if (!video || !src) return;
+          const stallCheckIntervalMs = 5000;
+          const stallThresholdMs = 12000;
+          const minReloadGapMs = 10000;
+          let hls = null;
+          let lastTime = 0;
+          let lastProgressTs = Date.now();
+          let lastReloadTs = 0;
 
-          if (video.canPlayType("application/vnd.apple.mpegurl")) {
+          function withCacheBust(url) {
+            if (!url) return url;
+            const sep = url.includes("?") ? "&" : "?";
+            return `${url}${sep}reload=${Date.now()}`;
+          }
+
+          const canUseNative = video.canPlayType("application/vnd.apple.mpegurl");
+          if (canUseNative) {
             video.src = src;
-            return;
           }
 
           function attemptPlay() {
@@ -84,14 +97,67 @@
             }
           }
 
-          if (window.Hls && window.Hls.isSupported()) {
-            const hls = new window.Hls({
+          function reloadStream(reason) {
+            const now = Date.now();
+            if (now - lastReloadTs < minReloadGapMs) {
+              return;
+            }
+            lastReloadTs = now;
+            const newSrc = withCacheBust(src);
+            console.warn("Reloading HLS stream", reason || "");
+            if (hls) {
+              hls.stopLoad();
+              hls.detachMedia();
+              hls.loadSource(newSrc);
+              hls.attachMedia(video);
+              hls.startLoad();
+              attemptPlay();
+              return;
+            }
+            video.src = newSrc;
+            video.load();
+            attemptPlay();
+          }
+
+          function startStallMonitor() {
+            setInterval(function () {
+              if (video.paused || video.ended) {
+                lastTime = video.currentTime;
+                lastProgressTs = Date.now();
+                return;
+              }
+              if (video.currentTime !== lastTime) {
+                lastTime = video.currentTime;
+                lastProgressTs = Date.now();
+                return;
+              }
+              if (Date.now() - lastProgressTs > stallThresholdMs) {
+                reloadStream("playback-stall");
+                lastProgressTs = Date.now();
+              }
+            }, stallCheckIntervalMs);
+          }
+
+          if (!canUseNative && window.Hls && window.Hls.isSupported()) {
+            hls = new window.Hls({
               capLevelToPlayerSize: true,
               maxBufferLength: 30,
             });
             hls.on(window.Hls.Events.ERROR, function (_, data) {
               if (data && data.fatal) {
                 console.warn("Fatal HLS error", data);
+                if (data.type === window.Hls.ErrorTypes.NETWORK_ERROR) {
+                  hls.startLoad();
+                  reloadStream("network-error");
+                  return;
+                }
+                if (data.type === window.Hls.ErrorTypes.MEDIA_ERROR) {
+                  hls.recoverMediaError();
+                  return;
+                }
+                hls.destroy();
+                hls = null;
+                reloadStream("fatal-error");
               }
             });
             hls.on(window.Hls.Events.MANIFEST_PARSED, function () {
@@ -99,11 +165,27 @@
             });
             hls.loadSource(src);
             hls.attachMedia(video);
+            video.addEventListener("stalled", function () {
+              reloadStream("stalled");
+            });
+            video.addEventListener("error", function () {
+              reloadStream("video-error");
+            });
+            startStallMonitor();
             return;
           }
 
-          video.src = src;
+          if (!canUseNative) {
+            video.src = src;
+          }
           video.addEventListener("loadedmetadata", attemptPlay, { once: true });
+          video.addEventListener("stalled", function () {
+            reloadStream("stalled");
+          });
+          video.addEventListener("error", function () {
+            reloadStream("video-error");
+          });
+          startStallMonitor();
         })();
       </script>
     {% endif %}
