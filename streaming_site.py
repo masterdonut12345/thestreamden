@@ -14,6 +14,8 @@ import hashlib
 import os
 import random
 import re
+import subprocess
+import sys
 import threading
 import time
 import uuid
@@ -74,7 +76,8 @@ HTML_CACHE_SECONDS = int(os.environ.get("HTML_CACHE_SECONDS", "30"))
 ENABLE_VIEWER_TRACKING = os.environ.get("ENABLE_VIEWER_TRACKING", "1") == "1"
 
 # IMPORTANT: do not run scraper in the web process unless explicitly enabled
-ENABLE_SCRAPER_IN_WEB = os.environ.get("ENABLE_SCRAPER_IN_WEB", "1") == "1"
+ENABLE_SCRAPER_IN_WEB = os.environ.get("ENABLE_SCRAPER_IN_WEB", "0") == "1"
+SCRAPER_SUBPROCESS = os.environ.get("SCRAPER_SUBPROCESS", "1") == "1"
 SCRAPE_INTERVAL_MINUTES = int(os.environ.get("SCRAPE_INTERVAL_MINUTES", "10"))
 STARTUP_SCRAPE_ON_BOOT = os.environ.get("STARTUP_SCRAPE_ON_BOOT", "1") == "1"
 
@@ -1405,7 +1408,11 @@ def _fetch_streams_for_source(session, source: str, source_id: str) -> list[dict
 # ====================== SCHEDULER (OFF BY DEFAULT) ======================
 def run_scraper_job():
     try:
-        scrape_games.main()
+        if SCRAPER_SUBPROCESS:
+            scraper_path = Path(__file__).parent / "scrape_games.py"
+            subprocess.run([sys.executable, str(scraper_path)], check=True)
+        else:
+            scrape_games.main()
         try:
             df = _read_csv_shared_locked(DATA_PATH)
             games = _build_games_from_df(df)
@@ -1434,6 +1441,8 @@ def start_scheduler():
         minutes=SCRAPE_INTERVAL_MINUTES,
         id="scrape_job",
         replace_existing=True,
+        max_instances=1,
+        coalesce=True,
     )
     scheduler.start()
     print("[scheduler] Background scheduler started.")
