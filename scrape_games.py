@@ -12,7 +12,7 @@ Guarantees:
   - Manual streams preserved
   - Scraped streams replaced each run
   - No stream explosion
-  - Locked CSV writes
+  - SQLite writes
 """
 
 import requests
@@ -23,11 +23,12 @@ import pandas as pd
 import pytz
 import re
 from urllib.parse import urljoin
-import ast
 import os
-import fcntl
 import hashlib
 import subprocess
+import json
+import sqlite3
+import time
 from playwright.sync_api import sync_playwright
 
 # ---------------- CONFIG ----------------
@@ -79,30 +80,41 @@ def _ensure_playwright_chromium() -> bool:
 EST = pytz.timezone("US/Eastern")
 UTC = pytz.UTC
 
-OUTPUT_FILE = Path(
+GAMES_DB_PATH = Path(
     os.environ.get(
-        "GAMES_CSV_PATH",
-        Path(__file__).parent / "data" / "today_games_with_all_streams.csv",
+        "GAMES_DB_PATH",
+        Path(__file__).parent / "data" / "games.db",
     )
 )
 
 MAX_STREAMS_PER_GAME = 8
 
-CSV_COLS = [
-    "source", "date_header", "sport", "time_unix", "time",
-    "tournament", "tournament_url", "matchup", "watch_url",
-    "is_live", "streams", "embed_url"
+DB_COLUMNS = [
+    "id",
+    "source",
+    "date_header",
+    "sport",
+    "time_unix",
+    "time",
+    "tournament",
+    "tournament_url",
+    "matchup",
+    "watch_url",
+    "is_live",
+    "streams_json",
+    "embed_url",
+    "updated_at",
 ]
 
 # ---------------- HELPERS ----------------
 
-def _parse_streams_cell(val):
+def _parse_streams_json(val):
     if isinstance(val, list):
         return val
     if not isinstance(val, str) or not val.strip():
         return []
     try:
-        parsed = ast.literal_eval(val)
+        parsed = json.loads(val)
         return parsed if isinstance(parsed, list) else []
     except Exception:
         return []
@@ -118,8 +130,17 @@ def _dedup_streams(streams):
         out.append(s)
     return out[:MAX_STREAMS_PER_GAME]
 
-def _streams_to_cell(streams):
-    return repr(_dedup_streams(streams))
+def _streams_to_json(streams):
+    return json.dumps(_dedup_streams(streams), ensure_ascii=False)
+
+def _serialize_time(value):
+    if value is None:
+        return None
+    if isinstance(value, str):
+        return value
+    if isinstance(value, (datetime, pd.Timestamp)):
+        return value.isoformat()
+    return str(value)
 
 def _is_manual(st):
     origin = st.get("origin")
@@ -153,11 +174,55 @@ def _stable_game_id(row: dict) -> int:
     digest = hashlib.md5(key.encode("utf-8")).hexdigest()
     return int(digest[:8], 16)
 
-def _ensure_cols(df: pd.DataFrame) -> pd.DataFrame:
-    for c in CSV_COLS:
-        if c not in df.columns:
-            df[c] = None
-    return df
+def _ensure_games_db() -> None:
+    GAMES_DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with sqlite3.connect(GAMES_DB_PATH) as conn:
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA synchronous=NORMAL")
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS games (
+                id INTEGER PRIMARY KEY,
+                source TEXT,
+                date_header TEXT,
+                sport TEXT,
+                time_unix REAL,
+                time TEXT,
+                tournament TEXT,
+                tournament_url TEXT,
+                matchup TEXT,
+                watch_url TEXT,
+                is_live INTEGER DEFAULT 0,
+                streams_json TEXT,
+                embed_url TEXT,
+                updated_at REAL
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS games_meta (
+                id INTEGER PRIMARY KEY,
+                updated_at REAL
+            )
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO games_meta (id, updated_at)
+            VALUES (1, 0)
+            ON CONFLICT(id) DO NOTHING
+            """
+        )
+
+
+def _connect_games_db() -> sqlite3.Connection:
+    _ensure_games_db()
+    conn = sqlite3.connect(GAMES_DB_PATH)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA synchronous=NORMAL")
+    return conn
 
 def _should_keep_existing(row: dict) -> bool:
     """
@@ -634,68 +699,118 @@ def main():
         return
 
     df_new = pd.concat(scraped_frames, ignore_index=True)
-
-    OUTPUT_FILE.parent.mkdir(parents=True, exist_ok=True)
-    if not OUTPUT_FILE.exists():
-        pd.DataFrame(columns=CSV_COLS).to_csv(OUTPUT_FILE, index=False)
-
-    with OUTPUT_FILE.open("r+", encoding="utf-8") as fh:
-        fcntl.flock(fh, fcntl.LOCK_EX)
-        df_old = _ensure_cols(pd.read_csv(fh))
-        df_new = _ensure_cols(df_new)
-
+    with _connect_games_db() as conn:
         # Build a lookup of existing rows by stable ID so we don't drop manual edits
-        old_map = {}
-        for _, row in df_old.iterrows():
-            rd = row.to_dict()
-            old_map[_stable_game_id(rd)] = rd
+        old_map: dict[int, dict] = {}
+        for row in conn.execute("SELECT * FROM games").fetchall():
+            rd = dict(row)
+            rd["streams"] = _parse_streams_json(rd.get("streams_json"))
+            old_map[int(rd["id"])] = rd
 
         # Deduplicate new scrape across sources before merging into existing rows
-        new_map = {}
+        new_map: dict[int, dict] = {}
         for _, row in df_new.iterrows():
             rd = row.to_dict()
             gid = _stable_game_id(rd)
             existing = new_map.get(gid)
             if existing:
-                merged_streams = merge_streams(rd.get("streams") or [], _parse_streams_cell(existing.get("streams")))
+                merged_streams = merge_streams(rd.get("streams") or [], existing.get("streams") or [])
                 rd["streams"] = merged_streams
                 rd["embed_url"] = rd.get("embed_url") or (merged_streams[0]["embed_url"] if merged_streams else None)
                 rd["is_live"] = existing.get("is_live") or _normalize_bool(rd.get("is_live"))
             new_map[gid] = rd
 
-        df_new = pd.DataFrame(new_map.values())
-
         out_rows = []
 
         # Merge scraped rows with existing where possible
-        for _, row in df_new.iterrows():
-            rd = row.to_dict()
+        for rd in new_map.values():
             gid = _stable_game_id(rd)
             old = old_map.pop(gid, None)
 
-            old_streams = _parse_streams_cell(old.get("streams")) if old else []
+            old_streams = old.get("streams") if old else []
             merged = merge_streams(rd.get("streams") or [], old_streams)
 
             rd["streams"] = merged
             rd["embed_url"] = rd.get("embed_url") or (merged[0]["embed_url"] if merged else None)
             rd["is_live"] = _normalize_bool(old.get("is_live") if old else rd.get("is_live"))
+            rd["id"] = gid
 
             out_rows.append(rd)
 
         # Carry forward unmatched (typically manual) rows so they are not wiped out
-        for _, rd in old_map.items():
+        for rd in old_map.values():
             if not _should_keep_existing(rd):
                 continue
-            streams = _parse_streams_cell(rd.get("streams"))
+            streams = rd.get("streams") or []
             rd["streams"] = streams
             rd["embed_url"] = rd.get("embed_url") or (streams[0]["embed_url"] if streams else None)
             rd["is_live"] = _normalize_bool(rd.get("is_live"))
             out_rows.append(rd)
 
-        fh.seek(0)
-        fh.truncate()
-        pd.DataFrame(out_rows)[CSV_COLS].to_csv(fh, index=False)
-        fcntl.flock(fh, fcntl.LOCK_UN)
+        now_ts = time.time()
+        keep_ids = [int(row.get("id")) for row in out_rows if row.get("id") is not None]
+
+        with conn:
+            for row in out_rows:
+                payload = {
+                    "id": int(row.get("id")),
+                    "source": row.get("source"),
+                    "date_header": row.get("date_header"),
+                    "sport": row.get("sport"),
+                    "time_unix": row.get("time_unix"),
+                    "time": _serialize_time(row.get("time")),
+                    "tournament": row.get("tournament"),
+                    "tournament_url": row.get("tournament_url"),
+                    "matchup": row.get("matchup"),
+                    "watch_url": row.get("watch_url"),
+                    "is_live": 1 if _normalize_bool(row.get("is_live")) else 0,
+                    "streams_json": _streams_to_json(row.get("streams") or []),
+                    "embed_url": row.get("embed_url") or "",
+                    "updated_at": now_ts,
+                }
+                conn.execute(
+                    """
+                    INSERT INTO games (
+                        id, source, date_header, sport, time_unix, time,
+                        tournament, tournament_url, matchup, watch_url, is_live,
+                        streams_json, embed_url, updated_at
+                    )
+                    VALUES (
+                        :id, :source, :date_header, :sport, :time_unix, :time,
+                        :tournament, :tournament_url, :matchup, :watch_url, :is_live,
+                        :streams_json, :embed_url, :updated_at
+                    )
+                    ON CONFLICT(id) DO UPDATE SET
+                        source = excluded.source,
+                        date_header = excluded.date_header,
+                        sport = excluded.sport,
+                        time_unix = excluded.time_unix,
+                        time = excluded.time,
+                        tournament = excluded.tournament,
+                        tournament_url = excluded.tournament_url,
+                        matchup = excluded.matchup,
+                        watch_url = excluded.watch_url,
+                        is_live = excluded.is_live,
+                        streams_json = excluded.streams_json,
+                        embed_url = excluded.embed_url,
+                        updated_at = excluded.updated_at
+                    """,
+                    payload,
+                )
+
+            if keep_ids:
+                placeholders = ",".join("?" for _ in keep_ids)
+                conn.execute(f"DELETE FROM games WHERE id NOT IN ({placeholders})", keep_ids)
+            else:
+                conn.execute("DELETE FROM games")
+            conn.execute(
+                """
+                INSERT INTO games_meta (id, updated_at)
+                VALUES (1, ?)
+                ON CONFLICT(id) DO UPDATE SET updated_at = excluded.updated_at
+                """,
+                (now_ts,),
+            )
 
     print(f"[scraper] Wrote {len(out_rows)} games (streamed.pk={source_counts['streamed.pk']}, sharkstreams={source_counts['sharkstreams']})")
 

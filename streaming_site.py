@@ -7,13 +7,13 @@ for tracking active viewers.
 
 from __future__ import annotations
 
-import ast
 import atexit
-import fcntl
 import hashlib
+import json
 import os
 import random
 import re
+import sqlite3
 import subprocess
 import sys
 import threading
@@ -49,22 +49,23 @@ import scrape_games
 streaming_bp = Blueprint("streaming", __name__)
 
 
-DATA_PATH = Path(
+GAMES_DB_PATH = Path(
     os.environ.get(
-        "GAMES_CSV_PATH",
-        Path(__file__).parent / "data" / "today_games_with_all_streams.csv",
+        "GAMES_DB_PATH",
+        Path(__file__).parent / "data" / "games.db",
     )
 ).expanduser()
 
 
 # ====================== PERFORMANCE CONTROLS ======================
-# Cache games in memory to avoid pd.read_csv + ast parsing on every request
+# Cache games in memory to avoid sqlite reads on every request
 GAMES_CACHE: dict[str, Any] = {
     "games": [],
     "ts": 0.0,
     "mtime": 0.0,
 }
 GAMES_CACHE_LOCK = threading.Lock()
+GAMES_DB_LOCK = threading.Lock()
 
 # Refresh at most every N seconds OR when file mtime changes
 GAMES_CACHE_TTL_SECONDS = int(os.environ.get("GAMES_CACHE_TTL_SECONDS", "1800"))
@@ -314,17 +315,6 @@ def make_stable_id(row: dict[str, Any]) -> int:
     return int(digest[:8], 16)
 
 
-def find_row_index_by_game_id(df: pd.DataFrame, game_id: int):
-    for i, row in df.iterrows():
-        try:
-            rid = make_stable_id(row)
-            if rid == game_id:
-                return int(i)
-        except Exception:
-            continue
-    return None
-
-
 def slugify(text: str) -> str:
     if not isinstance(text, str):
         return ""
@@ -356,35 +346,34 @@ def normalize_bool(v: Any) -> bool:
     return s in ("1", "true", "yes", "y", "live", "t")
 
 
-def parse_streams_cell(cell_value: Any) -> list[dict[str, Any]]:
-    """CSV stores streams as python-literal list of dicts."""
-
-    if cell_value is None or (isinstance(cell_value, float) and pd.isna(cell_value)):
+def parse_streams_json(value: Any) -> list[dict[str, Any]]:
+    if value is None:
         return []
-    if isinstance(cell_value, list):
-        return cell_value
+    if isinstance(value, list):
+        return value
 
-    s = str(cell_value).strip()
-    if not s:
+    raw = str(value).strip()
+    if not raw:
         return []
     try:
-        parsed = ast.literal_eval(s)
-        if isinstance(parsed, list):
-            out = []
-            for item in parsed:
-                if isinstance(item, dict) and item.get("embed_url"):
-                    fixed = dict(item)
-                    fixed["label"] = fixed.get("label") or "Stream"
-                    fixed["embed_url"] = fixed.get("embed_url")
-                    fixed["watch_url"] = fixed.get("watch_url")
-                    out.append(fixed)
-            return out
+        parsed = json.loads(raw)
     except Exception:
         return []
-    return []
+    if not isinstance(parsed, list):
+        return []
+
+    out = []
+    for item in parsed:
+        if isinstance(item, dict) and item.get("embed_url"):
+            fixed = dict(item)
+            fixed["label"] = fixed.get("label") or "Stream"
+            fixed["embed_url"] = fixed.get("embed_url")
+            fixed["watch_url"] = fixed.get("watch_url")
+            out.append(fixed)
+    return out
 
 
-def streams_to_cell(streams_list: list[dict[str, Any]]) -> str:
+def _serialize_streams(streams_list: list[dict[str, Any]]) -> str:
     cleaned = []
     for s in (streams_list or []):
         if not isinstance(s, dict):
@@ -396,109 +385,85 @@ def streams_to_cell(streams_list: list[dict[str, Any]]) -> str:
         fixed["label"] = fixed.get("label") or "Stream"
         fixed["embed_url"] = embed
         cleaned.append(fixed)
-    return repr(cleaned)
+    return json.dumps(cleaned, ensure_ascii=False)
 
 
-def ensure_csv_exists_with_header() -> None:
-    DATA_PATH.parent.mkdir(parents=True, exist_ok=True)
-    if DATA_PATH.exists():
-        return
-    cols = [
-        "source",
-        "date_header",
-        "sport",
-        "time_unix",
-        "time",
-        "tournament",
-        "tournament_url",
-        "matchup",
-        "watch_url",
-        "is_live",
-        "streams",
-        "embed_url",
-    ]
-    df = pd.DataFrame(columns=cols)
-    df.to_csv(DATA_PATH, index=False)
-    print(f"[csv] Created empty CSV at {DATA_PATH}")
-
-
-def _read_csv_shared_locked(path: Path) -> pd.DataFrame:
-    """Fast read path with shared lock."""
-
-    ensure_csv_exists_with_header()
-    with path.open("r", encoding="utf-8") as fh:
-        try:
-            import fcntl
-
-            fcntl.flock(fh.fileno(), fcntl.LOCK_SH)
-        except Exception:
-            pass
-        try:
-            df = pd.read_csv(fh)
-        except Exception:
-            df = pd.DataFrame(
-                columns=[
-                    "source",
-                    "date_header",
-                    "sport",
-                    "time_unix",
-                    "time",
-                    "tournament",
-                    "tournament_url",
-                    "matchup",
-                    "watch_url",
-                    "is_live",
-                    "streams",
-                    "embed_url",
-                ]
+def _ensure_games_db() -> None:
+    GAMES_DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with sqlite3.connect(GAMES_DB_PATH, check_same_thread=False) as conn:
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA synchronous=NORMAL")
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS games (
+                id INTEGER PRIMARY KEY,
+                source TEXT,
+                date_header TEXT,
+                sport TEXT,
+                time_unix REAL,
+                time TEXT,
+                tournament TEXT,
+                tournament_url TEXT,
+                matchup TEXT,
+                watch_url TEXT,
+                is_live INTEGER DEFAULT 0,
+                streams_json TEXT,
+                embed_url TEXT,
+                updated_at REAL
             )
-        try:
-            import fcntl
-
-            fcntl.flock(fh.fileno(), fcntl.LOCK_UN)
-        except Exception:
-            pass
-    return df
-
-
-def read_csv_locked_for_write():
-    """Exclusive lock to safely modify CSV."""
-
-    ensure_csv_exists_with_header()
-    fh = DATA_PATH.open("r+", encoding="utf-8")
-    fcntl.flock(fh.fileno(), fcntl.LOCK_EX)
-
-    fh.seek(0)
-    try:
-        df = pd.read_csv(fh)
-    except Exception:
-        df = pd.DataFrame(
-            columns=[
-                "source",
-                "date_header",
-                "sport",
-                "time_unix",
-                "time",
-                "tournament",
-                "tournament_url",
-                "matchup",
-                "watch_url",
-                "is_live",
-                "streams",
-                "embed_url",
-            ]
+            """
         )
-    return df, fh
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS games_meta (
+                id INTEGER PRIMARY KEY,
+                updated_at REAL
+            )
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO games_meta (id, updated_at)
+            VALUES (1, 0)
+            ON CONFLICT(id) DO NOTHING
+            """
+        )
 
 
-def write_csv_locked(df, fh):
-    fh.seek(0)
-    fh.truncate(0)
-    df.to_csv(fh, index=False)
-    fh.flush()
-    os.fsync(fh.fileno())
-    fcntl.flock(fh.fileno(), fcntl.LOCK_UN)
-    fh.close()
+def _get_games_db_connection() -> sqlite3.Connection:
+    _ensure_games_db()
+    conn = sqlite3.connect(GAMES_DB_PATH, check_same_thread=False)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA synchronous=NORMAL")
+    return conn
+
+
+def _get_games_db_last_updated() -> float:
+    _ensure_games_db()
+    with sqlite3.connect(GAMES_DB_PATH, check_same_thread=False) as conn:
+        row = conn.execute("SELECT updated_at FROM games_meta WHERE id = 1").fetchone()
+    if row and row[0]:
+        return float(row[0])
+    return 0.0
+
+
+def _touch_games_db(conn: sqlite3.Connection) -> None:
+    conn.execute(
+        """
+        INSERT INTO games_meta (id, updated_at)
+        VALUES (1, ?)
+        ON CONFLICT(id) DO UPDATE SET updated_at = excluded.updated_at
+        """,
+        (time.time(),),
+    )
+
+
+def _games_db_has_rows() -> bool:
+    _ensure_games_db()
+    with sqlite3.connect(GAMES_DB_PATH, check_same_thread=False) as conn:
+        row = conn.execute("SELECT COUNT(*) FROM games").fetchone()
+    return bool(row and row[0])
 
 
 def require_admin() -> bool:
@@ -663,38 +628,30 @@ def merge_streams(existing: list[dict[str, Any]], incoming: list[dict[str, Any]]
     return out
 
 
-CSV_COLS = [
-    "source",
-    "date_header",
-    "sport",
-    "time_unix",
-    "time",
-    "tournament",
-    "tournament_url",
-    "matchup",
-    "watch_url",
-    "is_live",
-    "streams",
-    "embed_url",
-]
+def _load_games_from_db() -> list[dict[str, Any]]:
+    with _get_games_db_connection() as conn:
+        rows = conn.execute("SELECT * FROM games").fetchall()
+    row_dicts = []
+    for row in rows:
+        rowd = dict(row)
+        rowd["streams"] = parse_streams_json(rowd.get("streams_json"))
+        row_dicts.append(rowd)
+    return _build_games_from_rows(row_dicts)
 
 
 def load_games_cached() -> list[dict[str, Any]]:
-    """Cached loader for games from CSV."""
+    """Cached loader for games from sqlite."""
 
     now = time.time()
     previous_games: list[dict[str, Any]] = []
-    try:
-        mtime = os.path.getmtime(DATA_PATH) if os.path.exists(DATA_PATH) else 0.0
-    except Exception:
-        mtime = 0.0
+    db_updated = _get_games_db_last_updated()
 
     with GAMES_CACHE_LOCK:
         previous_games = list(GAMES_CACHE.get("games") or [])
         cache_ok = (
             GAMES_CACHE["games"]
             and (now - GAMES_CACHE["ts"] < GAMES_CACHE_TTL_SECONDS)
-            and (mtime == GAMES_CACHE["mtime"])
+            and (db_updated == GAMES_CACHE["mtime"])
         )
         if cache_ok:
             cached_games = GAMES_CACHE["games"]
@@ -703,12 +660,11 @@ def load_games_cached() -> list[dict[str, Any]]:
             else:
                 return cached_games
 
-    df = _read_csv_shared_locked(DATA_PATH)
-    games = _build_games_from_df(df)
+    games = _load_games_from_db()
 
-    if not games and (len(df.index) > 0) and previous_games:
+    if not games and previous_games:
         print(
-            f"[loader][WARN] Parsed 0 games from {DATA_PATH} with {len(df.index)} rows; "
+            f"[loader][WARN] Parsed 0 games from {GAMES_DB_PATH}; "
             f"serving {len(previous_games)} cached games instead."
         )
         return previous_games
@@ -716,7 +672,7 @@ def load_games_cached() -> list[dict[str, Any]]:
     with GAMES_CACHE_LOCK:
         GAMES_CACHE["games"] = games
         GAMES_CACHE["ts"] = now
-        GAMES_CACHE["mtime"] = mtime
+        GAMES_CACHE["mtime"] = db_updated
 
     return games
 
@@ -896,24 +852,9 @@ def m3u8_proxy():
     return proxy_resp
 
 
-def _build_games_from_df(df: pd.DataFrame):
-    if df is None or df.empty:
+def _build_games_from_rows(rows: list[dict[str, Any]]):
+    if not rows:
         return []
-
-    for col in [
-        "streams",
-        "is_live",
-        "sport",
-        "time",
-        "date_header",
-        "tournament",
-        "tournament_url",
-        "matchup",
-        "watch_url",
-        "time_unix",
-    ]:
-        if col not in df.columns:
-            df[col] = ""
 
     games = []
     dedup_map: dict[tuple[str, str, str, str], dict[str, Any]] = {}
@@ -921,9 +862,8 @@ def _build_games_from_df(df: pd.DataFrame):
     stale_cutoff = now_utc - timedelta(hours=6)
     live_window_after_start = timedelta(hours=5)
 
-    for _, row in df.iterrows():
-        rowd = row.to_dict()
-        streams = parse_streams_cell(rowd.get("streams"))
+    for rowd in rows:
+        streams = rowd.get("streams") or []
         raw_embed_url = rowd.get("embed_url")
         embed_url = raw_embed_url.strip() if isinstance(raw_embed_url, str) else ""
 
@@ -1135,34 +1075,39 @@ def api_add_streams():
     if not isinstance(incoming_streams, list):
         return jsonify({"ok": False, "error": "streams must be a list"}), 400
 
-    df, fh = read_csv_locked_for_write()
-    for c in CSV_COLS:
-        if c not in df.columns:
-            df[c] = ""
+    with GAMES_DB_LOCK:
+        with _get_games_db_connection() as conn:
+            row = conn.execute(
+                "SELECT streams_json, embed_url, is_live FROM games WHERE id = ?",
+                (game_id,),
+            ).fetchone()
+            if row is None:
+                return jsonify({"ok": False, "error": "game not found", "game_id": game_id}), 404
 
-    idx = find_row_index_by_game_id(df, game_id)
-    if idx is None:
-        fcntl.flock(fh.fileno(), fcntl.LOCK_UN)
-        fh.close()
-        return jsonify({"ok": False, "error": "game not found", "game_id": game_id}), 404
+            existing_streams = parse_streams_json(row["streams_json"])
+            merged = merge_streams(existing_streams, incoming_streams)
 
-    existing_streams = parse_streams_cell(df.at[idx, "streams"])
-    merged = merge_streams(existing_streams, incoming_streams)
+            set_embed_url = payload.get("set_embed_url")
+            if isinstance(set_embed_url, str) and set_embed_url.strip():
+                embed_url = set_embed_url.strip()
+            else:
+                embed_url = row["embed_url"] or ""
+                if not embed_url and merged:
+                    embed_url = merged[0].get("embed_url") or ""
 
-    df.at[idx, "streams"] = streams_to_cell(merged)
+            is_live = int(row["is_live"] or 0)
+            if "set_is_live" in payload:
+                is_live = 1 if payload.get("set_is_live") else 0
 
-    set_embed_url = payload.get("set_embed_url")
-    if isinstance(set_embed_url, str) and set_embed_url.strip():
-        df.at[idx, "embed_url"] = set_embed_url.strip()
-    else:
-        cur_embed = df.at[idx, "embed_url"] if "embed_url" in df.columns else ""
-        if (not isinstance(cur_embed, str) or not cur_embed.strip()) and merged:
-            df.at[idx, "embed_url"] = merged[0].get("embed_url")
-
-    if "set_is_live" in payload:
-        df.at[idx, "is_live"] = bool(payload.get("set_is_live"))
-
-    write_csv_locked(df[CSV_COLS], fh)
+            conn.execute(
+                """
+                UPDATE games
+                SET streams_json = ?, embed_url = ?, is_live = ?, updated_at = ?
+                WHERE id = ?
+                """,
+                (_serialize_streams(merged), embed_url, is_live, time.time(), game_id),
+            )
+            _touch_games_db(conn)
 
     with GAMES_CACHE_LOCK:
         GAMES_CACHE["ts"] = 0
@@ -1186,25 +1131,18 @@ def api_games_remove():
     except Exception:
         return jsonify({"ok": False, "error": "game_id must be an int"}), 400
 
-    df, fh = read_csv_locked_for_write()
-    for c in CSV_COLS:
-        if c not in df.columns:
-            df[c] = ""
-
-    idx = find_row_index_by_game_id(df, game_id)
-    if idx is None:
-        fcntl.flock(fh.fileno(), fcntl.LOCK_UN)
-        fh.close()
-        return jsonify({"ok": False, "error": "game not found", "game_id": game_id}), 404
-
-    df = df.drop(index=idx).reset_index(drop=True)
-    write_csv_locked(df[CSV_COLS], fh)
+    with GAMES_DB_LOCK:
+        with _get_games_db_connection() as conn:
+            cur = conn.execute("DELETE FROM games WHERE id = ?", (game_id,))
+            if cur.rowcount == 0:
+                return jsonify({"ok": False, "error": "game not found", "game_id": game_id}), 404
+            _touch_games_db(conn)
 
     with GAMES_CACHE_LOCK:
         GAMES_CACHE["ts"] = 0
         GAMES_CACHE["mtime"] = 0
 
-    return jsonify({"ok": True, "removed": True, "game_id": game_id, "rows_now": int(len(df))})
+    return jsonify({"ok": True, "removed": True, "game_id": game_id})
 
 
 @streaming_bp.route("/api/games/upsert", methods=["POST"])
@@ -1222,65 +1160,88 @@ def api_games_upsert():
     else:
         return jsonify({"ok": False, "error": "expected 'game' object or 'games' list"}), 400
 
-    df, fh = read_csv_locked_for_write()
-    for c in CSV_COLS:
-        if c not in df.columns:
-            df[c] = ""
-
     upserted = []
-    for g in games:
-        row_like = {
-            "date_header": g.get("date_header", ""),
-            "sport": g.get("sport", ""),
-            "tournament": g.get("tournament", ""),
-            "matchup": g.get("matchup", ""),
-        }
-        game_id = make_stable_id(row_like)
+    with GAMES_DB_LOCK:
+        with _get_games_db_connection() as conn:
+            for g in games:
+                row_like = {
+                    "date_header": g.get("date_header", ""),
+                    "sport": g.get("sport", ""),
+                    "tournament": g.get("tournament", ""),
+                    "matchup": g.get("matchup", ""),
+                }
+                game_id = make_stable_id(row_like)
 
-        idx = find_row_index_by_game_id(df, game_id)
+                streams_list = g.get("streams")
+                if isinstance(streams_list, str):
+                    streams_list = parse_streams_json(streams_list)
+                elif not isinstance(streams_list, list):
+                    streams_list = []
 
-        streams_list = g.get("streams")
-        if isinstance(streams_list, str):
-            streams_list = parse_streams_cell(streams_list)
-        elif not isinstance(streams_list, list):
-            streams_list = []
+                existing_row = conn.execute(
+                    "SELECT streams_json FROM games WHERE id = ?",
+                    (game_id,),
+                ).fetchone()
+                if existing_row:
+                    existing_streams = parse_streams_json(existing_row["streams_json"])
+                    merged = merge_streams(existing_streams, streams_list)
+                else:
+                    merged = merge_streams([], streams_list)
 
-        embed_url = g.get("embed_url")
-        if not (isinstance(embed_url, str) and embed_url.strip()):
-            embed_url = streams_list[0].get("embed_url") if streams_list else ""
+                embed_url = g.get("embed_url")
+                if not (isinstance(embed_url, str) and embed_url.strip()):
+                    embed_url = merged[0].get("embed_url") if merged else ""
 
-        new_row = {
-            "source": g.get("source", ""),
-            "date_header": g.get("date_header", ""),
-            "sport": g.get("sport", ""),
-            "time_unix": g.get("time_unix", ""),
-            "time": g.get("time", ""),
-            "tournament": g.get("tournament", ""),
-            "tournament_url": g.get("tournament_url", ""),
-            "matchup": g.get("matchup", ""),
-            "watch_url": g.get("watch_url", ""),
-            "is_live": normalize_bool(g.get("is_live")),
-            "streams": streams_to_cell(streams_list),
-            "embed_url": embed_url or "",
-        }
+                payload_row = {
+                    "id": game_id,
+                    "source": g.get("source", ""),
+                    "date_header": g.get("date_header", ""),
+                    "sport": g.get("sport", ""),
+                    "time_unix": g.get("time_unix", ""),
+                    "time": g.get("time", ""),
+                    "tournament": g.get("tournament", ""),
+                    "tournament_url": g.get("tournament_url", ""),
+                    "matchup": g.get("matchup", ""),
+                    "watch_url": g.get("watch_url", ""),
+                    "is_live": 1 if normalize_bool(g.get("is_live")) else 0,
+                    "streams_json": _serialize_streams(merged),
+                    "embed_url": embed_url or "",
+                    "updated_at": time.time(),
+                }
 
-        if idx is None:
-            df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
-            action = "inserted"
-        else:
-            existing_streams = parse_streams_cell(df.at[idx, "streams"])
-            merged = merge_streams(existing_streams, streams_list)
-            new_row["streams"] = streams_to_cell(merged)
-            if not new_row["embed_url"] and merged:
-                new_row["embed_url"] = merged[0].get("embed_url") or ""
+                conn.execute(
+                    """
+                    INSERT INTO games (
+                        id, source, date_header, sport, time_unix, time,
+                        tournament, tournament_url, matchup, watch_url, is_live,
+                        streams_json, embed_url, updated_at
+                    )
+                    VALUES (
+                        :id, :source, :date_header, :sport, :time_unix, :time,
+                        :tournament, :tournament_url, :matchup, :watch_url, :is_live,
+                        :streams_json, :embed_url, :updated_at
+                    )
+                    ON CONFLICT(id) DO UPDATE SET
+                        source = excluded.source,
+                        date_header = excluded.date_header,
+                        sport = excluded.sport,
+                        time_unix = excluded.time_unix,
+                        time = excluded.time,
+                        tournament = excluded.tournament,
+                        tournament_url = excluded.tournament_url,
+                        matchup = excluded.matchup,
+                        watch_url = excluded.watch_url,
+                        is_live = excluded.is_live,
+                        streams_json = excluded.streams_json,
+                        embed_url = excluded.embed_url,
+                        updated_at = excluded.updated_at
+                    """,
+                    payload_row,
+                )
+                action = "updated" if existing_row else "inserted"
+                upserted.append({"game_id": game_id, "action": action})
 
-            for k, v in new_row.items():
-                df.at[idx, k] = v
-            action = "updated"
-
-        upserted.append({"game_id": game_id, "action": action})
-
-    write_csv_locked(df[CSV_COLS], fh)
+            _touch_games_db(conn)
 
     with GAMES_CACHE_LOCK:
         GAMES_CACHE["ts"] = 0
@@ -1295,22 +1256,21 @@ def api_games_clear_streams():
     if not require_admin():
         return jsonify({"ok": False, "error": "unauthorized"}), 401
 
-    df, fh = read_csv_locked_for_write()
-    for c in CSV_COLS:
-        if c not in df.columns:
-            df[c] = ""
-
-    if not df.empty:
-        df["streams"] = ""
-        df["embed_url"] = ""
-
-    write_csv_locked(df[CSV_COLS], fh)
+    with GAMES_DB_LOCK:
+        with _get_games_db_connection() as conn:
+            conn.execute(
+                "UPDATE games SET streams_json = ?, embed_url = ?, updated_at = ?",
+                ("[]", "", time.time()),
+            )
+            _touch_games_db(conn)
+            row = conn.execute("SELECT COUNT(*) FROM games").fetchone()
+            row_count = int(row[0]) if row else 0
 
     with GAMES_CACHE_LOCK:
         GAMES_CACHE["ts"] = 0
         GAMES_CACHE["mtime"] = 0
 
-    return jsonify({"ok": True, "rows": int(len(df))})
+    return jsonify({"ok": True, "rows": row_count})
 
 
 def _game_exists(game_id: int) -> bool:
@@ -1466,16 +1426,12 @@ def run_scraper_job():
         else:
             scrape_games.main()
         try:
-            df = _read_csv_shared_locked(DATA_PATH)
-            games = _build_games_from_df(df)
+            games = _load_games_from_db()
             with GAMES_CACHE_LOCK:
                 GAMES_CACHE["games"] = games
                 GAMES_CACHE["ts"] = time.time()
-                try:
-                    GAMES_CACHE["mtime"] = os.path.getmtime(DATA_PATH)
-                except Exception:
-                    GAMES_CACHE["mtime"] = 0
-            print(f"[scheduler] Cached {len(games)} games from {DATA_PATH}")
+                GAMES_CACHE["mtime"] = _get_games_db_last_updated()
+            print(f"[scheduler] Cached {len(games)} games from {GAMES_DB_PATH}")
         except Exception as parse_exc:
             print(f"[scheduler][WARN] Scrape wrote file but parsing failed: {parse_exc}")
             with GAMES_CACHE_LOCK:
@@ -1524,7 +1480,7 @@ def _maybe_start_scraper():
         should_start = False
 
     if should_start:
-        if STARTUP_SCRAPE_ON_BOOT or not DATA_PATH.exists():
+        if STARTUP_SCRAPE_ON_BOOT or not _games_db_has_rows():
             trigger_startup_scrape()
         start_scheduler()
         _SCRAPER_STARTED = True
