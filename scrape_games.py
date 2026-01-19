@@ -133,6 +133,15 @@ def _dedup_streams(streams):
 def _streams_to_json(streams):
     return json.dumps(_dedup_streams(streams), ensure_ascii=False)
 
+def _serialize_time(value):
+    if value is None:
+        return None
+    if isinstance(value, str):
+        return value
+    if isinstance(value, (datetime, pd.Timestamp)):
+        return value.isoformat()
+    return str(value)
+
 def _is_manual(st):
     origin = st.get("origin")
     # Treat missing/unknown origin as manual so scraper refreshes don't wipe user-added streams
@@ -749,7 +758,7 @@ def main():
                     "date_header": row.get("date_header"),
                     "sport": row.get("sport"),
                     "time_unix": row.get("time_unix"),
-                    "time": row.get("time"),
+                    "time": _serialize_time(row.get("time")),
                     "tournament": row.get("tournament"),
                     "tournament_url": row.get("tournament_url"),
                     "matchup": row.get("matchup"),
