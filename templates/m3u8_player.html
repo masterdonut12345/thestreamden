@@ -165,6 +165,16 @@
               liveSyncDurationCount: 4,
               liveMaxLatencyDurationCount: 8,
               lowLatencyMode: false,
+              fetchSetup: function (context, initParams) {
+                const nextParams = initParams || {};
+                nextParams.mode = "cors";
+                nextParams.credentials = "omit";
+                nextParams.referrerPolicy = "no-referrer";
+                return nextParams;
+              },
+              xhrSetup: function (xhr) {
+                xhr.withCredentials = false;
+              },
             });
             hls.on(window.Hls.Events.ERROR, function (_, data) {
               if (data && data.fatal) {
