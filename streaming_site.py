@@ -774,8 +774,7 @@ def make_money():
 @streaming_bp.route("/m3u8_player")
 def m3u8_player():
     src = normalize_m3u8_src((request.args.get("src") or "").strip())
-    proxy_src = build_m3u8_proxy_url(src) if src else ""
-    return render_template("m3u8_player.html", src=src, proxy_src=proxy_src)
+    return render_template("m3u8_player.html", src=src)
 
 
 @streaming_bp.route("/m3u8_proxy")
