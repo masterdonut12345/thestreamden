@@ -119,7 +119,14 @@
             const nextUsingProxy = options && typeof options.useProxy === "boolean" ? options.useProxy : usingProxy;
             usingProxy = nextUsingProxy;
             const baseSrc = currentSrc();
-            const newSrc = usingProxy ? withCacheBust(baseSrc) : baseSrc;
+            if (usingProxy && reason === "stall-timeout") {
+              console.warn("Stall detected on proxy, waiting for new data.");
+              if (hls) {
+                hls.startLoad();
+              }
+              return;
+            }
+            const newSrc = usingProxy ? baseSrc : withCacheBust(baseSrc);
             console.warn("Reloading HLS stream", reason || "");
             const resumeTime = video.currentTime;
             const restorePosition = function () {
