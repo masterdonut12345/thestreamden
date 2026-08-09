@@ -37,6 +37,10 @@ REQUEST_TIMEOUT = 8  # seconds
 STREAMED_API_BASE = os.environ.get("STREAMED_API_BASE", "https://streamed.st")
 STREAMED_MATCHES_PATH = os.environ.get("STREAMED_MATCHES_PATH", "/api/matches/all-today")
 STREAMED_SPORTS_PATH = os.environ.get("STREAMED_SPORTS_PATH", "/api/sports")
+SQLITE_DB = os.environ.get("STREAM_DEN_DB", str(Path(__file__).parent / "data" / "games.db"))
+# sharkstreams.net is currently dead (DNS does not resolve); keep the parser but
+# off by default so the scheduler doesn't spam timeouts. Set to 1 if it returns.
+ENABLE_SHARK = os.environ.get("ENABLE_SHARK_SCRAPER", "0") == "1"
 _SESSION = None
 
 
@@ -522,7 +526,10 @@ def main():
     except Exception as exc:
         print(f"[scraper][ERROR] streamed.st scrape failed: {exc}")
     try:
-        df_shark = scrape_shark()
+        if ENABLE_SHARK:
+            df_shark = scrape_shark()
+        else:
+            print("[scraper] SharkStreams disabled (ENABLE_SHARK_SCRAPER=0), skipping")
     except Exception as exc:
         print(f"[scraper][ERROR] shark scrape failed: {exc}")
 

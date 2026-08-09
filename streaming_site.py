@@ -1549,6 +1549,44 @@ def trigger_startup_scrape():
 
 _SCRAPER_STARTED = False
 
+# Cross-process lock file: with gunicorn -w 2 every worker imports this module,
+# so without coordination each process starts its own scheduler (double scrapes,
+# double DB writes). Only the first worker to grab the lock runs the scheduler.
+_SCHEDULER_LOCK_FD: int | None = None
+
+
+def _acquire_scheduler_lock() -> bool:
+    """Try to become the single scheduler owner across all workers."""
+    global _SCHEDULER_LOCK_FD
+    import fcntl
+
+    lock_path = GAMES_DB_PATH.parent / "scheduler.lock"
+    try:
+        GAMES_DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+        fd = os.open(str(lock_path), os.O_RDWR | os.O_CREAT, 0o644)
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            os.close(fd)
+            return False
+        os.write(fd, str(os.getpid()).encode())
+        os.truncate(fd, os.lseek(fd, 0, os.SEEK_CUR))
+        _SCHEDULER_LOCK_FD = fd
+        return True
+    except Exception:
+        # Locking is best-effort; if it fails (e.g. weird FS) run anyway.
+        return True
+
+
+def _release_scheduler_lock() -> None:
+    global _SCHEDULER_LOCK_FD
+    if _SCHEDULER_LOCK_FD is not None:
+        try:
+            os.close(_SCHEDULER_LOCK_FD)
+        except OSError:
+            pass
+        _SCHEDULER_LOCK_FD = None
+
 
 def _maybe_start_scraper():
     global _SCRAPER_STARTED
@@ -1560,11 +1598,12 @@ def _maybe_start_scraper():
     if reload_flag is not None and reload_flag != "true":
         should_start = False
 
-    if should_start:
+    if should_start and _acquire_scheduler_lock():
         if STARTUP_SCRAPE_ON_BOOT or not _games_db_has_rows():
             trigger_startup_scrape()
         start_scheduler()
         _SCRAPER_STARTED = True
+        atexit.register(_release_scheduler_lock)
 
 
 if ENABLE_SCRAPER_IN_WEB:
