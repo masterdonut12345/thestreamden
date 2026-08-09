@@ -267,215 +267,6 @@
 
         h3 { margin-top: 12px; margin-bottom: 8px; font-size: 1.1rem; }
 
-        .chat-panel {
-            background: var(--surface);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            border-radius: 16px;
-            padding: 12px;
-            box-shadow: var(--shadow-soft);
-            display: flex;
-            flex-direction: column;
-            height: 520px;
-        }
-
-        .chat-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 8px;
-            margin-bottom: 10px;
-        }
-
-        .chat-title {
-            font-weight: 700;
-            font-size: 1rem;
-        }
-
-        .chat-subtitle {
-            font-size: 0.82rem;
-            color: var(--muted);
-            margin-top: 2px;
-        }
-
-        .chat-status {
-            font-size: 0.78rem;
-            padding: 4px 8px;
-            border-radius: 999px;
-            border: 1px solid rgba(255, 255, 255, 0.12);
-            background: rgba(122, 162, 255, 0.12);
-            color: #dfe7ff;
-            white-space: nowrap;
-        }
-
-        .chat-status[data-state="warn"] {
-            background: rgba(255, 195, 113, 0.14);
-            color: #ffe8c2;
-        }
-
-        .chat-status[data-state="error"] {
-            background: rgba(255, 93, 93, 0.14);
-            color: #ffd5d5;
-        }
-
-        .chat-messages {
-            background: var(--surface-2);
-            border: 1px solid rgba(255, 255, 255, 0.06);
-            border-radius: 12px;
-            min-height: 0;
-            flex: 1 1 auto;
-            overflow-y: auto;
-            padding: 10px;
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
-
-        .chat-message {
-            background: rgba(255, 255, 255, 0.04);
-            border: 1px solid rgba(255, 255, 255, 0.06);
-            border-radius: 10px;
-            padding: 8px 10px;
-        }
-
-        .chat-meta {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 6px;
-            font-size: 0.78rem;
-            color: var(--muted);
-        }
-
-        .chat-text {
-            margin-top: 4px;
-            white-space: pre-wrap;
-            word-break: break-word;
-            font-size: 0.92rem;
-        }
-
-        .chat-form {
-            margin-top: 10px;
-            display: flex;
-            gap: 8px;
-        }
-
-        .chat-input {
-            flex: 1 1 auto;
-            padding: 10px 12px;
-            border-radius: 10px;
-            border: 1px solid rgba(255, 255, 255, 0.12);
-            background: rgba(0, 0, 0, 0.35);
-            color: var(--text);
-            font-size: 1rem; /* keep 16px to prevent mobile zoom */
-        }
-
-        .chat-send {
-            padding: 10px 14px;
-            border-radius: 10px;
-            border: 1px solid rgba(122, 162, 255, 0.8);
-            background: var(--accent);
-            color: #050508;
-            font-weight: 700;
-            cursor: pointer;
-            transition: transform 0.1s ease, box-shadow 0.18s ease;
-        }
-
-        .chat-send:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 10px 20px rgba(122, 162, 255, 0.45);
-        }
-
-        .chat-tip {
-            margin-top: 6px;
-            font-size: 0.82rem;
-            color: var(--muted);
-        }
-
-        /* Desktop rail (unchanged behavior) */
-        .chat-rail {
-            position: fixed;
-            right: 0;
-            top: 140px;
-            width: 320px;
-            z-index: 2600;
-            transform: translateX(0);
-            transition: transform 0.25s ease;
-        }
-
-        .chat-rail.closed {
-            transform: translateX(100%);
-        }
-
-        .chat-toggle {
-            position: absolute;
-            left: -36px;
-            top: 32px;
-            width: 36px;
-            height: 76px;
-            background: var(--accent);
-            color: #050508;
-            font-weight: 800;
-            border-radius: 12px 0 0 12px;
-            border: 1px solid rgba(255, 255, 255, 0.25);
-            cursor: pointer;
-            box-shadow: 0 12px 30px rgba(0,0,0,0.4);
-            z-index: 2601;
-        }
-        .chat-rail.closed .chat-toggle {
-            transform: translateX(-100%);
-        }
-
-        /* MOBILE/TABLET: bottom sheet chat (visible handle) */
-        @media (max-width: 1280px) {
-            .chat-rail {
-                display: block;
-                position: fixed;
-                left: 0;
-                right: 0;
-                bottom: 0;
-                top: auto;
-                width: 100%;
-                max-width: none;
-                z-index: 2600;
-
-                transform: translateY(calc(100% - 56px));
-                transition: transform 0.25s ease;
-            }
-
-            .chat-rail.open {
-                transform: translateY(0);
-            }
-
-            .chat-rail.closed {
-                transform: translateY(calc(100% - 56px));
-            }
-
-            .chat-panel {
-                height: min(60vh, 480px);
-                border-radius: 16px 16px 0 0;
-            }
-
-            .chat-toggle {
-                display: block;
-                position: absolute;
-                left: 50%;
-                top: -44px;
-                transform: translateX(-50%);
-                width: 140px;
-                height: 38px;
-                border-radius: 14px 14px 0 0;
-                border: 1px solid rgba(255,255,255,0.25);
-                background: var(--accent);
-                color: #050508;
-                font-weight: 800;
-                box-shadow: 0 12px 30px rgba(0,0,0,0.4);
-            }
-
-            /* don't slide the toggle off-screen on mobile */
-            .chat-rail.closed .chat-toggle {
-                transform: translateX(-50%);
-            }
-        }
 
         /* Left floating 160x600 ad, hidden on small screens */
         .left-rail-ad {
@@ -889,7 +680,7 @@
                     <div class="player-slot" data-slot="0">
                         <iframe
                             id="game-iframe"
-                            src="{{ first_stream.embed_url }}"
+                            src="{{ build_cdp_player_url(first_stream.embed_url) }}"
                             allowfullscreen
                             scrolling="no"
                             allow="autoplay; encrypted-media; picture-in-picture; fullscreen">
@@ -915,7 +706,7 @@
                                                 {% set first_extra_stream = g.streams[0] %}
                                                 {% if first_extra_stream %}
                                                     <option
-                                                        value="{{ first_extra_stream.embed_url }}"
+                                                        value="{{ build_cdp_player_url(first_extra_stream.embed_url) }}"
                                                         data-title="{{ g.matchup or ('Stream ' ~ loop.index) }}"
                                                     >
                                                         {{ g.matchup or ('Stream ' ~ loop.index) }}
@@ -941,7 +732,7 @@
                             <button
                                 type="button"
                                 class="stream-button {% if loop.first %}active{% endif %}"
-                                data-embed-url="{{ s.embed_url }}"
+                                data-embed-url="{{ build_cdp_player_url(s.embed_url) }}"
                                 data-stream-slug="{{ s.slug }}"
                             >
                                 {{ s.label or ('Stream ' ~ loop.index) }}
@@ -1006,33 +797,6 @@
         ></iframe>
     </div>
 
-    <div class="chat-rail closed" id="chat-rail" data-game-id="{{ game.id }}">
-        <button class="chat-toggle" id="chat-toggle" type="button" aria-expanded="false">
-            Chat
-        </button>
-        <div class="chat-panel" role="region" aria-label="Live chat">
-            <div class="chat-header">
-                <div>
-                    <div class="chat-title">Live chat</div>
-                    <div class="chat-subtitle">{{ game.matchup }}</div>
-                </div>
-                <span class="chat-status" id="chat-status" data-state="warn">Connecting…</span>
-            </div>
-            <div class="chat-messages" id="chat-messages" role="log" aria-live="polite"></div>
-            <form class="chat-form" id="chat-form">
-                <input
-                    class="chat-input"
-                    id="chat-input"
-                    type="text"
-                    maxlength="280"
-                    autocomplete="off"
-                    placeholder="Say something about this game…"
-                >
-                <button class="chat-send" type="submit">Send</button>
-            </form>
-            <div class="chat-tip">Be respectful. Messages are visible only for this game.</div>
-        </div>
-    </div>
 
     <script>
         (() => {
@@ -1228,135 +992,6 @@
         })();
     </script>
 
-    <script>
-        (function () {
-            const rail = document.getElementById("chat-rail");
-            if (!rail) return;
-
-            const toggle = document.getElementById("chat-toggle");
-            const messagesEl = document.getElementById("chat-messages");
-            const form = document.getElementById("chat-form");
-            const input = document.getElementById("chat-input");
-            const statusEl = document.getElementById("chat-status");
-
-            const gameId = rail.getAttribute("data-game-id");
-            const endpoint = "{{ url_for('streaming.game_chat_messages', game_id=game.id) }}";
-            let lastId = 0;
-            let fetching = false;
-
-            function setStatus(text, state) {
-                if (!statusEl) return;
-                statusEl.textContent = text;
-                statusEl.setAttribute("data-state", state);
-            }
-
-            function formatTime(iso) {
-                const date = new Date(iso);
-                if (Number.isNaN(date.getTime())) return "";
-                return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-            }
-
-            function renderMessage(msg) {
-                const wrap = document.createElement("div");
-                wrap.className = "chat-message";
-
-                const meta = document.createElement("div");
-                meta.className = "chat-meta";
-
-                const user = document.createElement("span");
-                user.textContent = msg.user || "Anonymous";
-
-                const time = document.createElement("span");
-                time.textContent = formatTime(msg.created_at);
-
-                meta.appendChild(user);
-                meta.appendChild(time);
-
-                const text = document.createElement("div");
-                text.className = "chat-text";
-                text.textContent = msg.body || "";
-
-                wrap.appendChild(meta);
-                wrap.appendChild(text);
-                messagesEl.appendChild(wrap);
-            }
-
-            function scrollToBottom() {
-                messagesEl.scrollTop = messagesEl.scrollHeight;
-            }
-
-            function setOpenState(isOpen) {
-                rail.classList.toggle("open", isOpen);
-                rail.classList.toggle("closed", !isOpen);
-                if (toggle) toggle.setAttribute("aria-expanded", String(isOpen));
-            }
-
-            if (toggle) {
-                toggle.addEventListener("click", () => {
-                    const isOpen = rail.classList.contains("open");
-                    setOpenState(!isOpen);
-                });
-            }
-
-            setOpenState(window.innerWidth > 1280);
-
-            async function fetchMessages({ initial = false } = {}) {
-                if (fetching) return;
-                fetching = true;
-                const url = new URL(endpoint, window.location.origin);
-                if (lastId) url.searchParams.set("after_id", String(lastId));
-                if (initial) url.searchParams.set("limit", "50");
-
-                try {
-                    const resp = await fetch(url.toString(), { headers: { Accept: "application/json" } });
-                    if (!resp.ok) throw new Error("bad response");
-                    const data = await resp.json();
-                    const msgs = data.messages || [];
-                    if (msgs.length) {
-                        msgs.forEach(renderMessage);
-                        lastId = data.latest_id || msgs[msgs.length - 1].id;
-                        scrollToBottom();
-                    }
-                    setStatus("Live", "ok");
-                } catch (err) {
-                    setStatus("Offline", "error");
-                } finally {
-                    fetching = false;
-                }
-            }
-
-            if (form && input) {
-                form.addEventListener("submit", async (event) => {
-                    event.preventDefault();
-                    const body = input.value.trim();
-                    if (!body) return;
-                    input.value = "";
-                    setStatus("Sending…", "warn");
-
-                    try {
-                        const resp = await fetch(endpoint, {
-                            method: "POST",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({ body }),
-                        });
-                        const data = await resp.json();
-                        if (!resp.ok || !data.ok) throw new Error("send failed");
-                        if (data.message) {
-                            renderMessage(data.message);
-                            lastId = data.message.id;
-                            scrollToBottom();
-                        }
-                        setStatus("Live", "ok");
-                    } catch (err) {
-                        setStatus("Failed to send", "error");
-                    }
-                });
-            }
-
-            fetchMessages({ initial: true });
-            setInterval(fetchMessages, 5000);
-        })();
-    </script>
 
     <script>
         (function () {

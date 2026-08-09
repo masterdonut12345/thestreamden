@@ -25,26 +25,19 @@ import re
 from urllib.parse import urljoin
 import os
 import hashlib
-import subprocess
 import json
 import sqlite3
 import time
-from playwright.sync_api import sync_playwright
 
 # ---------------- CONFIG ----------------
 
 BASE_URL_SHARK   = "https://sharkstreams.net/"
 HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; StreamScraper/1.0)"}
 REQUEST_TIMEOUT = 8  # seconds
-STREAMED_API_BASE = os.environ.get("STREAMED_API_BASE", "https://streamed.pk")
+STREAMED_API_BASE = os.environ.get("STREAMED_API_BASE", "https://streamed.st")
 STREAMED_MATCHES_PATH = os.environ.get("STREAMED_MATCHES_PATH", "/api/matches/all-today")
 STREAMED_SPORTS_PATH = os.environ.get("STREAMED_SPORTS_PATH", "/api/sports")
-M3U8_WAIT_SECONDS = float(os.environ.get("M3U8_WAIT_SECONDS", "3.5"))
-M3U8_TIMEOUT_SECONDS = float(os.environ.get("M3U8_TIMEOUT_SECONDS", "15"))
-SHARK_M3U8_MAX_LOOKUPS = int(os.environ.get("SHARK_M3U8_MAX_LOOKUPS", "10"))
-
 _SESSION = None
-_PLAYWRIGHT_INSTALL_ATTEMPTED = False
 
 
 def _get_session():
@@ -53,29 +46,6 @@ def _get_session():
         _SESSION = requests.Session()
         _SESSION.headers.update(HEADERS)
     return _SESSION
-
-
-def _ensure_playwright_chromium() -> bool:
-    global _PLAYWRIGHT_INSTALL_ATTEMPTED
-    if _PLAYWRIGHT_INSTALL_ATTEMPTED:
-        return False
-    _PLAYWRIGHT_INSTALL_ATTEMPTED = True
-    try:
-        result = subprocess.run(
-            ["playwright", "install", "chromium"],
-            check=False,
-            capture_output=True,
-            text=True,
-        )
-    except FileNotFoundError:
-        print("[scraper] Playwright CLI not found; cannot install Chromium.")
-        return False
-    if result.returncode != 0:
-        err = (result.stderr or result.stdout or "").strip()
-        msg = f" Details: {err}" if err else ""
-        print(f"[scraper] Failed to install Playwright Chromium.{msg}")
-        return False
-    return True
 
 EST = pytz.timezone("US/Eastern")
 UTC = pytz.UTC
@@ -443,7 +413,7 @@ def scrape_streamed_api() -> pd.DataFrame:
         sport = sports_map.get(sport_id, sport_id.title() if isinstance(sport_id, str) else "Other")
 
         rows.append({
-            "source": "streamed.pk",
+            "source": "streamed.st",
             "date_header": event_dt.strftime("%A, %B %d, %Y"),
             "sport": sport,
             "time_unix": ts_ms,
@@ -464,119 +434,21 @@ def scrape_streamed_api() -> pd.DataFrame:
 
 _OPENEMBED_RE = re.compile(r"openEmbed\(\s*[\"']([^\"']+)[\"']\s*\)", re.I)
 _WINDOWOPEN_RE = re.compile(r"window\.open\(\s*[\"']([^\"']+)[\"']\s*,", re.I)
-_HREF_URL_RE = re.compile(r"https?://[^\\s\"']+", re.I)
-_M3U8_RE = re.compile(r"""https?://[^\s"'<>]+?\.m3u8[^\s"'<>]*""", re.IGNORECASE)
 
-
-def _is_m3u8_url(url: str) -> bool:
-    return ".m3u8" in (url or "").lower()
-
-
-def _find_m3u8_from_page(
-    url: str,
-    *,
-    browser,
-    wait_seconds: float,
-    timeout_seconds: float,
-) -> str | None:
-    found: set[str] = set()
-
-    def add(maybe_url: str | None) -> None:
-        if not maybe_url:
-            return
-        if _is_m3u8_url(maybe_url):
-            found.add(maybe_url)
-
-    try:
-        ctx = browser.new_context()
-        page = ctx.new_page()
-
-        def on_request(req):
-            add(req.url)
-
-        page.on("request", on_request)
-
-        def on_response(res):
-            add(res.url)
-            try:
-                ct = (res.headers.get("content-type") or "").lower()
-                if any(x in ct for x in ("text", "json", "javascript", "xml", "mpegurl")):
-                    body = res.text()
-                    if body and len(body) <= 2_000_000:
-                        for m in _M3U8_RE.findall(body):
-                            add(m)
-                        for rel in re.findall(r"""[^\s"'<>]+\.m3u8[^\s"'<>]*""", body, flags=re.I):
-                            if rel.lower().startswith("http"):
-                                add(rel)
-                            else:
-                                add(urljoin(res.url, rel))
-            except Exception:
-                pass
-
-        page.on("response", on_response)
-
-        page.goto(url, wait_until="domcontentloaded", timeout=int(timeout_seconds * 1000))
-        elapsed = 0.0
-        step = 0.25
-        while elapsed < wait_seconds and not found:
-            page.wait_for_timeout(int(step * 1000))
-            elapsed += step
-
-        page.close()
-        ctx.close()
-    except Exception:
-        return None
-
-    matches = [u for u in found if "chunks.m3u8" in u.lower()]
-    if matches:
-        return sorted(matches)[0]
-    return None
 
 def scrape_shark() -> pd.DataFrame:
     session = _get_session()
-    r = session.get(BASE_URL_SHARK, timeout=REQUEST_TIMEOUT)
-    if r.status_code != 200:
+    try:
+        r = session.get(BASE_URL_SHARK, timeout=REQUEST_TIMEOUT)
+        if r.status_code != 200:
+            print(f"[scraper] SharkStreams returned HTTP {r.status_code}")
+            return pd.DataFrame()
+    except Exception as exc:
+        print(f"[scraper] SharkStreams unavailable: {exc}")
         return pd.DataFrame()
 
     soup = BeautifulSoup(r.text, "html.parser")
     rows = []
-    m3u8_cache: dict[str, str | None] = {}
-    lookup_count = 0
-    browser = None
-    playwright = None
-
-    if SHARK_M3U8_MAX_LOOKUPS > 0:
-        try:
-            playwright = sync_playwright().start()
-            browser = playwright.chromium.launch(
-                headless=True,
-                args=["--no-sandbox", "--disable-dev-shm-usage"],
-            )
-        except Exception as exc:
-            installed = _ensure_playwright_chromium()
-            if installed:
-                try:
-                    playwright = sync_playwright().start()
-                    browser = playwright.chromium.launch(
-                        headless=True,
-                        args=["--no-sandbox", "--disable-dev-shm-usage"],
-                    )
-                except Exception as retry_exc:
-                    print(
-                        "[scraper] SharkStreams m3u8 lookups disabled (Playwright failed to launch "
-                        "after attempting Chromium install). Error: "
-                        f"{retry_exc}"
-                    )
-                    browser = None
-            else:
-                print(
-                    "[scraper] SharkStreams m3u8 lookups disabled (Playwright failed to launch). "
-                    "Ensure Playwright browsers are installed (e.g. `playwright install chromium`) "
-                    f"and required system deps are available. Error: {exc}"
-                )
-                browser = None
-
-    eligible = []
     for div in soup.find_all("div", class_="row"):
         date_span = div.find("span", class_="ch-date")
         name_span = div.find("span", class_="ch-name")
@@ -592,85 +464,30 @@ def scrape_shark() -> pd.DataFrame:
         if not _within_days(dt, days_ahead=7):
             continue
 
-        eligible.append((div, dt, name_span, cat_span))
-
-    total_items = len(eligible)
-    for idx, (div, dt, name_span, cat_span) in enumerate(eligible, start=1):
-        if total_items:
-            bar_len = 24
-            filled = int(bar_len * idx / total_items)
-            bar = "=" * filled + "-" * (bar_len - filled)
-            percent = int(idx * 100 / total_items)
-            print(f"[scraper] SharkStreams progress [{bar}] {idx}/{total_items} ({percent}%)")
-
-        embed_urls = []
+        # Use the URL from the Embed button's openEmbed() call as the embed URL.
+        # Fall back to the Watch button's window.open() URL if no embed URL is found.
+        embed_url = None
+        watch_url = None
         for a in div.find_all("a"):
             onclick = a.get("onclick", "")
-            m = _OPENEMBED_RE.search(onclick) or _WINDOWOPEN_RE.search(onclick)
-            if m:
-                embed_urls.append(urljoin(BASE_URL_SHARK, m.group(1)))
-            for attr in ("data-href", "data-embed", "data-url", "href"):
-                href = a.get(attr)
-                if href and href != "#":
-                    embed_urls.append(urljoin(BASE_URL_SHARK, href))
-            text = (a.get_text(strip=True) or "").lower()
-            if text in ("watch", "embed") or "watch" in text or "embed" in text:
-                href = a.get("href")
-                if href and href != "#":
-                    embed_urls.append(urljoin(BASE_URL_SHARK, href))
+            if embed_url is None:
+                m = _OPENEMBED_RE.search(onclick)
+                if m:
+                    embed_url = urljoin(BASE_URL_SHARK, m.group(1))
+            if watch_url is None:
+                m = _WINDOWOPEN_RE.search(onclick)
+                if m:
+                    watch_url = urljoin(BASE_URL_SHARK, m.group(1))
 
-        # scan inline scripts within the row for openEmbed calls
-        for script in div.find_all("script"):
-            text = script.string or script.text or ""
-            for m in _OPENEMBED_RE.finditer(text):
-                embed_urls.append(urljoin(BASE_URL_SHARK, m.group(1)))
-            for m in _WINDOWOPEN_RE.finditer(text):
-                embed_urls.append(urljoin(BASE_URL_SHARK, m.group(1)))
-            for m in _HREF_URL_RE.finditer(text):
-                maybe = m.group(0)
-                if "embed" in maybe or "player" in maybe or "watch" in maybe:
-                    embed_urls.append(urljoin(BASE_URL_SHARK, maybe))
-
-        # Normalize and deduplicate
-        norm_urls = []
-        seen_urls = set()
-        for u in embed_urls:
-            if not u:
-                continue
-            u = _force_https(u)
-            if u in seen_urls:
-                continue
-            seen_urls.add(u)
-            norm_urls.append(u)
-
-        if not norm_urls:
-            continue
-
-        resolved_urls = []
-        for u in norm_urls:
-            cached = m3u8_cache.get(u)
-            if cached is None and u not in m3u8_cache:
-                if browser and lookup_count < SHARK_M3U8_MAX_LOOKUPS:
-                    cached = _find_m3u8_from_page(
-                        u,
-                        browser=browser,
-                        wait_seconds=M3U8_WAIT_SECONDS,
-                        timeout_seconds=M3U8_TIMEOUT_SECONDS,
-                    )
-                    lookup_count += 1
-                m3u8_cache[u] = cached
-            if cached:
-                resolved_urls.append((u, cached))
-
-        if not resolved_urls:
+        if not embed_url:
             continue
 
         streams = [{
             "label": "SharkStreams",
-            "embed_url": resolved,
-            "watch_url": original,
+            "embed_url": embed_url,
+            "watch_url": watch_url or embed_url,
             "origin": "scraped",
-        } for original, resolved in resolved_urls]
+        }]
 
         rows.append({
             "source": "sharkstreams",
@@ -681,23 +498,13 @@ def scrape_shark() -> pd.DataFrame:
             "tournament": None,
             "tournament_url": None,
             "matchup": name_span.text.strip(),
-            "watch_url": resolved_urls[0][0],
+            "watch_url": watch_url or embed_url,
             "streams": streams,
-            "embed_url": resolved_urls[0][1],
+            "embed_url": embed_url,
             "is_live": False,
         })
 
-    if browser:
-        try:
-            browser.close()
-        except Exception:
-            pass
-        try:
-            if playwright:
-                playwright.stop()
-        except Exception:
-            pass
-
+    print(f"[scraper] SharkStreams scraped {len(rows)} games")
     return pd.DataFrame(rows)
 
 # ---------------- MERGE + WRITE ----------------
@@ -708,11 +515,19 @@ def merge_streams(new, old):
     return _dedup_streams(manual + scraped)
 
 def main():
-    df_streamed = scrape_streamed_api()
-    df_shark = scrape_shark()
+    df_streamed = pd.DataFrame()
+    df_shark = pd.DataFrame()
+    try:
+        df_streamed = scrape_streamed_api()
+    except Exception as exc:
+        print(f"[scraper][ERROR] streamed.st scrape failed: {exc}")
+    try:
+        df_shark = scrape_shark()
+    except Exception as exc:
+        print(f"[scraper][ERROR] shark scrape failed: {exc}")
 
     source_counts = {
-        "streamed.pk": len(df_streamed),
+        "streamed.st": len(df_streamed),
         "sharkstreams": len(df_shark),
     }
 
@@ -835,7 +650,7 @@ def main():
                 (now_ts,),
             )
 
-    print(f"[scraper] Wrote {len(out_rows)} games (streamed.pk={source_counts['streamed.pk']}, sharkstreams={source_counts['sharkstreams']})")
+    print(f"[scraper] Wrote {len(out_rows)} games (streamed.st={source_counts['streamed.st']}, sharkstreams={source_counts['sharkstreams']})")
 
 if __name__ == "__main__":
     main()

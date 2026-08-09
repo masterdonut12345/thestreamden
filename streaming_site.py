@@ -45,8 +45,14 @@ from flask import (
 import requests
 
 import scrape_games
+from harvest import CdpHarvester, ensure_cdp_chrome, rewrite_playlist, build_master
 
 streaming_bp = Blueprint("streaming", __name__)
+
+
+@streaming_bp.app_context_processor
+def _inject_template_helpers():
+    return {"build_cdp_player_url": build_cdp_player_url}
 
 
 GAMES_DB_PATH = Path(
@@ -70,6 +76,17 @@ GAMES_DB_LOCK = threading.Lock()
 # Refresh at most every N seconds OR when file mtime changes
 GAMES_CACHE_TTL_SECONDS = int(os.environ.get("GAMES_CACHE_TTL_SECONDS", "1800"))
 
+# CDP headless-harvest live relay (see harvest.py)
+CDP_CHROME_PORT = int(os.environ.get("CDP_CHROME_PORT", "9223"))
+CDP_HARVEST_TIMEOUT_MS = int(os.environ.get("CDP_HARVEST_TIMEOUT_MS", "50000"))
+CDP_MEDIA_WAIT_MS = int(os.environ.get("CDP_MEDIA_WAIT_MS", "20000"))
+CDP_FOLLOW_INTERVAL_MS = int(os.environ.get("CDP_FOLLOW_INTERVAL_MS", "6000"))
+CDP_REFRESH_TIMEOUT_MS = int(os.environ.get("CDP_REFRESH_TIMEOUT_MS", "10000"))
+CDP_SESSION_TTL_S = int(os.environ.get("CDP_SESSION_TTL_S", str(12 * 3600)))
+# embedUrl -> {"id": sid, "harvester": CdpHarvester, "created": ts}
+CDP_SESSIONS: dict[str, dict] = {}
+CDP_SESSIONS_LOCK = threading.Lock()
+
 # Cloudflare / browser caching for HTML (keep short to avoid stale)
 HTML_CACHE_SECONDS = int(os.environ.get("HTML_CACHE_SECONDS", "30"))
 
@@ -77,9 +94,9 @@ HTML_CACHE_SECONDS = int(os.environ.get("HTML_CACHE_SECONDS", "30"))
 ENABLE_VIEWER_TRACKING = os.environ.get("ENABLE_VIEWER_TRACKING", "1") == "1"
 
 # IMPORTANT: do not run scraper in the web process unless explicitly enabled
-ENABLE_SCRAPER_IN_WEB = os.environ.get("ENABLE_SCRAPER_IN_WEB", "0") == "1"
+ENABLE_SCRAPER_IN_WEB = os.environ.get("ENABLE_SCRAPER_IN_WEB", "1") == "1"
 SCRAPER_SUBPROCESS = os.environ.get("SCRAPER_SUBPROCESS", "1") == "1"
-SCRAPE_INTERVAL_MINUTES = int(os.environ.get("SCRAPE_INTERVAL_MINUTES", "180"))
+SCRAPE_INTERVAL_MINUTES = int(os.environ.get("SCRAPE_INTERVAL_MINUTES", "30"))
 STARTUP_SCRAPE_ON_BOOT = os.environ.get("STARTUP_SCRAPE_ON_BOOT", "1") == "1"
 
 
@@ -88,12 +105,7 @@ ACTIVE_VIEWERS: dict[str, datetime] = {}  # session_id → last_seen timestamp
 ACTIVE_PAGE_VIEWS: dict[tuple[str, str], datetime] = {}  # (session_id, path) → last_seen timestamp
 LAST_VIEWER_PRINT: datetime | None = None  # throttle printing
 
-CHAT_LOCK = threading.Lock()
-GAME_CHAT: dict[int, list[dict[str, Any]]] = {}
-GAME_CHAT_COUNTER: dict[int, int] = {}
-CHAT_FETCH_LIMIT = int(os.environ.get("CHAT_FETCH_LIMIT", "50"))
-CHAT_MAX_MESSAGES_PER_GAME = int(os.environ.get("CHAT_MAX_MESSAGES_PER_GAME", "200"))
-CHAT_MESSAGE_MAX_LEN = int(os.environ.get("CHAT_MESSAGE_MAX_LEN", "280"))
+
 
 
 
@@ -120,34 +132,7 @@ def mark_active() -> None:
             del ACTIVE_VIEWERS[s]
 
 
-def _get_chat_display_name() -> str:
-    user = getattr(g, "current_user", None)
-    if user and getattr(user, "username", None):
-        return user.username
-    username = session.get("username")
-    if username:
-        return username
-    sid = session.get("sid") or get_session_id()
-    return f"Guest-{sid[:4]}"
 
-
-def _append_chat_message(game_id: int, username: str, body: str) -> dict[str, Any]:
-    now = datetime.now(timezone.utc)
-    message = {
-        "id": 0,
-        "user": username,
-        "body": body,
-        "created_at": now.isoformat(),
-    }
-    with CHAT_LOCK:
-        next_id = GAME_CHAT_COUNTER.get(game_id, 0) + 1
-        GAME_CHAT_COUNTER[game_id] = next_id
-        message["id"] = next_id
-        messages = GAME_CHAT.setdefault(game_id, [])
-        messages.append(message)
-        if len(messages) > CHAT_MAX_MESSAGES_PER_GAME:
-            del messages[: len(messages) - CHAT_MAX_MESSAGES_PER_GAME]
-    return message
 
 
 @streaming_bp.route("/heartbeat", methods=["POST"])
@@ -247,6 +232,28 @@ def build_m3u8_proxy_url(src: str) -> str:
     if not src:
         return ""
     return f"/m3u8_proxy?{urlencode({'src': src})}"
+
+
+CDP_EMBED_HOSTS = ("embed.st", "embedsports.top", "strmd.st")
+
+
+def is_cdp_embed_url(value: str) -> bool:
+    """Do these embeds need the headless-harvest relay? (embed.st / embedsports.top family.)"""
+    if not value:
+        return False
+    netloc = (urlparse(value).netloc or "").lower()
+    return any(h in netloc for h in CDP_EMBED_HOSTS) or "/embed/" in value
+
+
+def build_cdp_player_url(src: str) -> str:
+    if not src:
+        return ""
+    if is_cdp_embed_url(src):
+        return f"/cdp_player?{urlencode({'src': src})}"
+    # plain m3u8 stays on the existing proxy path
+    if is_m3u8_url(src):
+        return build_m3u8_player_url(src)
+    return src
 
 
 def normalize_http_url(value: str) -> str:
@@ -765,16 +772,19 @@ def index():
     )
 
 
-@streaming_bp.route("/make-money")
-def make_money():
-    mark_active()
-    return render_template("make_money.html")
-
 
 @streaming_bp.route("/m3u8_player")
 def m3u8_player():
     src = normalize_m3u8_src((request.args.get("src") or "").strip())
     return render_template("m3u8_player.html", src=src)
+
+
+@streaming_bp.route("/cdp_player")
+def cdp_player():
+    src = normalize_http_url((request.args.get("src") or "").strip())
+    if not src:
+        return render_template("cdp_player.html", src="")
+    return render_template("cdp_player.html", src=src)
 
 
 @streaming_bp.route("/m3u8_proxy")
@@ -851,6 +861,134 @@ def m3u8_proxy():
     return proxy_resp
 
 
+# ====================== CDP HEADLESS-HARVEST PLAYBACK ======================
+# Some embeds (embed.st / strmd.st) serve their HLS master/media manifests only to a
+# real browser session (plain requests get 403 nginx). We drive a headless Chrome via
+# CDP to capture those manifests, then serve just the tiny manifests to the viewer;
+# segments play directly from the CDN (CORS-open). A background "follower" reloads
+# the embed page periodically so the served window tracks the live broadcast.
+
+
+def _cdp_alive(harvester) -> bool:
+    try:
+        return (
+            not harvester.stopped
+            and harvester.ws is not None
+            and harvester.ws.connected
+        )
+    except Exception:
+        return False
+
+
+def cdp_get_or_harvest(embed_url: str):
+    now = time.time()
+    # prune dead/expired sessions once in a while
+    if len(CDP_SESSIONS) > 0 and int(now) % 60 == 0:
+        with CDP_SESSIONS_LOCK:
+            dead = [
+                k
+                for k, s in CDP_SESSIONS.items()
+                if now - s["created"] > CDP_SESSION_TTL_S or not _cdp_alive(s["harvester"])
+            ]
+            for k in dead:
+                try:
+                    CDP_SESSIONS[k]["harvester"].stop()
+                except Exception:
+                    pass
+                CDP_SESSIONS.pop(k, None)
+
+    with CDP_SESSIONS_LOCK:
+        s = CDP_SESSIONS.get(embed_url)
+        if s and _cdp_alive(s["harvester"]):
+            return s["id"], s["harvester"]
+        if s:
+            CDP_SESSIONS.pop(embed_url, None)
+
+    ensure_cdp_chrome(CDP_CHROME_PORT)
+    # release the lock while the slow CDP capture runs so other requests stay responsive
+    h = CdpHarvester(
+        embed_url,
+        chrome_port=CDP_CHROME_PORT,
+        harvest_timeout_ms=CDP_HARVEST_TIMEOUT_MS,
+        media_wait_ms=CDP_MEDIA_WAIT_MS,
+        follow_interval_ms=CDP_FOLLOW_INTERVAL_MS,
+        refresh_timeout_ms=CDP_REFRESH_TIMEOUT_MS,
+    ).run()
+    sid = os.urandom(6).hex()
+    with CDP_SESSIONS_LOCK:
+        CDP_SESSIONS[embed_url] = {"id": sid, "harvester": h, "created": time.time()}
+    return sid, h
+
+
+def cdp_find(session_id: str):
+    with CDP_SESSIONS_LOCK:
+        for s in CDP_SESSIONS.values():
+            if s["id"] == session_id:
+                return s["harvester"]
+    return None
+
+
+@streaming_bp.route("/api/harvest", methods=["POST"])
+def cdp_api_harvest():
+    payload = request.get_json(silent=True) or {}
+    embed_url = (payload.get("embedUrl") or payload.get("embed_url") or "").strip()
+    if not embed_url or not str(embed_url).startswith(("http://", "https://")):
+        return jsonify({"ok": False, "error": "embedUrl required"}), 400
+    try:
+        sid, h = cdp_get_or_harvest(str(embed_url))
+        return jsonify({
+            "ok": True,
+            "id": sid,
+            "embedUrl": embed_url,
+            "secureUrl": h.secure_url,
+            "token": h.token,
+            "harvestedInMs": h.prep_time_ms,
+            "variants": list(h.media.keys()),
+            "playbackUrl": f"/api/playback/{sid}/master.m3u8",
+        })
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 502
+
+
+@streaming_bp.route("/api/playback/<session_id>/master.m3u8")
+def cdp_playback_master(session_id: str):
+    h = cdp_find(session_id)
+    if not h:
+        return Response("session expired - re-harvest", status=404, mimetype="text/plain")
+    snap = h.snapshot()
+    body = snap["master"] or "#EXTM3U\n"
+    return Response(
+        build_master(session_id, body),
+        mimetype="application/vnd.apple.mpegurl",
+        headers={"Access-Control-Allow-Origin": "*", "Cache-Control": "no-store"},
+    )
+
+
+@streaming_bp.route("/api/playback/<session_id>/stream_<kind>.m3u8")
+def cdp_playback_variant(session_id: str, kind: str):
+    h = cdp_find(session_id)
+    if not h:
+        return Response("session expired - re-harvest", status=404, mimetype="text/plain")
+    snap = h.snapshot()
+    media = snap["media"].get(kind)
+    if not media or not media.get("body"):
+        return Response(f"no {kind} variant captured", status=404, mimetype="text/plain")
+    body = rewrite_playlist(media["body"], media["url"], direct=True)
+    return Response(
+        body,
+        mimetype="application/vnd.apple.mpegurl",
+        headers={"Access-Control-Allow-Origin": "*", "Cache-Control": "no-store"},
+    )
+
+
+@streaming_bp.route("/api/refresh/<session_id>", methods=["POST"])
+def cdp_playback_refresh(session_id: str):
+    h = cdp_find(session_id)
+    if not h or not h.refresh_now():
+        return jsonify({"ok": False, "error": "harvest not ready"}), 409
+    return jsonify({"ok": True})
+
+
 def _build_games_from_rows(rows: list[dict[str, Any]]):
     if not rows:
         return []
@@ -876,20 +1014,6 @@ def _build_games_from_rows(rows: list[dict[str, Any]]):
                     "watch_url": rowd.get("watch_url") or embed_url,
                 }
             ]
-        shark_stream_source = rowd.get("source") == "sharkstreams"
-        has_shark_m3u8 = False
-        if shark_stream_source:
-            if isinstance(embed_url, str) and is_m3u8_url(embed_url):
-                has_shark_m3u8 = True
-            else:
-                for stream in streams:
-                    if not isinstance(stream, dict):
-                        continue
-                    embed = stream.get("embed_url")
-                    if isinstance(embed, str) and is_m3u8_url(embed):
-                        has_shark_m3u8 = True
-                        break
-
         if streams:
             fixed_streams = []
             for stream in streams:
@@ -897,9 +1021,6 @@ def _build_games_from_rows(rows: list[dict[str, Any]]):
                     continue
                 fixed = dict(stream)
                 embed = fixed.get("embed_url")
-                if shark_stream_source:
-                    if not (isinstance(embed, str) and (is_m3u8_url(embed) or "/m3u8_player" in embed)):
-                        continue
                 if isinstance(embed, str) and embed:
                     fixed["embed_url"] = build_m3u8_player_url(embed)
                 fixed_streams.append(fixed)
@@ -995,10 +1116,6 @@ def _build_games_from_rows(rows: list[dict[str, Any]]):
                 time_display = None
 
         matchup = rowd.get("matchup")
-        if shark_stream_source and has_shark_m3u8 and isinstance(matchup, str):
-            suffix = " - Ad free"
-            if not matchup.endswith(suffix):
-                matchup = f"{matchup}{suffix}"
 
         game_obj = {
             "id": game_id,
@@ -1275,41 +1392,6 @@ def api_games_clear_streams():
 def _game_exists(game_id: int) -> bool:
     games = load_games_cached()
     return any(g["id"] == game_id for g in games)
-
-
-@streaming_bp.route("/api/games/<int:game_id>/chat", methods=["GET", "POST"])
-def game_chat_messages(game_id: int):
-    if not _game_exists(game_id):
-        return jsonify({"ok": False, "error": "game not found"}), 404
-
-    if request.method == "POST":
-        payload = request.get_json(silent=True) or {}
-        body = (payload.get("body") or "").strip()
-
-        if not body:
-            return jsonify({"ok": False, "error": "empty"}), 400
-        if len(body) > CHAT_MESSAGE_MAX_LEN:
-            return jsonify({"ok": False, "error": "too_long"}), 400
-
-        username = _get_chat_display_name()
-        message = _append_chat_message(game_id, username, body)
-        return jsonify({"ok": True, "message": message, "latest_id": message["id"]})
-
-    after_id = request.args.get("after_id", type=int)
-    limit = request.args.get("limit", type=int) or CHAT_FETCH_LIMIT
-    limit = max(1, min(limit, CHAT_FETCH_LIMIT))
-
-    with CHAT_LOCK:
-        messages = list(GAME_CHAT.get(game_id, []))
-
-    if after_id:
-        messages = [msg for msg in messages if msg["id"] > after_id]
-
-    if len(messages) > limit:
-        messages = messages[-limit:]
-
-    latest_id = messages[-1]["id"] if messages else (after_id or 0)
-    return jsonify({"ok": True, "messages": messages, "latest_id": latest_id})
 
 
 @streaming_bp.route("/game/<int:game_id>")

@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Stream Player</title>
+    <style>
+      html, body {
+        margin: 0;
+        padding: 0;
+        background: #000;
+        height: 100%;
+        overflow: hidden;
+      }
+      .player-wrap {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 100%;
+        width: 100%;
+      }
+      .player-stack {
+        position: relative;
+        width: 100%;
+        height: 100%;
+      }
+      video {
+        width: 100%;
+        height: 100%;
+        background: #000;
+      }
+      .fallback, .status {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        color: #fff;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        padding: 24px;
+        text-align: center;
+        font-size: 15px;
+      }
+      .fallback a { color: #7aa7ff; }
+      .status .spinner {
+        width: 26px;
+        height: 26px;
+        border: 3px solid rgba(255,255,255,.25);
+        border-top-color: #fff;
+        border-radius: 50%;
+        animation: spin .8s linear infinite;
+      }
+      @keyframes spin { to { transform: rotate(360deg); } }
+      iframe {
+        border: 0;
+        width: 100%;
+        height: 100%;
+      }
+      .status.error .spinner { display: none; }
+    </style>
+  </head>
+  <body>
+    {% if src %}
+      <div class="player-wrap">
+        <div class="player-stack">
+          <div class="status" id="status"><span class="spinner"></span><span id="status-text">Starting stream…</span></div>
+          <video id="hls-video" controls autoplay playsinline crossorigin="anonymous" style="display:none"></video>
+          <div class="fallback" id="fallback" style="display:none"></div>
+        </div>
+      </div>
+
+      <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.8"></script>
+      <script>
+        (function () {
+          "use strict";
+          const embedUrl = {{ src|tojson }};
+          if (!embedUrl) return;
+
+          const status = document.getElementById("status");
+          const statusText = document.getElementById("status-text");
+          const video = document.getElementById("hls-video");
+          const fallback = document.getElementById("fallback");
+
+          function setError(msg, fallbackUrl) {
+            status.classList.add("error");
+            status.style.display = "none";
+            video.style.display = "none";
+            fallback.style.display = "flex";
+            fallback.innerHTML = "Could not start the stream.<br>" + (msg || "");
+            if (fallbackUrl) {
+              fallback.innerHTML += "<br><a href=\"" + fallbackUrl.replace(/&/g, "&amp;").replace(/"/g, "&quot;") + "\" target=\"_blank\" rel=\"noopener\">Open the source stream directly</a>";
+            }
+          }
+
+          async function harvest() {
+            const r = await fetch("/api/harvest", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ embedUrl: embedUrl }),
+            });
+            const data = await r.json();
+            if (!data.ok) throw new Error(data.error || "harvest failed");
+            return data;
+          }
+
+          async function retryFresh() {
+            setStatus("Finding a fresh stream…");
+            try {
+              const playback = await harvest();
+              startPlayback(playback);
+            } catch (e) {
+              setError(e.message, embedUrl);
+            }
+          }
+
+          function setStatus(msg) {
+            status.classList.remove("error");
+            status.style.display = "flex";
+            video.style.display = "none";
+            statusText.textContent = msg;
+          }
+
+          function startPlayback(playback) {
+            const hlsUrl = playback.playbackUrl;
+            status.style.display = "none";
+            video.style.display = "block";
+
+            if (window.Hls && Hls.isSupported()) {
+              const hls = new Hls({
+                maxBufferLength: 60,
+                backBufferLength: 0,
+                liveSyncDurationCount: 2,
+                liveMaxLatencyDurationCount: 3,
+                enableWorker: true,
+                manifestLoadingRetryDelay: 500,
+                manifestLoadingMaxRetryTimeout: 2000,
+                levelLoadingRetryDelay: 400,
+                levelLoadingMaxRetryTimeout: 2000,
+              });
+              hls.loadSource(hlsUrl);
+              hls.attachMedia(video);
+
+              let stallTimer = null;
+              hls.on(Hls.Events.ERROR, function (_ev, data) {
+                if (data && data.fatal) {
+                  if (data.details === "manifestLoadError" && data.fatal === Hls.ErrorTypes.NETWORK_ERROR) {
+                    retryFresh();
+                    return;
+                  }
+                  hls.recoverMediaError();
+                }
+              });
+              hls.on(Hls.Events.BUFFER_STALLED, function () {
+                // window stopped advancing (slow/missed follow cycle) — force one early
+                if (!stallTimer) {
+                  stallTimer = setTimeout(function () {
+                    stallTimer = null;
+                    try {
+                      fetch("/api/refresh/" + playback.id, { method: "POST" }).then(function (r) {
+                        if (r.ok) hls.startLoad(-1);
+                      }).catch(function () {});
+                    } catch (e) {}
+                  }, 4000);
+                }
+              });
+              hls.on(Hls.Events.MANIFEST_PARSED, function () {
+                video.play().catch(function () {});
+              });
+            } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
+              video.src = hlsUrl;
+              video.play().catch(function () {});
+            } else {
+              setError("Your browser needs hls.js support.", embedUrl);
+            }
+          }
+
+          (async function () {
+            try {
+              const playback = await harvest();
+              startPlayback(playback);
+            } catch (e) {
+              setError(e.message, embedUrl);
+            }
+          })();
+        })();
+      </script>
+    {% else %}
+      <div class="fallback">
+        <strong>Stream unavailable.</strong>
+      </div>
+    {% endif %}
+  </body>
+</html>
