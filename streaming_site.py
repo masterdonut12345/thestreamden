@@ -24,10 +24,8 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urljoin, urlencode, urlparse
 
-import pandas as pd
 import pytz
 from apscheduler.schedulers.background import BackgroundScheduler
-from bs4 import BeautifulSoup
 from flask import (
     Blueprint,
     Response,
@@ -44,7 +42,6 @@ from flask import (
 )
 import requests
 
-import scrape_games
 from harvest import CdpHarvester, ensure_cdp_chrome, rewrite_playlist, build_master
 
 streaming_bp = Blueprint("streaming", __name__)
@@ -288,7 +285,7 @@ def coerce_start_datetime(rowd: dict[str, Any]) -> datetime | None:
     if ts not in (None, ""):
         try:
             ts_float = float(ts)
-            if not pd.isna(ts_float):
+            if ts_float == ts_float:  # not NaN
                 if ts_float > 1e11:  # likely ms
                     ts_float = ts_float / 1000.0
                 return datetime.fromtimestamp(ts_float, tz=timezone.utc)
@@ -297,23 +294,30 @@ def coerce_start_datetime(rowd: dict[str, Any]) -> datetime | None:
 
     raw_time = rowd.get("time")
     if isinstance(raw_time, str) and raw_time.strip():
-        try:
-            dt = pd.to_datetime(raw_time, utc=True, errors="coerce")
-            if isinstance(dt, pd.Timestamp) and not pd.isna(dt):
-                return dt.to_pydatetime()
-        except Exception:
-            return None
+        dt = _parse_iso_to_utc(raw_time)
+        if dt is not None:
+            return dt
 
     date_header = rowd.get("date_header")
     if isinstance(date_header, str) and date_header.strip():
         try:
-            dt = pd.to_datetime(date_header, utc=True, errors="coerce")
-            if isinstance(dt, pd.Timestamp) and not pd.isna(dt):
-                return dt.to_pydatetime()
+            naive = datetime.strptime(date_header, "%A, %B %d, %Y")
+            return naive.replace(tzinfo=timezone.utc)
         except Exception:
             return None
 
     return None
+
+
+def _parse_iso_to_utc(value: str) -> datetime | None:
+    """Parse an ISO-8601 timestamp (with optional offset) to aware UTC using stdlib."""
+    try:
+        dt = datetime.fromisoformat(value.strip())
+    except (TypeError, ValueError):
+        return None
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
 
 
 def make_stable_id(row: dict[str, Any]) -> int:
@@ -1109,9 +1113,9 @@ def _build_games_from_rows(rows: list[dict[str, Any]]):
         raw_time = rowd.get("time")
         if isinstance(raw_time, str) and raw_time.strip():
             try:
-                dt = pd.to_datetime(raw_time, errors="coerce")
-                if not pd.isna(dt):
-                    time_display = dt.strftime("%I:%M %p ET").lstrip("0")
+                dt = datetime.fromisoformat(raw_time.strip())
+                dt = dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt
+                time_display = dt.strftime("%I:%M %p ET").lstrip("0")
             except Exception:
                 time_display = None
 
@@ -1505,6 +1509,8 @@ def run_scraper_job():
             scraper_path = Path(__file__).parent / "scrape_games.py"
             subprocess.run([sys.executable, str(scraper_path)], check=True)
         else:
+            import scrape_games
+
             scrape_games.main()
         try:
             games = _load_games_from_db()
