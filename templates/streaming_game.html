@@ -523,7 +523,12 @@
             </div>
         </header>
 
-        {% if game.streams and game.streams|length > 0 %}
+        {% if not_started %}
+            <div class="no-stream not-started">
+                <strong>Stream has not started yet.</strong><br>
+                Check back closer to game time.{% if game.time %} This game is scheduled for {{ game.time }}.{% endif %}
+            </div>
+        {% elif game.streams and game.streams|length > 0 %}
             {% set first_stream = game.streams[0] %}
             <div class="player-card">
                 <h3>Live Stream</h3>

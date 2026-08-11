@@ -355,6 +355,23 @@ def _parse_iso_to_utc(value: str) -> datetime | None:
     return dt.astimezone(timezone.utc)
 
 
+def _game_not_started(game: dict[str, Any]) -> bool:
+    """True when the game has a future start time but isn't live yet.
+
+    Matches the is_live window used in _build_games_from_rows (live from
+    15 minutes before start through 5 hours after). If we can't determine a
+    start time, assume the stream is available so the player still renders.
+    """
+    if game.get("is_live"):
+        return False
+    start_dt = coerce_start_datetime(game)
+    if start_dt is None:
+        return False
+    now_utc = datetime.now(timezone.utc)
+    return start_dt > now_utc + timedelta(minutes=15)
+
+
+
 def make_stable_id(row: dict[str, Any]) -> int:
     key = f"{row.get('date_header', '')}|{row.get('sport', '')}|{row.get('tournament', '')}|{row.get('matchup', '')}"
     digest = hashlib.md5(key.encode("utf-8")).hexdigest()
@@ -1308,6 +1325,8 @@ def _build_games_from_rows(rows: list[dict[str, Any]]):
                     fixed["embed_url"] = build_m3u8_player_url(embed)
                 fixed_streams.append(fixed)
             streams = fixed_streams
+        if not streams:
+            continue
         game_id = make_stable_id(rowd)
 
         raw_sport = rowd.get("sport")
@@ -1686,6 +1705,8 @@ def game_detail(game_id: int):
     if not game:
         abort(404)
 
+    not_started = _game_not_started(game)
+
     other_games = [g for g in games if g["id"] != game_id and g.get("streams")]
 
     slug = game.get("slug") or game_slug(game)
@@ -1699,6 +1720,7 @@ def game_detail(game_id: int):
         "streaming_game.html",
         game=game,
         other_games=other_games,
+        not_started=not_started,
         share_id_url=share_id_url,
         share_slug_url=share_slug_url,
         og_image_url=og_image_url,
