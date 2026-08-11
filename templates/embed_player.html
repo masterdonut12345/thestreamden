@@ -89,6 +89,25 @@
             }
             return proxied;
           };
+
+          var _srcDescriptor = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, "src");
+          Object.defineProperty(HTMLMediaElement.prototype, "src", {
+            get: function () {
+              return _srcDescriptor.get.call(this);
+            },
+            set: function (v) {
+              var rw = window.__strmdRewrite(v);
+              console.log("[strmd] src setter ->", String(v).slice(0, 60), "=>", String(rw).slice(0, 90));
+              return _srcDescriptor.set.call(this, rw);
+            },
+            configurable: true,
+            enumerable: true
+          });
+          var _setAttr = HTMLMediaElement.prototype.setAttribute;
+          HTMLMediaElement.prototype.setAttribute = function (name, value) {
+            if (name === "src") value = window.__strmdRewrite(value);
+            return _setAttr.call(this, name, value);
+          };
           var oF = window.fetch;
           window.fetch = function (input, init) {
             var rw, newUrl;
