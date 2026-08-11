@@ -666,6 +666,13 @@
             flex-wrap: wrap;
         }
 
+        .game-badges {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            flex-shrink: 0;
+        }
+
         .game-title { font-weight: 600; font-size: 1.02em; flex: 1 1 auto; min-width: 0; }
         .game-title a { color: #e5e9ff; text-decoration: none; }
 
@@ -718,6 +725,25 @@
             flex-shrink: 0;
             cursor: default;
         }
+
+        .score-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 4px 10px;
+            border-radius: 10px;
+            border: 1px solid rgba(122, 162, 255, 0.35);
+            background: rgba(122, 162, 255, 0.10);
+            font-size: 0.82rem;
+            font-weight: 700;
+            font-variant-numeric: tabular-nums;
+            flex-shrink: 0;
+            cursor: default;
+            white-space: nowrap;
+        }
+        .score-pill .score-sep { color: var(--muted); font-weight: 400; }
+        .score-pill .score-status { color: var(--muted); font-weight: 600; font-size: 0.70rem; text-transform: uppercase; letter-spacing: 0.04em; }
+        .score-pill .score-status.final { color: #8f9bb3; }
 
         .live-pill::before {
             content: "";
@@ -1129,9 +1155,17 @@
                                                 {{ game.matchup }}
                                             </a>
                                         </div>
-                                        {% if game.is_live %}
-                                            <span class="live-pill" aria-label="Live now">LIVE</span>
-                                        {% endif %}
+                                        <div class="game-badges">
+                                            {% if game.is_live %}
+                                                <span class="live-pill" aria-label="Live now">LIVE</span>
+                                            {% endif %}
+                                            {% if game.home_score is not none and game.away_score is not none %}
+                                                <span class="score-pill" title="{{ game.game_status or '' }}">
+                                                    <span>{{ game.home_score }}</span><span class="score-sep">–</span><span>{{ game.away_score }}</span>
+                                                    {% if game.game_status %}<span class="score-status{% if game.game_status == 'Final' %} final{% endif %}">{{ game.game_status }}</span>{% endif %}
+                                                </span>
+                                            {% endif %}
+                                        </div>
                                     </div>
 
                                     <div class="game-tags-row">

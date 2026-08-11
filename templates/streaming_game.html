@@ -163,6 +163,25 @@
             margin: 0 0 6px;
         }
 
+        .score-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 4px 10px;
+            border-radius: 10px;
+            border: 1px solid rgba(122, 162, 255, 0.35);
+            background: rgba(122, 162, 255, 0.10);
+            font-size: 0.9rem;
+            font-weight: 700;
+            font-variant-numeric: tabular-nums;
+            flex-shrink: 0;
+            cursor: default;
+            white-space: nowrap;
+        }
+        .score-pill .score-sep { color: var(--muted); font-weight: 400; }
+        .score-pill .score-status { color: var(--muted); font-weight: 600; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; }
+        .score-pill .score-status.final { color: #8f9bb3; }
+
         .meta {
             margin-top: 4px;
             margin-bottom: 2px;
@@ -478,6 +497,12 @@
                         <h1>{{ game.matchup }}</h1>
                         {% if game.is_live %}
                             <span class="live-pill" aria-label="Live now">LIVE</span>
+                        {% endif %}
+                        {% if game.home_score is not none and game.away_score is not none %}
+                            <span class="score-pill" title="{{ game.game_status or '' }}">
+                                <span>{{ game.home_score }}</span><span class="score-sep">–</span><span>{{ game.away_score }}</span>
+                                {% if game.game_status %}<span class="score-status{% if game.game_status == 'Final' %} final{% endif %}">{{ game.game_status }}</span>{% endif %}
+                            </span>
                         {% endif %}
                     </div>
                     <h2>{{ game.sport }}</h2>
@@ -833,6 +858,41 @@
             setInterval(sendHeartbeat, 30000);
         })();
     </script>
+
+    {% if not_started %}
+    <script>
+        (function () {
+            var gameId = {{ game.id }};
+            var statusUrl = "{{ url_for('streaming.api_game_status', game_id=game.id) }}";
+            var checkMs = 30000;
+            var maxChecks = 60;
+
+            function checkStatus() {
+                fetch(statusUrl, { cache: "no-store" })
+                    .then(function (r) { return r.json(); })
+                    .then(function (data) {
+                        if (data && data.ok && data.is_live && !data.not_started) {
+                            if (window.console) console.log("Stream is live — reloading");
+                            window.location.reload();
+                        }
+                    })
+                    .catch(function () { /* network hiccup; try again next tick */ });
+            }
+
+            if (maxChecks > 0) {
+                var remaining = maxChecks;
+                var timer = setInterval(function () {
+                    remaining -= 1;
+                    if (remaining <= 0) {
+                        clearInterval(timer);
+                        return;
+                    }
+                    checkStatus();
+                }, checkMs);
+            }
+        })();
+    </script>
+    {% endif %}
 
     <script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token": "643968b4db2b4d4c80a6f49718fcfcaa"}'></script>
 </body>

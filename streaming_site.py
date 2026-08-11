@@ -472,7 +472,12 @@ def _ensure_games_db() -> None:
                 is_live INTEGER DEFAULT 0,
                 streams_json TEXT,
                 embed_url TEXT,
-                updated_at REAL
+                updated_at REAL,
+                home_team TEXT,
+                away_team TEXT,
+                home_score INTEGER,
+                away_score INTEGER,
+                game_status TEXT
             )
             """
         )
@@ -491,6 +496,7 @@ def _ensure_games_db() -> None:
             ON CONFLICT(id) DO NOTHING
             """
         )
+        _migrate_score_columns(conn)
 
 
 def _get_games_db_connection() -> sqlite3.Connection:
@@ -500,6 +506,26 @@ def _get_games_db_connection() -> sqlite3.Connection:
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA synchronous=NORMAL")
     return conn
+
+
+def _migrate_score_columns(conn: sqlite3.Connection) -> None:
+    """Add score columns to an existing games table if missing."""
+    try:
+        cols = {row[1] for row in conn.execute("PRAGMA table_info(games)").fetchall()}
+    except Exception:
+        return
+    for name, ddl in (
+        ("home_team", "TEXT"),
+        ("away_team", "TEXT"),
+        ("home_score", "INTEGER"),
+        ("away_score", "INTEGER"),
+        ("game_status", "TEXT"),
+    ):
+        if name not in cols:
+            try:
+                conn.execute(f"ALTER TABLE games ADD COLUMN {name} {ddl}")
+            except Exception:
+                pass
 
 
 def _get_games_db_last_updated() -> float:
@@ -1431,6 +1457,11 @@ def _build_games_from_rows(rows: list[dict[str, Any]]):
             "watch_url": rowd.get("watch_url"),
             "streams": streams,
             "is_live": is_live,
+            "home_team": rowd.get("home_team"),
+            "away_team": rowd.get("away_team"),
+            "home_score": rowd.get("home_score"),
+            "away_score": rowd.get("away_score"),
+            "game_status": rowd.get("game_status"),
         }
 
         dedup_key = (
@@ -1728,6 +1759,23 @@ def game_detail(game_id: int):
     )
 
 
+@streaming_bp.route("/api/game/<int:game_id>/status")
+def api_game_status(game_id: int):
+    """Lightweight live-status for the game page auto-refresh."""
+    games = load_games_cached()
+    game = next((g for g in games if g["id"] == game_id), None)
+    if not game:
+        return jsonify({"ok": False, "error": "not found"}), 404
+    return jsonify({
+        "ok": True,
+        "is_live": bool(game.get("is_live")),
+        "not_started": _game_not_started(game),
+        "home_score": game.get("home_score"),
+        "away_score": game.get("away_score"),
+        "game_status": game.get("game_status"),
+    })
+
+
 @streaming_bp.route("/g/<slug>")
 def game_by_slug(slug: str):
     mark_active()
@@ -1801,6 +1849,143 @@ def _fetch_streams_for_source(session, source: str, source_id: str) -> list[dict
 
 
 # ====================== SCHEDULER (OFF BY DEFAULT) ======================
+ESPN_SCOREBOARDS = {
+    "MLB": "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/scoreboard",
+    "American Football": "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard",
+    "Basketball": "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard",
+}
+
+_ESPN_TEAM_NAME_CACHE: dict[str, list[dict[str, Any]]] = {}
+
+
+def _espn_normalize(name: str) -> str:
+    s = re.sub(r"[^a-z0-9 ]", "", (name or "").lower())
+    s = re.sub(r"\b(the|fc|sc|cf|afc|nfc|as|club)\b", " ", s)
+    return re.sub(r"\s+", " ", s).strip()
+
+
+def _fetch_espn_scoreboard(sport: str) -> list[dict[str, Any]]:
+    url = ESPN_SCOREBOARDS.get(sport)
+    if not url:
+        return []
+    try:
+        resp = requests.get(url, timeout=10)
+        if resp.status_code != 200:
+            return []
+        data = resp.json()
+    except Exception:
+        return []
+    events = []
+    for ev in data.get("events") or []:
+        comps = ev.get("competitions") or []
+        if not comps:
+            continue
+        comp = comps[0]
+        teams = {}
+        for c in comp.get("competitors") or []:
+            side = c.get("homeAway")
+            name = (c.get("team") or {}).get("displayName", "")
+            teams[side] = {
+                "name": name,
+                "normalized": _espn_normalize(name),
+                "abbrev": (c.get("team") or {}).get("abbreviation", "").lower(),
+            }
+        status = comp.get("status") or {}
+        stype = status.get("type") or {}
+        events.append({
+            "home": teams.get("home"),
+            "away": teams.get("away"),
+            "home_score": _safe_int((comp.get("competitors") or [{}])[0].get("score")) if comp.get("competitors") else None,
+            "away_score": None,
+            "state": stype.get("state"),  # pre | in | post
+            "detail": stype.get("detail"),  # e.g. "Final", "Top 7th", "Q3 02:31"
+        })
+        # home_score/away_score per side
+        for c in comp.get("competitors") or []:
+            side = c.get("homeAway")
+            score = _safe_int(c.get("score"))
+            if side == "home":
+                events[-1]["home_score"] = score
+            elif side == "away":
+                events[-1]["away_score"] = score
+    return events
+
+
+def _safe_int(v) -> int | None:
+    try:
+        return int(float(v))
+    except Exception:
+        return None
+
+
+def _match_espn_game(events: list[dict[str, Any]], home_team: str, away_team: str):
+    """Match a game to an ESPN event by normalized team names."""
+    h = _espn_normalize(home_team)
+    a = _espn_normalize(away_team)
+    if not h or not a:
+        return None
+    for ev in events:
+        eh = (ev.get("home") or {}).get("normalized")
+        ea = (ev.get("away") or {}).get("normalized")
+        eh_ab = (ev.get("home") or {}).get("abbrev")
+        ea_ab = (ev.get("away") or {}).get("abbrev")
+        if (eh and (eh == h or eh_ab == h)) and (ea and (ea == a or ea_ab == a)):
+            return ev
+        if (eh and (eh == a or eh_ab == a)) and (ea and (ea == h or ea_ab == h)):
+            return ev
+    return None
+
+
+def enrich_scores() -> int:
+    """Fetch live scores from ESPN for MLB/NFL/NBA and store them in the DB.
+
+    Runs after each scrape. Returns how many games were updated.
+    """
+    updated = 0
+    try:
+        with _get_games_db_connection() as conn:
+            rows = conn.execute(
+                "SELECT id, sport, home_team, away_team FROM games WHERE home_team != '' AND away_team != ''"
+            ).fetchall()
+    except Exception as exc:
+        print(f"[scores][ERROR] DB read failed: {exc}")
+        return 0
+
+    by_sport: dict[str, list[dict]] = {}
+    for r in rows:
+        sport = str(r["sport"] or "").strip()
+        if sport in ESPN_SCOREBOARDS:
+            by_sport.setdefault(sport, []).append(dict(r))
+
+    if not by_sport:
+        return 0
+
+    for sport, game_rows in by_sport.items():
+        events = _fetch_espn_scoreboard(sport)
+        if not events:
+            continue
+        with _get_games_db_connection() as conn:
+            for gr in game_rows:
+                ev = _match_espn_game(events, gr["home_team"], gr["away_team"])
+                if not ev:
+                    continue
+                state = ev.get("state")
+                detail = ev.get("detail") or ""
+                is_final = state == "post" or detail.strip().lower().startswith("final")
+                status = "Final" if is_final else detail
+                conn.execute(
+                    "UPDATE games SET home_score = ?, away_score = ?, game_status = ?, is_live = ? WHERE id = ?",
+                    (ev.get("home_score"), ev.get("away_score"), status,
+                     0 if is_final else 1, gr["id"]),
+                )
+                updated += 1
+    if updated:
+        print(f"[scores] Updated {updated} games with ESPN scores")
+        with GAMES_CACHE_LOCK:
+            GAMES_CACHE["ts"] = 0
+    return updated
+
+
 def run_scraper_job():
     try:
         if SCRAPER_SUBPROCESS:
@@ -1824,6 +2009,11 @@ def run_scraper_job():
                 GAMES_CACHE["mtime"] = 0
     except Exception as exc:  # pragma: no cover - logging only
         print(f"[scheduler][ERROR] Scraper error: {exc}")
+
+    try:
+        enrich_scores()
+    except Exception as exc:
+        print(f"[scores][ERROR] Enrichment failed: {exc}")
 
 
 def start_scheduler():

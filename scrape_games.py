@@ -192,7 +192,12 @@ def _ensure_games_db() -> None:
                 is_live INTEGER DEFAULT 0,
                 streams_json TEXT,
                 embed_url TEXT,
-                updated_at REAL
+                updated_at REAL,
+                home_team TEXT,
+                away_team TEXT,
+                home_score INTEGER,
+                away_score INTEGER,
+                game_status TEXT
             )
             """
         )
@@ -423,6 +428,17 @@ def scrape_streamed_api() -> pd.DataFrame:
         sport_id = match.get("category") or ""
         sport = sports_map.get(sport_id, sport_id.title() if isinstance(sport_id, str) else "Other")
 
+        teams = match.get("teams") or {}
+        home_team = ""
+        away_team = ""
+        if isinstance(teams, dict):
+            h = teams.get("home")
+            a = teams.get("away")
+            if isinstance(h, dict):
+                home_team = str(h.get("name") or "").strip()
+            if isinstance(a, dict):
+                away_team = str(a.get("name") or "").strip()
+
         rows.append({
             "source": "streamed.st",
             "date_header": event_dt.strftime("%A, %B %d, %Y"),
@@ -436,6 +452,8 @@ def scrape_streamed_api() -> pd.DataFrame:
             "streams": streams,
             "embed_url": streams[0]["embed_url"] if streams else None,
             "is_live": (event_dt - timedelta(minutes=15)) <= now_utc <= (event_dt + timedelta(hours=5)),
+            "home_team": home_team,
+            "away_team": away_team,
         })
 
     return pd.DataFrame(rows)
@@ -618,6 +636,8 @@ def main():
                     "is_live": 1 if _normalize_bool(row.get("is_live")) else 0,
                     "streams_json": _streams_to_json(row.get("streams") or []),
                     "embed_url": row.get("embed_url") or "",
+                    "home_team": row.get("home_team") or "",
+                    "away_team": row.get("away_team") or "",
                     "updated_at": now_ts,
                 }
                 conn.execute(
@@ -625,12 +645,12 @@ def main():
                     INSERT INTO games (
                         id, source, date_header, sport, time_unix, time,
                         tournament, tournament_url, matchup, watch_url, is_live,
-                        streams_json, embed_url, updated_at
+                        streams_json, embed_url, updated_at, home_team, away_team
                     )
                     VALUES (
                         :id, :source, :date_header, :sport, :time_unix, :time,
                         :tournament, :tournament_url, :matchup, :watch_url, :is_live,
-                        :streams_json, :embed_url, :updated_at
+                        :streams_json, :embed_url, :updated_at, :home_team, :away_team
                     )
                     ON CONFLICT(id) DO UPDATE SET
                         source = excluded.source,
@@ -645,6 +665,8 @@ def main():
                         is_live = excluded.is_live,
                         streams_json = excluded.streams_json,
                         embed_url = excluded.embed_url,
+                        home_team = excluded.home_team,
+                        away_team = excluded.away_team,
                         updated_at = excluded.updated_at
                     """,
                     payload,
