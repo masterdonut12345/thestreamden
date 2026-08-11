@@ -867,12 +867,26 @@ def api_live_games():
 
 @streaming_bp.route("/api/poster/announced")
 def api_poster_announced():
-    """Game IDs already announced by the X poster (requires ADMIN_API_KEY)."""
+    """Game IDs already announced by the X poster (requires ADMIN_API_KEY).
+
+    Also reports today_posted: how many announcements happened since UTC
+    midnight, so the poster can enforce a daily cap despite being run as
+    a stateless cron job.
+    """
     if not require_admin():
         return jsonify({"ok": False, "error": "unauthorized"}), 401
+    day_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
     with _get_games_db_connection() as conn:
         rows = conn.execute("SELECT game_id, posted_at FROM poster_announced").fetchall()
-    return jsonify({"ok": True, "announced": [{"id": r[0], "posted_at": r[1]} for r in rows]})
+        today_count = conn.execute(
+            "SELECT COUNT(*) FROM poster_announced WHERE posted_at >= ?",
+            (day_start.timestamp(),),
+        ).fetchone()[0]
+    return jsonify({
+        "ok": True,
+        "today_posted": today_count,
+        "announced": [{"id": r[0], "posted_at": r[1]} for r in rows],
+    })
 
 
 @streaming_bp.route("/api/poster/announce", methods=["POST"])
