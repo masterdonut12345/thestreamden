@@ -477,7 +477,9 @@ def _ensure_games_db() -> None:
                 away_team TEXT,
                 home_score INTEGER,
                 away_score INTEGER,
-                game_status TEXT
+                game_status TEXT,
+                home_abbr TEXT,
+                away_abbr TEXT
             )
             """
         )
@@ -520,6 +522,8 @@ def _migrate_score_columns(conn: sqlite3.Connection) -> None:
         ("home_score", "INTEGER"),
         ("away_score", "INTEGER"),
         ("game_status", "TEXT"),
+        ("home_abbr", "TEXT"),
+        ("away_abbr", "TEXT"),
     ):
         if name not in cols:
             try:
@@ -1429,7 +1433,8 @@ def _build_games_from_rows(rows: list[dict[str, Any]]):
             continue
 
         is_live = normalize_bool(rowd.get("is_live"))
-        if not is_live and start_dt:
+        game_status = (rowd.get("game_status") or "").strip().lower()
+        if not is_live and start_dt and game_status != "final":
             if (start_dt - timedelta(minutes=15)) <= now_utc <= (start_dt + live_window_after_start):
                 is_live = True
 
@@ -1462,6 +1467,10 @@ def _build_games_from_rows(rows: list[dict[str, Any]]):
             "home_score": rowd.get("home_score"),
             "away_score": rowd.get("away_score"),
             "game_status": rowd.get("game_status"),
+            "home_abbr": rowd.get("home_abbr"),
+            "away_abbr": rowd.get("away_abbr"),
+            "home_label": _short_team_label(rowd.get("home_team"), rowd.get("home_abbr")),
+            "away_label": _short_team_label(rowd.get("away_team"), rowd.get("away_abbr")),
         }
 
         dedup_key = (
@@ -1895,12 +1904,12 @@ def _fetch_espn_scoreboard(sport: str) -> list[dict[str, Any]]:
         events.append({
             "home": teams.get("home"),
             "away": teams.get("away"),
-            "home_score": _safe_int((comp.get("competitors") or [{}])[0].get("score")) if comp.get("competitors") else None,
+            "home_score": None,
             "away_score": None,
             "state": stype.get("state"),  # pre | in | post
             "detail": stype.get("detail"),  # e.g. "Final", "Top 7th", "Q3 02:31"
         })
-        # home_score/away_score per side
+        # home_score/away_score per side (competitor order is not guaranteed)
         for c in comp.get("competitors") or []:
             side = c.get("homeAway")
             score = _safe_int(c.get("score"))
@@ -1918,22 +1927,53 @@ def _safe_int(v) -> int | None:
         return None
 
 
+_TEAM_LABEL_STOPWORDS = {
+    "fc", "sc", "cf", "afc", "nfc", "the", "as", "club", "city", "utd",
+    "united", "de", "del", "los", "las", "sao", "sport", "sporting",
+}
+
+
+def _short_team_label(name: str, abbr: str | None = None) -> str:
+    """Return a short crest label (2-3 chars) for a team.
+
+    Prefers the ESPN abbreviation when available; otherwise derives one from
+    the team name (e.g. "Toronto Blue Jays" -> "TBJ", "Plymouth Argyle" -> "PA").
+    """
+    if abbr and str(abbr).strip():
+        return str(abbr).strip()[:4].upper()
+    words = [
+        w for w in re.split(r"[^a-z0-9']+", (name or "").lower())
+        if w and w not in _TEAM_LABEL_STOPWORDS
+    ]
+    if not words:
+        return "?"
+    if len(words) == 1:
+        return words[0][:3].upper()
+    return "".join(w[0] for w in words[:3]).upper()
+
+
 def _match_espn_game(events: list[dict[str, Any]], home_team: str, away_team: str):
-    """Match a game to an ESPN event by normalized team names."""
+    """Match a game to an ESPN event by normalized team names.
+
+    Returns (event, reversed) where ``reversed`` is True when ESPN lists the
+    teams in the opposite home/away order to our database, so the caller can
+    swap the scores back to our home/away orientation. Returns (None, False)
+    when no event matches.
+    """
     h = _espn_normalize(home_team)
     a = _espn_normalize(away_team)
     if not h or not a:
-        return None
+        return None, False
     for ev in events:
         eh = (ev.get("home") or {}).get("normalized")
         ea = (ev.get("away") or {}).get("normalized")
         eh_ab = (ev.get("home") or {}).get("abbrev")
         ea_ab = (ev.get("away") or {}).get("abbrev")
         if (eh and (eh == h or eh_ab == h)) and (ea and (ea == a or ea_ab == a)):
-            return ev
+            return ev, False
         if (eh and (eh == a or eh_ab == a)) and (ea and (ea == h or ea_ab == h)):
-            return ev
-    return None
+            return ev, True
+    return None, False
 
 
 def enrich_scores() -> int:
@@ -1966,17 +2006,41 @@ def enrich_scores() -> int:
             continue
         with _get_games_db_connection() as conn:
             for gr in game_rows:
-                ev = _match_espn_game(events, gr["home_team"], gr["away_team"])
+                ev, reversed_ = _match_espn_game(events, gr["home_team"], gr["away_team"])
                 if not ev:
                     continue
+
                 state = ev.get("state")
-                detail = ev.get("detail") or ""
-                is_final = state == "post" or detail.strip().lower().startswith("final")
-                status = "Final" if is_final else detail
+                detail = (ev.get("detail") or "").strip()
+                is_final = state == "post" or detail.lower().startswith("final")
+                is_live_now = state == "in"
+
+                if reversed_:
+                    home_score = ev.get("away_score")
+                    away_score = ev.get("home_score")
+                    home_abbr = (ev.get("away") or {}).get("abbrev") or ""
+                    away_abbr = (ev.get("home") or {}).get("abbrev") or ""
+                else:
+                    home_score = ev.get("home_score")
+                    away_score = ev.get("away_score")
+                    home_abbr = (ev.get("home") or {}).get("abbrev") or ""
+                    away_abbr = (ev.get("away") or {}).get("abbrev") or ""
+
+                # A "pre" game hasn't started: never show a 0-0 score as if it
+                # were live. Store scores only once the game is actually in
+                # progress or final, so the UI never renders fake data.
+                if state == "pre" or (not is_final and not is_live_now):
+                    conn.execute(
+                        "UPDATE games SET home_score = NULL, away_score = NULL, game_status = NULL, is_live = 0 WHERE id = ?",
+                        (gr["id"],),
+                    )
+                    continue
+
+                status = "Final" if is_final else (detail or "Live")
                 conn.execute(
-                    "UPDATE games SET home_score = ?, away_score = ?, game_status = ?, is_live = ? WHERE id = ?",
-                    (ev.get("home_score"), ev.get("away_score"), status,
-                     0 if is_final else 1, gr["id"]),
+                    "UPDATE games SET home_score = ?, away_score = ?, game_status = ?, is_live = ?, home_abbr = ?, away_abbr = ? WHERE id = ?",
+                    (home_score, away_score, status,
+                     1 if is_live_now else 0, home_abbr, away_abbr, gr["id"]),
                 )
                 updated += 1
     if updated:

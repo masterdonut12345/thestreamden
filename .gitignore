@@ -3,6 +3,7 @@ __pycache__/
 *.pyo
 myvenv/
 data/scheduler.lock
+data/games.db
 data/games.db-shm
 data/games.db-wal
 .env

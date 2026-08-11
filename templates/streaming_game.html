@@ -39,28 +39,41 @@
 
     <style>
         :root {
-            --bg: #050508;
-            --bg-alt: #050509;
-            --text: #f5f5f5;
-            --muted: #b8b8b8;
+            --bg: #05060c;
+            --glass: rgba(16, 20, 38, 0.55);
+            --glass2: rgba(22, 28, 52, 0.65);
+            --text: #eef1fb;
+            --muted: #a3a9c2;
             --accent: #7aa2ff;
-            --accent-soft: rgba(122, 162, 255, 0.16);
-            --border: #222;
-            --surface: #0b0b10;
-            --surface-2: #12121a;
-            --button-bg: #10101a;
-            --button-hover: #19192a;
+            --accent2: #6ae0ff;
+            --live: #ff4d6a;
+            --border: rgba(130, 160, 255, 0.16);
+            --hairline: rgba(255, 255, 255, 0.06);
             --shadow-soft: 0 18px 40px rgba(0, 0, 0, 0.8);
         }
 
-        * { box-sizing: border-box; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
 
         body {
             margin: 0;
             min-height: 100vh;
             font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
-            background: radial-gradient(circle at top, #151521 0, #050508 45%, #000 100%);
+            background: var(--bg);
             color: var(--text);
+            position: relative;
+            overflow-x: hidden;
+        }
+
+        body::before {
+            content: "";
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            z-index: -1;
+            background:
+                radial-gradient(900px 500px at 18% -5%, rgba(122, 162, 255, 0.16), transparent 60%),
+                radial-gradient(700px 500px at 95% 0%, rgba(106, 224, 255, 0.10), transparent 55%),
+                linear-gradient(180deg, #070814 0%, #05060c 60%, #030309 100%);
         }
 
         /* RESTORED: do NOT reserve space for the banner */
@@ -115,20 +128,35 @@
         }
 
         .back-link {
-            margin-bottom: 12px;
+            margin-bottom: 14px;
             font-size: 0.9rem;
             color: var(--muted);
         }
-        .back-link a { color: var(--muted); }
-        .back-link a:hover { color: var(--accent); }
+        .back-link a {
+            color: var(--muted);
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 7px 13px;
+            border-radius: 999px;
+            border: 1px solid var(--border);
+            background: var(--glass);
+            transition: border-color 0.15s ease, color 0.15s ease;
+        }
+        .back-link a:hover {
+            color: var(--accent2);
+            border-color: rgba(122, 162, 255, 0.45);
+        }
 
         header {
-            border-radius: 20px;
-            padding: 16px 18px;
+            border-radius: 18px;
+            padding: 20px 22px;
             margin-bottom: 18px;
-            background: linear-gradient(135deg, rgba(122, 162, 255, 0.09), rgba(0, 0, 0, 0.8));
-            border: 1px solid rgba(122, 162, 255, 0.25);
+            background: linear-gradient(180deg, var(--glass2), var(--glass));
+            border: 1px solid var(--border);
             box-shadow: var(--shadow-soft);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
         }
 
         .header-container {
@@ -167,7 +195,7 @@
             display: inline-flex;
             align-items: center;
             gap: 8px;
-            padding: 4px 10px;
+            padding: 5px 11px;
             border-radius: 10px;
             border: 1px solid rgba(122, 162, 255, 0.35);
             background: rgba(122, 162, 255, 0.10);
@@ -205,13 +233,14 @@
             gap: 6px;
             padding: 4px 10px;
             border-radius: 999px;
-            border: 1px solid rgba(122, 162, 255, 0.35);
-            background: rgba(122, 162, 255, 0.08);
+            border: 1px solid var(--border);
+            background: rgba(255, 255, 255, 0.05);
             color: #dde5ff;
             font-size: 0.84rem;
             max-width: 100%;
             overflow-wrap: anywhere;
             cursor: pointer;
+            transition: border-color 0.15s ease, background 0.15s ease;
         }
         .share-pill:hover {
             border-color: rgba(122, 162, 255, 0.75);
@@ -246,8 +275,8 @@
             font-size: 0.78rem;
             padding: 4px 8px;
             border-radius: 999px;
-            border: 1px solid rgba(255, 255, 255, 0.06);
-            background: rgba(10, 10, 18, 0.95);
+            border: 1px solid var(--border);
+            background: var(--glass);
             color: var(--muted);
         }
         .chip-accent {
@@ -280,9 +309,11 @@
             margin-top: 4px;
             border-radius: 18px;
             padding: 14px 14px 18px;
-            background: radial-gradient(circle at top left, rgba(122, 162, 255, 0.1), var(--surface));
-            border: 1px solid rgba(255, 255, 255, 0.06);
-            box-shadow: 0 18px 40px rgba(0, 0, 0, 0.9);
+            background: linear-gradient(180deg, var(--glass2), var(--glass));
+            border: 1px solid var(--border);
+            box-shadow: var(--shadow-soft);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
         }
 
         /* PLAYER LAYOUT: single vs 2x2 grid */
@@ -348,7 +379,7 @@
             background: rgba(5, 5, 12, 0.95);
             color: var(--text);
             border-radius: 999px;
-            border: 1px solid rgba(255, 255, 255, 0.18);
+            border: 1px solid var(--border);
             padding: 3px 8px;
         }
 
@@ -360,7 +391,7 @@
             margin-top: 30px;
             padding: 16px 14px;
             border-radius: 14px;
-            background: rgba(10, 10, 16, 0.95);
+            background: var(--glass);
             border: 1px dashed rgba(122, 162, 255, 0.4);
             color: var(--muted);
             font-size: 0.95rem;
@@ -388,17 +419,18 @@
         .multi-toggle-button {
             padding: 6px 12px;
             border-radius: 999px;
-            border: 1px solid rgba(255, 255, 255, 0.15);
-            background: var(--button-bg);
+            border: 1px solid var(--border);
+            background: var(--glass);
             color: var(--text);
             cursor: pointer;
             font-size: 0.8rem;
             display: inline-flex;
             align-items: center;
             gap: 6px;
+            transition: border-color 0.15s ease, background 0.15s ease;
         }
         .multi-toggle-button:hover {
-            background: var(--button-hover);
+            background: rgba(122, 162, 255, 0.14);
             border-color: rgba(122, 162, 255, 0.7);
         }
 

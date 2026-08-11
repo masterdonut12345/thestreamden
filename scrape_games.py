@@ -197,7 +197,9 @@ def _ensure_games_db() -> None:
                 away_team TEXT,
                 home_score INTEGER,
                 away_score INTEGER,
-                game_status TEXT
+                game_status TEXT,
+                home_abbr TEXT,
+                away_abbr TEXT
             )
             """
         )
