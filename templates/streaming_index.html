@@ -8,6 +8,17 @@
 
     <title>The Stream Den</title>
 
+    <!-- iOS home-screen web app -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Stream Den">
+    <meta name="theme-color" content="#050508">
+    <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='icon-180.png') }}">
+    <link rel="icon" type="image/png" sizes="192x192" href="{{ url_for('static', filename='icon-192.png') }}">
+    <link rel="icon" type="image/png" sizes="512x512" href="{{ url_for('static', filename='icon-512.png') }}">
+
     <!-- Open Graph (link preview) -->
     <meta property="og:title" content="The Stream Den – Free Sports Streaming" />
     <meta property="og:description" content="Watch live sports with fewer ads." />
