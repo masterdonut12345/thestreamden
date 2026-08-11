@@ -318,7 +318,7 @@
         .bnav .dot { position: absolute; top: -2px; right: -7px; width: 8px; height: 8px; border-radius: 50%; background: var(--live); animation: pulse 1.6s infinite; }
 
         /* ================= RESPONSIVE ================= */
-        @media (max-width: 700px) {
+@media (max-width: 700px) {
             .appbar-inner { padding: 10px 14px; gap: 10px; }
             .brand span.text { display: none; }
             .searchbar { width: 40px; padding: 0; justify-content: center; border: none; background: transparent; }
@@ -329,13 +329,41 @@
             .main { padding: 16px 14px 100px; }
 
             .grid { grid-template-columns: 1fr; }
-            .card { flex-direction: row; align-items: center; gap: 12px; padding: 12px 14px; min-width: 0; }
-            .card-top { flex-direction: column; align-items: flex-start; gap: 4px; flex: 0 0 72px; }
-            .matchup { flex: 1; justify-content: flex-start; flex-wrap: wrap; gap: 7px; padding: 0; min-width: 0; }
-            .crest { width: 38px; height: 38px; flex-shrink: 0; }
-            .tname { flex-basis: 100%; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+            .card { 
+                flex-direction: column; 
+                align-items: stretch; 
+                gap: 10px; 
+                padding: 14px; 
+            }
+            .card-top { 
+                flex-direction: row; 
+                justify-content: space-between; 
+                align-items: center; 
+                gap: 8px; 
+            }
+            .matchup { 
+                display: flex; 
+                align-items: center; 
+                justify-content: center; 
+                gap: 10px; 
+            }
+            .crest { width: 36px; height: 36px; border-radius: 10px; font-size: 0.7rem; }
             .scoreline { flex-direction: row; gap: 6px; }
-            .card-foot { display: none; }
+            .tname { 
+                text-align: center; 
+                white-space: nowrap; 
+                overflow: hidden; 
+                text-overflow: ellipsis; 
+                font-size: 0.84rem; 
+                line-height: 1.3; 
+            }
+            .card-foot { 
+                display: flex; 
+                justify-content: space-between; 
+                align-items: center; 
+                border-top: 1px solid var(--hairline); 
+                padding-top: 10px; 
+            }
 
             .hero-inner { flex-direction: column; align-items: stretch; gap: 14px; padding: 18px; }
             .watch-btn { justify-content: center; }
