@@ -491,14 +491,6 @@ def _ensure_games_db() -> None:
             ON CONFLICT(id) DO NOTHING
             """
         )
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS poster_announced (
-                game_id INTEGER PRIMARY KEY,
-                posted_at REAL
-            )
-            """
-        )
 
 
 def _get_games_db_connection() -> sqlite3.Connection:
@@ -834,82 +826,6 @@ def index():
         most_viewed_games=most_viewed_games,
         current_session=get_session_id(),
     )
-
-
-@streaming_bp.route("/api/live_games")
-def api_live_games():
-    """Public JSON feed of currently-live games, for external automation."""
-    games = load_games_cached()
-    live = [g for g in games if g.get("is_live")]
-    live.sort(key=lambda g: (g.get("time_unix") or 0))
-    out = []
-    for g in live:
-        streams = g.get("streams") or []
-        out.append({
-            "id": g.get("id"),
-            "slug": g.get("slug"),
-            "sport": g.get("sport"),
-            "matchup": g.get("matchup"),
-            "tournament": g.get("tournament"),
-            "time": g.get("time"),
-            "time_unix": g.get("time_unix"),
-            "watch_url": g.get("watch_url"),
-            "url": "/g/" + (g.get("slug") or str(g.get("id") or "")),
-            "stream_count": len(streams),
-        })
-    return jsonify({
-        "ok": True,
-        "count": len(out),
-        "generated_at": datetime.now(timezone.utc).isoformat(),
-        "games": out,
-    })
-
-
-@streaming_bp.route("/api/poster/announced")
-def api_poster_announced():
-    """Game IDs already announced by the X poster (requires ADMIN_API_KEY).
-
-    Also reports today_posted: how many announcements happened since UTC
-    midnight, so the poster can enforce a daily cap despite being run as
-    a stateless cron job.
-    """
-    if not require_admin():
-        return jsonify({"ok": False, "error": "unauthorized"}), 401
-    day_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
-    with _get_games_db_connection() as conn:
-        rows = conn.execute("SELECT game_id, posted_at FROM poster_announced").fetchall()
-        today_count = conn.execute(
-            "SELECT COUNT(*) FROM poster_announced WHERE posted_at >= ?",
-            (day_start.timestamp(),),
-        ).fetchone()[0]
-    return jsonify({
-        "ok": True,
-        "today_posted": today_count,
-        "announced": [{"id": r[0], "posted_at": r[1]} for r in rows],
-    })
-
-
-@streaming_bp.route("/api/poster/announce", methods=["POST"])
-def api_poster_announce():
-    """Mark a game as announced by the X poster (requires ADMIN_API_KEY)."""
-    if not require_admin():
-        return jsonify({"ok": False, "error": "unauthorized"}), 401
-    payload = request.get_json(silent=True) or {}
-    try:
-        game_id = int(payload.get("game_id"))
-    except (TypeError, ValueError):
-        return jsonify({"ok": False, "error": "game_id must be an int"}), 400
-    with _get_games_db_connection() as conn:
-        conn.execute(
-            """
-            INSERT INTO poster_announced (game_id, posted_at)
-            VALUES (?, ?)
-            ON CONFLICT(game_id) DO UPDATE SET posted_at = excluded.posted_at
-            """,
-            (game_id, time.time()),
-        )
-    return jsonify({"ok": True, "game_id": game_id})
-
 
 
 
