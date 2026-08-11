@@ -329,11 +329,11 @@
             .main { padding: 16px 14px 100px; }
 
             .grid { grid-template-columns: 1fr; }
-            .card { flex-direction: row; align-items: center; gap: 12px; padding: 12px 14px; }
+            .card { flex-direction: row; align-items: center; gap: 12px; padding: 12px 14px; min-width: 0; }
             .card-top { flex-direction: column; align-items: flex-start; gap: 4px; flex: 0 0 72px; }
-            .matchup { flex: 1; justify-content: flex-start; flex-wrap: wrap; gap: 7px; padding: 0; }
-            .crest { width: 38px; height: 38px; }
-            .tname { flex-basis: 100%; text-align: left; }
+            .matchup { flex: 1; justify-content: flex-start; flex-wrap: wrap; gap: 7px; padding: 0; min-width: 0; }
+            .crest { width: 38px; height: 38px; flex-shrink: 0; }
+            .tname { flex-basis: 100%; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
             .scoreline { flex-direction: row; gap: 6px; }
             .card-foot { display: none; }
 
