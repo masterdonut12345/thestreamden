@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+    <title>Stream Player</title>
+    <style>
+      html, body { margin: 0; padding: 0; background: #000; height: 100%; width: 100%; overflow: hidden; }
+      #player { height: 100vh; width: 100vw; }
+    </style>
+    {% if src %}
+      <script src="https://cdn.jsdelivr.net/npm/@swarmcloud/hls@latest/p2p-engine.min.js"></script>
+      <script>
+        (function () {
+          if (window.__hostlie_installed) return;
+          window.__hostlie_installed = true;
+          var FAKE = "embed.st";
+          var oi = WebAssembly.instantiate;
+          var ois = WebAssembly.instantiateStreaming;
+          function wrapImports(imports) {
+            if (!imports || typeof imports !== "object") return imports;
+            var out = {};
+            for (const ns of Object.keys(imports)) {
+              var v = imports[ns];
+              if (v && typeof v === "object") {
+                var w = {};
+                for (const k of Object.keys(v)) {
+                  const f = v[k];
+                  w[k] = (typeof f === "function") ? function () {
+                    if (k === "__wbg_get_b3ed3ad4be2bc8ac" && arguments[1] === "hostname") return FAKE;
+                    return f.apply(this, arguments);
+                  } : f;
+                }
+                out[ns] = w;
+              } else out[ns] = v;
+            }
+            return out;
+          }
+          WebAssembly.instantiate = function (buf, imports) { return oi.call(this, buf, wrapImports(imports)); };
+          WebAssembly.instantiateStreaming = function (resp, imports) { return ois.call(this, resp, wrapImports(imports)); };
+        })();
+      </script>
+      <script src="https://strmd.b-cdn.net/js/bundle-jw.js"></script>
+    {% endif %}
+  </head>
+  <body>
+    {% if src %}
+      <div id="player"></div>
+      <script>
+        (function () {
+          var SRC = {{ src|tojson }};
+          var CANDIDATES = {{ candidates|tojson }};
+          var IDX = {{ idx }};
+          window.__strmdMasterOk = false;
+          window.__fallbackDone = false;
+
+          function scheduleFallback(reason) {
+            if (window.__fallbackDone) return;
+            if (IDX + 1 < CANDIDATES.length) {
+              window.__fallbackDone = true;
+              console.log("[player] stream failed (" + reason + "), trying next source", IDX + 1);
+              var q = new URLSearchParams();
+              q.set("srcs", JSON.stringify(CANDIDATES.map(function (c) { return c.src; })));
+              q.set("idx", String(IDX + 1));
+              location.href = "/embed_player?" + q.toString();
+            } else {
+              window.__fallbackDone = true;
+              console.log("[player] all " + CANDIDATES.length + " sources failed:", reason);
+              document.title = "Start failed";
+            }
+          }
+          window.scheduleFallback = scheduleFallback;
+
+          function strmdCheck(url, status) {
+            if (status >= 200 && status < 300) { window.__strmdMasterOk = true; return; }
+            if (status >= 400 && !window.__strmdMasterOk) {
+              console.log("[strmd] manifest failed", status, String(url || "").slice(0, 120));
+              scheduleFallback("manifest " + status);
+            }
+          }
+
+          window.__strmdRewrite = function (u) {
+            var m = /^https:\/\/lb([\w.-]+\.strmd\.st)\/(.*)$/.exec(String(u || ""));
+            if (!m) return u;
+            var proxied = location.origin + "/strmd/lb" + m[1] + "/" + m[2];
+            if (SRC) {
+              var sep = proxied.indexOf("?") === -1 ? "?" : "&";
+              proxied += sep + "src=" + encodeURIComponent(SRC);
+            }
+            return proxied;
+          };
+          var oF = window.fetch;
+          window.fetch = function (input, init) {
+            var rw, newUrl;
+            try {
+              if (typeof input === "string") {
+                rw = window.__strmdRewrite(input);
+                if (rw !== input) {
+                  console.log("[strmd] fetch ->", String(rw).slice(0, 140));
+                  if (rw.indexOf("/strmd/") !== -1 && /\.m3u8/.test(rw)) {
+                    var p = oF.call(this, rw, init);
+                    p.then(function (res) { strmdCheck(rw, res.status); }).catch(function () {});
+                    return p;
+                  }
+                  return oF.call(this, rw, init);
+                }
+                return oF.apply(this, arguments);
+              }
+              if (input && input.url) {
+                rw = window.__strmdRewrite(input.url);
+                if (rw !== input.url) {
+                  console.log("[strmd] fetch ->", String(rw).slice(0, 140));
+                  return oF.call(this, new Request(rw, input), init);
+                }
+                return oF.apply(this, arguments);
+              }
+            } catch (e) {}
+            return oF.apply(this, arguments);
+          };
+          var oX = XMLHttpRequest.prototype.open;
+          XMLHttpRequest.prototype.open = function () {
+            try {
+              var rw = window.__strmdRewrite(arguments[1]);
+              if (rw !== arguments[1]) {
+                arguments[1] = rw;
+                this.__strmdUrl = rw;
+                console.log("[strmd] xhr ->", String(rw).slice(0, 140));
+              }
+            } catch (e) {}
+            return oX.apply(this, arguments);
+          };
+          var oXS = XMLHttpRequest.prototype.send;
+          XMLHttpRequest.prototype.send = function () {
+            try {
+              var u = this.__strmdUrl;
+              if (u && u.indexOf("/strmd/") !== -1 && /\.m3u8/.test(u)) {
+                this.addEventListener("load", function () {
+                  strmdCheck(u, this.status);
+                });
+              }
+            } catch (e) {}
+            return oXS.apply(this, arguments);
+          };
+        })();
+      </script>
+      <script>
+        var PARTS = {{ parts|tojson }};
+        (async function () {
+          try {
+            var mod = await import("{{ lock_url }}");
+            await mod.default();
+            await mod.init_wasm();
+            var r = await mod.set_stream_jw(PARTS[0], PARTS[1], PARTS[2]);
+            window.__stream = r;
+            console.log("[player] set_stream_jw ret", typeof r);
+          } catch (e) {
+            console.log("[player] mint failed", String((e && e.message) || e).slice(0, 300));
+            if (window.__fallbackDone === false) {
+              window.scheduleFallback && window.scheduleFallback("mint");
+            }
+            document.title = "Start failed";
+          }
+        })();
+      </script>
+    {% else %}
+      <div class="fallback"><strong>Stream unavailable.</strong></div>
+    {% endif %}
+  </body>
+</html>

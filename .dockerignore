@@ -1,8 +1,10 @@
-__pycache__/
+.git
+.gitignore
+myvenv
+__pycache__
 *.pyc
 *.pyo
-myvenv/
 data/scheduler.lock
 data/games.db-shm
 data/games.db-wal
-.env
+/tmp

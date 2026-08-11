@@ -350,7 +350,10 @@ def _build_stream_label(stream: dict) -> str:
     if stream.get("hd"):
         extras.append("HD")
     if extras:
-        return f"{base} ({' - '.join(extras)})"
+        base = f"{base} ({' - '.join(extras)})"
+    source = (stream.get("source") or "").strip()
+    if source:
+        return f"{source} · {base}"
     return base
 
 
@@ -370,7 +373,7 @@ def _fetch_streams_for_source(session, source: str, source_id: str) -> list[dict
             "label": _build_stream_label(st),
             "embed_url": _force_https(embed),
             "watch_url": _force_https(embed),
-            "origin": "api",
+            "origin": "scraped",
             "language": st.get("language"),
             "hd": bool(st.get("hd")),
             "source": st.get("source"),
@@ -409,6 +412,10 @@ def scrape_streamed_api() -> pd.DataFrame:
         streams: list[dict] = []
         for src in sources:
             if not isinstance(src, dict):
+                continue
+            # Only the embed.st admin channel is supported by our mint player;
+            # delta/echo/golf use a different system we can't play.
+            if (src.get("source") or "").strip().lower() != "admin":
                 continue
             streams.extend(_fetch_streams_for_source(session, src.get("source"), src.get("id")))
         streams = _dedup_streams(streams)

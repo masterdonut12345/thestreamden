@@ -11,7 +11,6 @@ import atexit
 import hashlib
 import json
 import os
-import random
 import re
 import sqlite3
 import subprocess
@@ -41,6 +40,7 @@ from flask import (
     url_for,
 )
 import requests
+from curl_cffi import requests as curl_requests
 
 from harvest import CdpHarvester, ensure_cdp_chrome, rewrite_playlist, build_master
 
@@ -49,7 +49,10 @@ streaming_bp = Blueprint("streaming", __name__)
 
 @streaming_bp.app_context_processor
 def _inject_template_helpers():
-    return {"build_cdp_player_url": build_cdp_player_url}
+    return {
+        "build_cdp_player_url": build_cdp_player_url,
+        "build_embed_player_fallback_url": build_embed_player_fallback_url,
+    }
 
 
 GAMES_DB_PATH = Path(
@@ -233,6 +236,12 @@ def build_m3u8_proxy_url(src: str) -> str:
 
 CDP_EMBED_HOSTS = ("embed.st", "embedsports.top", "strmd.st")
 
+# Endpoint the lock.wasm /fetch flow proxies to (browser-side mint lives in the
+# embed_player template; the wasm POSTs its protobuf to this same-origin route).
+EMBED_FETCH_UPSTREAM = "https://embed.st/fetch"
+# lock.js + lock.wasm are served by the stream provider's CDN.
+LOCK_JS_URL = "https://strmd.b-cdn.net/js/wasm/lock.js"
+
 
 def is_cdp_embed_url(value: str) -> bool:
     """Do these embeds need the headless-harvest relay? (embed.st / embedsports.top family.)"""
@@ -246,11 +255,37 @@ def build_cdp_player_url(src: str) -> str:
     if not src:
         return ""
     if is_cdp_embed_url(src):
-        return f"/cdp_player?{urlencode({'src': src})}"
+        # Prefer the browser-side mint player (no headless Chrome needed).
+        # Falls back to /cdp_player for URLs the mint path can't parse.
+        return build_embed_player_url(src)
     # plain m3u8 stays on the existing proxy path
     if is_m3u8_url(src):
         return build_m3u8_player_url(src)
     return src
+
+
+def parse_embed_parts(src: str) -> list[str]:
+    """Split an embed.st URL like https://embed.st/embed/<channel>/<id>/<part>
+    into [channel, id, part]. Returns [] when it doesn't look like one."""
+    if not src:
+        return []
+    try:
+        path = urlparse(src).path or ""
+    except Exception:
+        return []
+    m = re.match(r"^/embed/([^/]+)/([^/]+)/([0-9]+)$", path)
+    if not m:
+        return []
+    return [m.group(1), m.group(2), m.group(3)]
+
+
+def build_embed_player_url(src: str) -> str:
+    """Route embed.st family URLs to the browser-side mint player."""
+    if not src:
+        return ""
+    if parse_embed_parts(src):
+        return f"/embed_player?{urlencode({'src': src})}"
+    return build_cdp_player_url(src)
 
 
 def normalize_http_url(value: str) -> str:
@@ -791,6 +826,129 @@ def cdp_player():
     return render_template("cdp_player.html", src=src)
 
 
+@streaming_bp.route("/embed_player")
+def embed_player():
+    src = normalize_http_url((request.args.get("src") or "").strip())
+    candidates_raw = request.args.get("srcs") or ""
+    candidates: list[str] = []
+    if candidates_raw:
+        try:
+            parsed = json.loads(candidates_raw)
+        except Exception:
+            parsed = []
+        for u in parsed:
+            nu = normalize_http_url(str(u or ""))
+            if nu and parse_embed_parts(nu) and nu not in candidates:
+                candidates.append(nu)
+    if src and src not in candidates and parse_embed_parts(src):
+        candidates.append(src)
+    if not candidates:
+        return render_template("embed_player.html", src="", parts=[], candidates=[], idx=0, lock_url=LOCK_JS_URL)
+
+    try:
+        idx = max(0, int(request.args.get("idx", "0")))
+    except Exception:
+        idx = 0
+    if idx >= len(candidates):
+        idx = 0
+    active_src = candidates[idx]
+    parts = parse_embed_parts(active_src)
+    candidate_parts = [{"src": c, "parts": parse_embed_parts(c)} for c in candidates]
+    return render_template(
+        "embed_player.html",
+        src=active_src,
+        parts=parts,
+        candidates=candidate_parts,
+        idx=idx,
+        lock_url=LOCK_JS_URL,
+    )
+
+
+def build_embed_player_fallback_url(active_embed_url: str, all_embeds) -> str:
+    """Build an /embed_player URL that starts on active_embed_url but falls back
+    to the other candidates in all_embeds when the active stream is dead."""
+    candidates: list[str] = []
+    for u in (all_embeds or []):
+        nu = normalize_http_url(str(u or ""))
+        if nu and parse_embed_parts(nu) and nu not in candidates:
+            candidates.append(nu)
+    if active_embed_url in candidates:
+        idx = candidates.index(active_embed_url)
+    else:
+        idx = 0
+    if not candidates:
+        return ""
+    return "/embed_player?" + urlencode({
+        "src": candidates[idx],
+        "srcs": json.dumps(candidates),
+        "idx": str(idx),
+    })
+
+
+@streaming_bp.route("/fetch", methods=["POST", "OPTIONS"])
+@streaming_bp.route("/embed_fetch", methods=["POST", "OPTIONS"])
+def embed_fetch():
+    """Same-origin relay for lock.wasm's /fetch.
+
+    The viewer browser runs lock.wasm, which POSTs its protobuf to the SAME ORIGIN
+    path /fetch (the wasm hardcodes {origin}/fetch). We proxy the body to the real
+    embed.st /fetch and forward ALL response headers verbatim - most importantly the
+    `Goat` header (and its Access-Control-Expose-Headers) that the wasm decodes the
+    blob with. No secrets are touched server-side.
+    """
+    if request.method == "OPTIONS":
+        resp = make_response("", 200)
+        resp.headers["Access-Control-Allow-Origin"] = "*"
+        resp.headers["Access-Control-Allow-Methods"] = "POST, GET, OPTIONS"
+        resp.headers["Access-Control-Allow-Headers"] = "*"
+        resp.headers["Access-Control-Max-Age"] = "600"
+        return resp
+
+    body = request.get_data()
+    if not body:
+        return jsonify({"ok": False, "error": "empty body"}), 400
+    try:
+        referer = "https://embed.st/embed/admin/2501/1"
+        browser_referer = request.headers.get("Referer", "") or ""
+        if "src=" in browser_referer:
+            try:
+                from urllib.parse import urlparse, parse_qs
+                src_candidate = parse_qs(urlparse(browser_referer).query).get("src", [""])[0]
+                if src_candidate.startswith("http"):
+                    referer = src_candidate
+            except Exception:
+                pass
+        upstream_headers = {
+            "Content-Type": "application/octet-stream",
+            "Referer": referer,
+            "User-Agent": request.headers.get("User-Agent", "") or "Mozilla/5.0",
+        }
+        for header_name in ("Accept", "Accept-Language"):
+            header_value = request.headers.get(header_name)
+            if header_value:
+                upstream_headers[header_name] = header_value
+        resp = requests.post(
+            EMBED_FETCH_UPSTREAM,
+            data=body,
+            headers=upstream_headers,
+            timeout=25,
+        )
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 502
+
+    proxy_resp = Response(resp.content, status=resp.status_code)
+    proxy_resp.headers["Content-Type"] = resp.headers.get(
+        "content-type", "application/octet-stream"
+    )
+    # Forward the custom Goat header + the CORS expose directive verbatim.
+    for header_name in ("Goat", "Access-Control-Expose-Headers", "Cache-Control"):
+        header_value = resp.headers.get(header_name)
+        if header_value:
+            proxy_resp.headers[header_name] = header_value
+    proxy_resp.headers["Access-Control-Allow-Origin"] = "*"
+    return proxy_resp
+
+
 @streaming_bp.route("/m3u8_proxy")
 def m3u8_proxy():
     src = normalize_http_url((request.args.get("src") or "").strip())
@@ -865,7 +1023,114 @@ def m3u8_proxy():
     return proxy_resp
 
 
-# ====================== CDP HEADLESS-HARVEST PLAYBACK ======================
+@streaming_bp.route("/strmd/<path:media_path>")
+def strmd_media_proxy(media_path):
+    """Same-origin relay for lb*.strmd.st media.
+
+    lock.wasm mints a `/secure/<tok>/rtmp/stream/<id>` URL that the CDN only serves
+    to real-browser sessions (the CDN TLS-fingerprints the client: plain python-requests
+    gets 403 nginx, a Chrome-impersonating client gets 200). The template rewrites any
+    https://lb*.strmd.st/* source into /strmd/lb*.strmd.st/* so the browser's
+    hls.js/XHR traffic is same-origin here, and we re-request upstream with curl_cffi
+    impersonating Chrome. We rewrite the m3u8 bodies so nested playlists/segments keep
+    flowing through this proxy.
+    """
+    try:
+        return _strmd_media_proxy_impl(media_path)
+    except Exception as e:
+        return abort(500)
+
+
+_STRMD_CURL_CLIENT = None
+_STRMD_CURL_LOCK = threading.Lock()
+
+
+def _get_curl_client():
+    global _STRMD_CURL_CLIENT
+    if _STRMD_CURL_CLIENT is None:
+        with _STRMD_CURL_LOCK:
+            if _STRMD_CURL_CLIENT is None:
+                _STRMD_CURL_CLIENT = curl_requests.Session(impersonate="chrome")
+    return _STRMD_CURL_CLIENT
+
+
+def _curl_get(url, headers=None, stream=False, timeout=None):
+    client = _get_curl_client()
+    return client.get(
+        url,
+        headers=headers or {},
+        stream=stream,
+        timeout=timeout or M3U8_PROXY_TIMEOUT,
+    )
+
+
+def _strmd_media_proxy_impl(media_path):
+    if not media_path or "..." in media_path:
+        return abort(400)
+
+    # media_path = "lb8.strmd.st/secure/<tok>/rtmp/stream/<id>[/...].m3u8"
+    host, _, rest = media_path.partition("/")
+    if "." not in host:
+        return abort(400)
+    upstream = "https://{}/{}".format(host, rest)
+
+    referer = "https://embed.st/"
+    try:
+        parts = parse_embed_parts(request.args.get("src") or "")
+        if parts:
+            ctype, cid, cpart = parts
+            referer = "https://embed.st/embed/{}/{}/{}".format(ctype, cid, cpart)
+    except Exception:
+        pass
+
+    upstream_headers = {
+        "User-Agent": request.headers.get("User-Agent", "") or "Mozilla/5.0",
+        "Referer": referer,
+        "Accept": request.headers.get("Accept", "*/*"),
+    }
+    if request.headers.get("Range"):
+        upstream_headers["Range"] = request.headers.get("Range")
+
+    try:
+        resp = _curl_get(upstream, headers=upstream_headers, stream=False)
+    except Exception as e:
+        return abort(502)
+
+    content_type = resp.headers.get("content-type", "application/octet-stream")
+    status = resp.status_code
+    if status >= 400:
+        try:
+            resp.close()
+        except Exception:
+            pass
+        return ("proxy error: {}".format(status), status)
+
+    if "mpegurl" in content_type.lower() or upstream.rstrip("/").endswith(".m3u8"):
+        try:
+            text = resp.text
+            resp.close()
+        except Exception:
+            return abort(502)
+        # Only rewrite absolute lb*.strmd.st refs in the body into proxy URLs;
+        # bare relative refs already resolve under this same /strmd/ proxy path.
+        proxied_base = "https://{}/strmd/".format(request.host)
+        rewritten = re.sub(
+            r"https://(lb[\w.-]+\.strmd\.st/)([^\s\r\n]*)",
+            lambda m: proxied_base + m.group(1) + m.group(2),
+            text,
+        )
+        proxy_resp = make_response(rewritten, status)
+        proxy_resp.headers["Content-Type"] = "application/vnd.apple.mpegurl"
+        proxy_resp.headers["Access-Control-Allow-Origin"] = "*"
+        proxy_resp.headers["Cache-Control"] = "no-store"
+        return proxy_resp
+
+    body = resp.content
+    proxy_resp = Response(body, status=status)
+    proxy_resp.headers["Content-Type"] = content_type
+    proxy_resp.headers["Access-Control-Allow-Origin"] = "*"
+    proxy_resp.headers["Cache-Control"] = "no-store"
+    return proxy_resp
 # Some embeds (embed.st / strmd.st) serve their HLS master/media manifests only to a
 # real browser session (plain requests get 403 nginx). We drive a headless Chrome via
 # CDP to capture those manifests, then serve just the tiny manifests to the viewer;
@@ -880,6 +1145,16 @@ def _cdp_alive(harvester) -> bool:
             and harvester.ws is not None
             and harvester.ws.connected
         )
+    except Exception:
+        return False
+
+
+def _cdp_chrome_reachable(port: int) -> bool:
+    import socket
+
+    try:
+        with socket.create_connection(("127.0.0.1", port), timeout=2):
+            return True
     except Exception:
         return False
 
@@ -909,6 +1184,10 @@ def cdp_get_or_harvest(embed_url: str):
             CDP_SESSIONS.pop(embed_url, None)
 
     ensure_cdp_chrome(CDP_CHROME_PORT)
+    # If no Chrome could be launched (e.g. Python buildpack w/o Chromium), fail
+    # fast so the client falls back to a direct iframe instead of hanging.
+    if not _cdp_chrome_reachable(CDP_CHROME_PORT):
+        raise RuntimeError("CDP unavailable (no Chrome)")
     # release the lock while the slow CDP capture runs so other requests stay responsive
     h = CdpHarvester(
         embed_url,
@@ -1402,16 +1681,12 @@ def _game_exists(game_id: int) -> bool:
 def game_detail(game_id: int):
     mark_active()
 
-    requested_stream_slug = request.args.get("stream", "").strip()
-
     games = load_games_cached()
     game = next((g for g in games if g["id"] == game_id), None)
     if not game:
         abort(404)
 
     other_games = [g for g in games if g["id"] != game_id and g.get("streams")]
-
-    open_ad = random.random() < 0.25
 
     slug = game.get("slug") or game_slug(game)
     share_id_url = _absolute_url(url_for("streaming.game_detail", game_id=game_id))
@@ -1424,11 +1699,9 @@ def game_detail(game_id: int):
         "streaming_game.html",
         game=game,
         other_games=other_games,
-        open_ad=open_ad,
         share_id_url=share_id_url,
         share_slug_url=share_slug_url,
         og_image_url=og_image_url,
-        requested_stream_slug=requested_stream_slug,
         current_user=current_user,
     )
 
@@ -1465,7 +1738,10 @@ def _build_stream_label(stream: dict[str, Any]) -> str:
     if stream.get("hd"):
         extras.append("HD")
     if extras:
-        return f"{base} ({' - '.join(extras)})"
+        base = f"{base} ({' - '.join(extras)})"
+    source = (stream.get("source") or "").strip()
+    if source:
+        return f"{source} · {base}"
     return base
 
 
@@ -1493,7 +1769,7 @@ def _fetch_streams_for_source(session, source: str, source_id: str) -> list[dict
                 "label": _build_stream_label(st),
                 "embed_url": embed,
                 "watch_url": embed,
-                "origin": "api",
+                "origin": "scraped",
                 "language": st.get("language"),
                 "hd": bool(st.get("hd")),
                 "source": st.get("source"),

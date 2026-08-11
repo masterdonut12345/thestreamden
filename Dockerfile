@@ -20,4 +20,4 @@ COPY . .
 
 RUN pip install --no-cache-dir -r requirements.txt
 
-CMD ["sh", "-c", "gunicorn -w 1 --threads ${WEB_THREADS:-4} --bind 0.0.0.0:5000 wsgi:app"]
+CMD ["sh", "-c", "gunicorn -w 1 --threads ${WEB_THREADS:-2} --bind 0.0.0.0:${PORT:-5000} wsgi:app"]

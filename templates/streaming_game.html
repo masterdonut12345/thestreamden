@@ -126,25 +126,6 @@
             gap: 20px;
         }
 
-        /* fixed 320x50 ad box on the left */
-        .ad-slot-left {
-            flex: 0 0 auto;
-            width: 320px;
-            height: 50px;
-            display: flex;
-            align-items: center;
-            justify-content: flex-start;
-            overflow: hidden;
-        }
-        .ad-slot-left .ad-iframe {
-            width: 320px;
-            height: 50px;
-            border-radius: 8px;
-            border: 0;
-            overflow: hidden;
-            box-shadow: 0 8px 18px rgba(0, 0, 0, 0.45);
-        }
-
         .header-text {
             flex: 1 1 auto;
             padding-right: 10px;
@@ -258,39 +239,12 @@
             .player-card { padding: 12px; }
             .player-layout.multi { grid-template-columns: 1fr; }
             .player-layout.single .player-slot[data-slot="0"] iframe { height: 360px; }
-            .stream-picker { flex-direction: column; }
-            .stream-button { width: 100%; justify-content: center; }
             .multi-view-title { flex-direction: column; align-items: flex-start; gap: 6px; }
             .multi-controls { width: 100%; }
             .multi-toggle-button { width: 100%; justify-content: center; }
         }
 
         h3 { margin-top: 12px; margin-bottom: 8px; font-size: 1.1rem; }
-
-
-        /* Left floating 160x600 ad, hidden on small screens */
-        .left-rail-ad {
-            position: fixed;
-            top: 120px;
-            left: 20px;
-            width: 160px;
-            height: 600px;
-            max-width: none;
-            border-radius: 12px;
-            overflow: hidden;
-            box-shadow: 0 16px 36px rgba(0, 0, 0, 0.85);
-            z-index: 900;
-        }
-        .left-rail-ad .ad-iframe {
-            width: 160px;
-            height: 600px;
-            border-radius: 12px;
-            border: 0;
-            overflow: hidden;
-        }
-        @media (max-width: 1200px) {
-            .left-rail-ad { display: none; }
-        }
 
         .player-card {
             margin-top: 4px;
@@ -370,44 +324,6 @@
 
         @media (max-width: 700px) {
             .player-layout.single .player-slot[data-slot="0"] iframe { height: 360px; }
-        }
-
-        .stream-picker {
-            margin-top: 12px;
-            display: flex;
-            flex-wrap: wrap;
-            gap: 8px;
-        }
-
-        .stream-button {
-            padding: 7px 14px;
-            border-radius: 999px;
-            border: 1px solid rgba(255, 255, 255, 0.12);
-            background: var(--button-bg);
-            color: var(--text);
-            cursor: pointer;
-            font-size: 0.86rem;
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            transition:
-                background 0.15s ease,
-                border-color 0.15s ease,
-                transform 0.1s ease,
-                box-shadow 0.15s ease;
-        }
-        .stream-button:hover {
-            background: var(--button-hover);
-            border-color: rgba(122, 162, 255, 0.7);
-            transform: translateY(-1px);
-            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.7);
-        }
-        .stream-button.active {
-            background: var(--accent);
-            color: #050508;
-            border-color: var(--accent);
-            font-weight: 600;
-            box-shadow: 0 14px 30px rgba(122, 162, 255, 0.5);
         }
 
         .no-stream {
@@ -512,9 +428,6 @@
             border-radius: 0;
         }
 
-        body.full-page-player #stream-picker { display: none !important; }
-        body.full-page-player .ad-slot-left { display: none; }
-
         body.full-page-player .multi-view-title {
             position: fixed;
             bottom: 12px;
@@ -533,59 +446,6 @@
             box-shadow: 0 10px 25px rgba(0, 0, 0, 0.8);
         }
 
-        /* FIXED RIGHT RAIL BANNER — OUTSIDE FLOW, DOES NOT RESIZE ANYTHING */
-        .stake-rail {
-            position: fixed;
-            right: 16px;
-            top: 140px;
-            width: 160px;
-            z-index: 2500;
-        }
-
-        .left-rail-ad {
-            position: fixed;
-            left: 16px;
-            top: 200px;
-            width: 160px;
-            z-index: 2500;
-        }
-        .left-rail-ad .box {
-            width: 160px;
-            height: 300px;
-            border-radius: 14px;
-            overflow: hidden;
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            box-shadow: 0 14px 30px rgba(0, 0, 0, 0.8);
-            background: rgba(0,0,0,0.35);
-        }
-
-        .stake-rail .box {
-            width: 160px;
-            height: 600px;
-            border-radius: 14px;
-            overflow: hidden;
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            box-shadow: 0 18px 40px rgba(0, 0, 0, 0.85);
-            background: rgba(0,0,0,0.35);
-        }
-
-        .stake-rail a,
-        .stake-rail img {
-            display: block;
-            width: 160px;
-            height: 600px;
-        }
-
-        /* hide on smaller screens to avoid overlap */
-        @media (max-width: 1280px) {
-            .stake-rail { display: none; }
-            .left-rail-ad { display: none; }
-        }
-
-        /* hide in full-page mode */
-        body.full-page-player .stake-rail { display: none; }
-        body.full-page-player .left-rail-ad { display: none; }
-
         @media (prefers-reduced-motion: reduce) {
             .live-pill::before { animation: none !important; box-shadow: 0 0 0 0 rgba(255, 77, 106, 0.6); }
         }
@@ -602,14 +462,6 @@
 
         <header>
             <div class="header-container">
-                <div class="ad-slot-left" aria-label="Sponsored banner">
-                    <iframe
-                        class="ad-iframe"
-                        title="Top banner ad"
-                        srcdoc='<!doctype html><html><head><meta charset="utf-8"></head><body style="margin:0;padding:0;display:flex;align-items:center;justify-content:center;background:transparent;"><script type="text/javascript">var atOptions={"key":"5478f94711ce55d9b858433d3c49812f","format":"iframe","height":50,"width":320,"params":{}};</script><script type="text/javascript" src="https://www.highperformanceformat.com/5478f94711ce55d9b858433d3c49812f/invoke.js"></script></body></html>'>
-                    </iframe>
-                </div>
-
                 <div class="header-text">
                     <div class="title-row">
                         <h1>{{ game.matchup }}</h1>
@@ -680,7 +532,7 @@
                     <div class="player-slot" data-slot="0">
                         <iframe
                             id="game-iframe"
-                            src="{{ build_cdp_player_url(first_stream.embed_url) }}"
+                            src="{{ build_embed_player_fallback_url(first_stream.embed_url, game.streams | map(attribute='embed_url') | list) }}"
                             allowfullscreen
                             scrolling="no"
                             allow="autoplay; encrypted-media; picture-in-picture; fullscreen">
@@ -706,7 +558,7 @@
                                                 {% set first_extra_stream = g.streams[0] %}
                                                 {% if first_extra_stream %}
                                                     <option
-                                                        value="{{ build_cdp_player_url(first_extra_stream.embed_url) }}"
+                                                        value="{{ build_embed_player_fallback_url(first_extra_stream.embed_url, g.streams | map(attribute='embed_url') | list) }}"
                                                         data-title="{{ g.matchup or ('Stream ' ~ loop.index) }}"
                                                     >
                                                         {{ g.matchup or ('Stream ' ~ loop.index) }}
@@ -725,21 +577,6 @@
                         {% endif %}
                     {% endif %}
                 </div>
-
-                {% if game.streams|length > 1 %}
-                    <div class="stream-picker" id="stream-picker">
-                        {% for s in game.streams %}
-                            <button
-                                type="button"
-                                class="stream-button {% if loop.first %}active{% endif %}"
-                                data-embed-url="{{ build_cdp_player_url(s.embed_url) }}"
-                                data-stream-slug="{{ s.slug }}"
-                            >
-                                {{ s.label or ('Stream ' ~ loop.index) }}
-                            </button>
-                        {% endfor %}
-                    </div>
-                {% endif %}
 
                 <!-- CONTROLS -->
                 <div class="multi-view-title">
@@ -768,35 +605,6 @@
                 Check back closer to game time or try another stream.
             </div>
         {% endif %}
-
-    <!-- FIXED banner OUTSIDE .page-wrapper so it never changes layout -->
-    <div class="left-rail-ad" aria-label="Left rail ad">
-        <div class="box">
-            <script type="text/javascript">
-              atOptions = {
-                'key' : '29ef845582924216c628b8930841e3bb',
-                'format' : 'iframe',
-                'height' : 300,
-                'width' : 160,
-                'params' : {}
-              };
-            </script>
-            <script
-              type="text/javascript"
-              src="https://broodbelongminiature.com/29ef845582924216c628b8930841e3bb/invoke.js"
-            ></script>
-        </div>
-
-    </div>
-
-    <div class="left-rail-ad" aria-label="Sidebar banner">
-        <iframe
-            class="ad-iframe"
-            title="Sidebar banner ad"
-            srcdoc='<!doctype html><html><head><meta charset="utf-8"></head><body style="margin:0;padding:0;display:flex;align-items:center;justify-content:center;background:transparent;"><script>atOptions={"key":"fea0e81c7727467a10d419a8e7d2f3d8","format":"iframe","height":600,"width":160,"params":{}};</script><script src="https://graduatedoutside.com/fea0e81c7727467a10d419a8e7d2f3d8/invoke.js"></script></body></html>'>
-        ></iframe>
-    </div>
-
 
     <script>
         (() => {
@@ -879,58 +687,9 @@
     <script>
         (function() {
             const mainIframe       = document.getElementById('game-iframe');
-            const picker           = document.getElementById('stream-picker');
             const playerLayout     = document.getElementById('player-layout');
             const multiToggle      = document.getElementById('multi-toggle');
             const fullscreenToggle = document.getElementById('fullscreen-toggle');
-
-            const requestedSlug = "{{ (requested_stream_slug or '')|e }}";
-
-            function setQueryParam(name, value) {
-                try {
-                    const url = new URL(window.location.href);
-                    if (value) url.searchParams.set(name, value);
-                    else url.searchParams.delete(name);
-                    window.history.replaceState({}, "", url.toString());
-                } catch (e) {}
-            }
-
-            function activateStreamButton(btn) {
-                if (!btn || !mainIframe || !picker) return false;
-                const url = btn.getAttribute('data-embed-url');
-                if (!url) return false;
-
-                mainIframe.src = url;
-
-                picker.querySelectorAll('.stream-button').forEach(b => {
-                    b.classList.toggle('active', b === btn);
-                });
-
-                const slug = btn.getAttribute('data-stream-slug');
-                if (slug) setQueryParam('stream', slug);
-
-                return true;
-            }
-
-            function activateStreamBySlug(slug) {
-                if (!picker || !slug) return false;
-                const safe = slug.replace(/"/g, '\\"');
-                const btn = picker.querySelector('.stream-button[data-stream-slug="' + safe + '"]');
-                if (!btn) return false;
-                return activateStreamButton(btn);
-            }
-
-            if (picker && mainIframe) {
-                picker.addEventListener('click', function (evt) {
-                    const btn = evt.target.closest('.stream-button');
-                    if (!btn) return;
-                    activateStreamButton(btn);
-                });
-
-                if (requestedSlug) {
-                    activateStreamBySlug(requestedSlug);
-                }
-            }
 
             if (playerLayout && multiToggle) {
                 let multiOn = false;
