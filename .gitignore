@@ -7,3 +7,6 @@ data/games.db
 data/games.db-shm
 data/games.db-wal
 .env
+streams.db
+streams.db-shm
+streams.db-wal

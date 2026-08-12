@@ -41,6 +41,8 @@ SQLITE_DB = os.environ.get("STREAM_DEN_DB", str(Path(__file__).parent / "data" /
 # sharkstreams.net is currently dead (DNS does not resolve); keep the parser but
 # off by default so the scheduler doesn't spam timeouts. Set to 1 if it returns.
 ENABLE_SHARK = os.environ.get("ENABLE_SHARK_SCRAPER", "0") == "1"
+ENABLE_CDNLIVETV = os.environ.get("ENABLE_CDNLIVETV_SCRAPER", "1") == "1"
+CDNLIVETV_BASE_URL = os.environ.get("CDNLIVETV_BASE_URL", "https://cdnlivetv.is")
 _SESSION = None
 
 
@@ -51,7 +53,7 @@ def _get_session():
         _SESSION.headers.update(HEADERS)
     return _SESSION
 
-EST = pytz.timezone("US/Eastern")
+EST = pytz.timezone("America/New_York")
 UTC = pytz.UTC
 
 GAMES_DB_PATH = Path(
@@ -538,7 +540,147 @@ def scrape_shark() -> pd.DataFrame:
     print(f"[scraper] SharkStreams scraped {len(rows)} games")
     return pd.DataFrame(rows)
 
-# ---------------- MERGE + WRITE ----------------
+# ---------------- CDN LIVETV SPORT INFERENCE ----------------
+
+def _infer_sport_from_name(name: str) -> str:
+    """Infer sport category from channel name."""
+    name_lower = name.lower()
+    
+    # TV network keywords - map to sports categories
+    tv_keywords = {
+        'Sports': ['sports', 'sport', 'espn', 'sky sport', 'bt sport', 'tnt sport', 'tnt sports', 'bein sport', 'bein sports', 'sky sport', 'tsn', 'sportsnet', 'sport tv', 'sport digital', 'v sport', 'viaplay sport', 'stan sport', 'premier sports', 'canal sport', 'c more sport', 'eurosport', 'fox sport', 'nbc sport', 'cbs sport', 'abc sport', 'cbc sport', 'sbn', 'flo sports', 'canal sport', 'v sport', 'viaplay sport', 'stan sport', 'premier sports', 'eurosport', 'sky sport', 'bein sport', 'tnt sport', 'tsn', 'sportsnet', 'sport tv', 'benfica tv', 'chicago sports network', 'red sox', 'braves', 'orioles', 'diamondbacks', 'cubs', 'athletics', 'rangers', 'rays', 'twins', 'astros', 'angels', 'mariners', 'phillies', 'mets', 'yankees', 'white sox', 'blue jays', 'guardians', 'tigers', 'royals', 'pirates', 'brewers', 'cardinals', 'nationals', 'marlins', 'padres', 'giants', 'rockies', 'dodgers', 'reds', 'guardians', 'tigers', 'rays', 'astros', 'angels', 'twins', 'royals', 'white sox', 'blue jays', 'diamondbacks', 'rockies', 'padres', 'giants', 'dodgers', 'marlins', 'nationals', 'phillies', 'pirates', 'cardinals', 'brewers', 'cubs', 'reds'],
+        'Football': ['premier', 'la liga', 'bundesliga', 'serie a', 'ligue 1', 'champions league', 'europa league', 'uefa', 'fifa', 'world cup', 'football', 'soccer'],
+        'Basketball': ['basketball', 'nba', 'wnba', 'euroleague', 'ncaa basketball', 'college basketball'],
+        'Baseball': ['baseball', 'mlb', 'ncaa baseball'],
+        'American Football': ['nfl', 'college football', 'american football'],
+        'Hockey': ['hockey', 'nhl', 'ice hockey'],
+        'Tennis': ['tennis', 'atp', 'wta', 'grand slam'],
+        'MMA': ['mma', 'ufc', 'boxing', 'wrestling'],
+        'Motorsports': ['f1', 'formula 1', 'motogp', 'nascar', 'indycar'],
+        'Golf': ['golf', 'pga'],
+        'Cricket': ['cricket', 'ipl', 't20'],
+        'Rugby': ['rugby', 'six nations', 'super rugby'],
+        'Motorsports': ['f1', 'formula 1', 'motogp', 'nascar', 'indycar'],
+    }
+    
+    name_lower = name.lower()
+    
+    # Check TV network keywords first (more specific)
+    for sport, keywords in tv_keywords.items():
+        for kw in keywords:
+            if kw in name_lower:
+                return sport
+    
+    # Then check sport-specific keywords
+    sport_keywords = {
+        'Football': ['football', 'soccer', 'premier', 'la liga', 'bundesliga', 'serie a', 'ligue 1', 'champions league', 'europa league', 'uefa', 'fifa', 'world cup'],
+        'Basketball': ['basketball', 'nba', 'wnba', 'euroleague', 'ncaa basketball', 'college basketball'],
+        'Baseball': ['baseball', 'mlb', 'ncaa baseball'],
+        'American Football': ['nfl', 'college football'],
+        'Hockey': ['hockey', 'nhl', 'ice hockey'],
+        'Tennis': ['tennis', 'atp', 'wta', 'grand slam'],
+        'MMA': ['mma', 'ufc', 'boxing', 'wrestling'],
+        'Motorsports': ['f1', 'formula 1', 'motogp', 'nascar', 'indycar'],
+        'Golf': ['golf', 'pga', 'european tour'],
+        'Cricket': ['cricket', 'ipl', 't20'],
+        'Rugby': ['rugby', 'six nations', 'super rugby'],
+    }
+    
+    for sport, keywords in sport_keywords.items():
+        for kw in keywords:
+            if kw in name_lower:
+                return sport
+    
+    return "Other"
+
+
+# ---------------- CDN LIVETV ----------------
+
+ENABLE_CDNLIVETV = os.environ.get("ENABLE_CDNLIVETV_SCRAPER", "1") == "1"
+CDNLIVETV_BASE_URL = os.environ.get("CDNLIVETV_BASE_URL", "https://cdnlivetv.is")
+
+
+def scrape_cdnlivetv() -> pd.DataFrame:
+    """
+    Scrape channels from cdnlivetv.is using the simple HTTP harvester.
+    """
+    if not ENABLE_CDNLIVETV:
+        print("[scraper] cdnlivetv disabled (ENABLE_CDNLIVETV_SCRAPER=0), skipping")
+        return pd.DataFrame()
+    
+    try:
+        from harvest import CdnLiveTvHarvester
+        harvester = CdnLiveTvHarvester(CDNLIVETV_BASE_URL)
+        
+        print("[scraper] Fetching cdnlivetv channels...")
+        channels = harvester.get_channels()
+        
+        if not channels:
+            print("[scraper] cdnlivetv: no channels found")
+            return pd.DataFrame()
+        
+        rows = []
+        now_utc = datetime.now(UTC)
+        
+        for channel in channels[:50]:  # Limit to first 50 channels
+            try:
+                channel_url = channel.get('url')
+                channel_name = channel.get('name', 'Unknown Channel')
+                
+                if not channel_url:
+                    continue
+                
+                print(f"[scraper] Fetching playlist for: {channel_name}")
+                playlist_url = harvester.get_playlist_url(channel_url)
+                
+                if not playlist_url:
+                    print(f"[scraper] No playlist found for: {channel_name}")
+                    continue
+                
+                # Determine sport category from channel name
+                sport = _infer_sport_from_name(channel_name)
+                
+                streams = [{
+                    "label": "cdnlivetv",
+                    "embed_url": playlist_url,
+                    "watch_url": playlist_url,
+                    "origin": "cdnlivetv",
+                }]
+                
+                rows.append({
+                    "source": "cdnlivetv",
+                    "date_header": datetime.now(EST).strftime("%A, %B %d, %Y"),
+                    "sport": sport,
+                    "time_unix": int(time.time() * 1000),
+                    "time": datetime.now(EST),
+                    "tournament": None,
+                    "tournament_url": None,
+                    "matchup": channel_name,
+                    "watch_url": playlist_url,
+                    "streams": [{
+                        "label": "cdnlivetv",
+                        "embed_url": playlist_url,
+                        "watch_url": playlist_url,
+                        "origin": "cdnlivetv",
+                    }],
+                    "embed_url": playlist_url,
+                    "is_live": True,
+                    "home_team": "",
+                    "away_team": "",
+                })
+                
+            except Exception as exc:
+                print(f"[scraper] Error processing channel {channel.get('name', 'unknown')}: {exc}")
+                continue
+        
+        df = pd.DataFrame(rows)
+        print(f"[scraper] cdnlivetv scraped {len(df)} channels")
+        return df
+        
+    except Exception as exc:
+        print(f"[scraper][ERROR] cdnlivetv scrape failed: {exc}")
+        return pd.DataFrame()
+
 
 def merge_streams(new, old):
     manual = [s for s in old if _is_manual(s)]
@@ -559,13 +701,18 @@ def main():
             print("[scraper] SharkStreams disabled (ENABLE_SHARK_SCRAPER=0), skipping")
     except Exception as exc:
         print(f"[scraper][ERROR] shark scrape failed: {exc}")
+    try:
+        df_cdnlivetv = scrape_cdnlivetv()
+    except Exception as exc:
+        print(f"[scraper][ERROR] cdnlivetv scrape failed: {exc}")
 
     source_counts = {
         "streamed.st": len(df_streamed),
         "sharkstreams": len(df_shark),
+        "cdnlivetv": len(df_cdnlivetv),
     }
 
-    scraped_frames = [df for df in (df_streamed, df_shark) if not df.empty]
+    scraped_frames = [df for df in (df_streamed, df_shark, df_cdnlivetv) if not df.empty]
     if not scraped_frames:
         print("[scraper] No games found.")
         return
@@ -688,7 +835,7 @@ def main():
                 (now_ts,),
             )
 
-    print(f"[scraper] Wrote {len(out_rows)} games (streamed.st={source_counts['streamed.st']}, sharkstreams={source_counts['sharkstreams']})")
+    print(f"[scraper] Wrote {len(out_rows)} games (streamed.st={source_counts['streamed.st']}, sharkstreams={source_counts['sharkstreams']}, cdnlivetv={source_counts['cdnlivetv']})")
 
 if __name__ == "__main__":
     main()

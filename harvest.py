@@ -15,6 +15,7 @@ the current live window so viewers track the real broadcast.
 import base64
 import json
 import os
+import re
 import threading
 import time
 
@@ -390,3 +391,231 @@ def build_master(session_id, master_body):
         else:
             out.append(line)
     return '\n'.join(out)
+# ====================== CDN Live TV Harvester ======================
+# Simple HTTP-based harvester for cdnlivetv.is
+# Fetches channel list from API, extracts playlist URLs from player pages
+# No headless browser - just HTTP requests with proper headers
+
+UA = 'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:153.0) Gecko/20100101 Firefox/153.0'
+
+CDNLIVETV_REFERER = "https://streamsports99.tv/"
+CDNLIVETV_ORIGIN = "https://streamsports99.tv/"
+
+CDNLIVETV_API_HEADERS = {
+    "Referer": "https://streamsports99.tv/",
+    "Origin": "https://streamsports99.tv/",
+    "User-Agent": "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:153.0) Gecko/20100101 Firefox/153.0",
+    "Accept": "application/json",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Accept-Encoding": "gzip, deflate, br, zstd",
+}
+
+CDNLIVETV_PLAYER_HEADERS = {
+    "Referer": "https://streamsports99.tv/",
+    "Origin": "https://streamsports99.tv/",
+    "User-Agent": "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:153.0) Gecko/20100101 Firefox/153.0",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Accept-Encoding": "gzip, deflate, br, zstd",
+    "Sec-Fetch-Dest": "document",
+    "Sec-Fetch-Mode": "navigate",
+    "Sec-Fetch-Site": "cross-site",
+    "Upgrade-Insecure-Requests": "1",
+}
+
+
+def _decode_cdnlivetv(s: str) -> str:
+    """Decode cdnlivetv's obfuscated base64 (replaces - → +, _ → /, pads)."""
+    s = s.replace('-', '+').replace('_', '/')
+    while len(s) % 4:
+        s += '='
+    try:
+        return base64.b64decode(s).decode('utf-8')
+    except Exception:
+        return base64.b64decode(s + '=').decode('utf-8')
+
+
+def _extract_cdnlivetv_playlist_url(html: str) -> str | None:
+    """
+    Extract the playlist URL from cdnlivetv's obfuscated JavaScript.
+    The playlist URL is built by concatenating decoded base64 strings.
+    """
+    # Extract all var assignments: var VAR_NAME = 'base64string';
+    var_pattern = r"var\s+(\w+)\s*=\s*['\"]([A-Za-z0-9\-_=]+)['\"];"
+    matches = re.findall(var_pattern, html)
+    vars_dict = dict(matches)
+    
+    # Find the main concatenation expression
+    concat_match = re.search(r'var\s+(\w+)\s*=\s*(?:[a-zA-Z_][\w]*\([^;]+)', html)
+    if not concat_match:
+        return None
+    
+    main_var = concat_match.group(1)
+    concat_expr = concat_match.group(0)
+    
+    # Find the decode function name
+    decode_match = re.search(r'function\s+(\w+)\s*\(s\)\s*\{', html)
+    if not decode_match:
+        return None
+    decode_func = decode_match.group(1)
+    
+    # Find all decode function calls in the concatenation expression
+    parts = re.findall(rf'{re.escape(decode_match.group(1))}\((\w+)\)', concat_match.group(0))
+    if not parts:
+        parts = re.findall(rf'{re.escape(decode_match.group(1))}\((\w+)\)', html)
+    
+    # Extract all var assignments
+    var_pattern = r"var\s+(\w+)\s*=\s*['\"]([A-Za-z0-9\-_=]+)['\"];"
+    matches = re.findall(var_pattern, html)
+    vars_dict = dict(matches)
+    
+    # Decode each part and concatenate
+    full_url = ""
+    for part in parts:
+        encoded = re.findall(rf'var\s+{re.escape(part)}\s*=\s*[\'"]([A-Za-z0-9\-_=]+)[\'"];', html)
+        if not encoded:
+            continue
+        try:
+            decoded = base64.b64decode(encoded[0].replace('-', '+').replace('_', '/') + '=' * (-len(encoded[0]) % 4)).decode('utf-8')
+            full_url += decoded
+        except Exception:
+            continue
+    
+    if full_url and ('playlist.m3u8' in full_url or '.m3u8' in full_url):
+        return full_url
+    
+    return None
+
+
+class CdnLiveTvHarvester:
+    """
+    HTTP-based harvester for cdnlivetv.is.
+    Fetches channel list from API, extracts playlist URLs from player pages.
+    No headless browser - just HTTP requests with proper headers.
+    """
+    
+    def __init__(self, base_url: str = "https://cdnlivetv.is"):
+        self.base_url = base_url.rstrip('/')
+        self.session = requests.Session()
+        self.session.headers.update({
+            'Referer': 'https://streamsports99.tv/',
+            'Origin': 'https://streamsports99.tv/',
+            'User-Agent': 'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:153.0) Gecko/20100101 Firefox/153.0',
+            'Accept': 'application/json',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Accept-Encoding': 'gzip, deflate, br, zstd',
+        })
+    
+    def get_channels(self) -> list[dict]:
+        """Fetch the channel list from cdnlivetv.is API."""
+        try:
+            r = requests.get(
+                "https://api.cdnlivetv.is/api/v1/channels/?user=cdnlivetv&plan=free",
+                headers={
+                    "Referer": "https://streamsports99.tv/",
+                    "Origin": "https://streamsports99.tv/",
+                    "User-Agent": "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:153.0) Gecko/20100101 Firefox/153.0",
+                    "Accept": "application/json",
+                    "Accept-Language": "en-US,en;q=0.9",
+                    "Accept-Encoding": "gzip, deflate, br, zstd",
+                },
+                timeout=15
+            )
+            r.raise_for_status()
+            data = r.json()
+            
+            channels = []
+            for ch in data.get('channels', []):
+                if ch.get('status') == 'online':
+                    channels.append({
+                        'name': ch.get('name', ''),
+                        'code': ch.get('code', ''),
+                        'url': ch.get('url', ''),
+                        'image': ch.get('image', ''),
+                        'viewers': ch.get('viewers', 0),
+                    })
+            return channels
+        except Exception as e:
+            print(f"[cdnlivetv] Error fetching channels: {e}")
+            return []
+    
+    def get_playlist_url(self, channel_url: str) -> str | None:
+        """Fetch the channel player page and extract the playlist URL."""
+        try:
+            if 'cdnlivetv.tv' not in channel_url:
+                channel_url = channel_url.replace('cdnlivetv.is', 'cdnlivetv.tv')
+            
+            headers = {
+                "Referer": "https://streamsports99.tv/",
+                "Origin": "https://streamsports99.tv/",
+                "User-Agent": "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:153.0) Gecko/20100101 Firefox/153.0",
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                "Accept-Language": "en-US,en;q=0.9",
+                "Accept-Encoding": "gzip, deflate, br, zstd",
+                "Sec-Fetch-Dest": "document",
+                "Sec-Fetch-Mode": "navigate",
+                "Sec-Fetch-Site": "cross-site",
+                "Upgrade-Insecure-Requests": "1",
+            }
+            
+            r = requests.get(channel_url, headers=headers, timeout=15)
+            r.raise_for_status()
+            html = r.text
+            
+            # Extract playlist URL from the HTML
+            # Find the decode function
+            decode_match = re.search(r'function\s+(\w+)\s*\(s\)\s*\{', html)
+            if not decode_match:
+                return None
+            decode_func = decode_match.group(1)
+            
+            # Find the main concatenation
+            concat_match = re.search(r'var\s+(\w+)\s*=\s*(?:[a-zA-Z_][\w]*\([^;]+)', html)
+            if not concat_match:
+                return None
+            concat_expr = concat_match.group(0)
+            
+            # Find parts in concatenation
+            parts = re.findall(rf'{re.escape(decode_match.group(1))}\((\w+)\)', concat_expr)
+            if not parts:
+                parts = re.findall(rf'{re.escape(decode_match.group(1))}\((\w+)\)', html)
+            
+            # Extract all var assignments
+            var_pattern = r"var\s+(\w+)\s*=\s*['\"]([A-Za-z0-9\-_=]+)['\"];"
+            vars_dict = dict(re.findall(var_pattern, html))
+            
+            full_url = ""
+            for part in parts:
+                encoded = re.findall(rf'var\s+{re.escape(part)}\s*=\s*[\'"]([A-Za-z0-9\-_=]+)[\'"];', html)
+                if not encoded:
+                    continue
+                try:
+                    decoded = base64.b64decode(encoded[0].replace('-', '+').replace('_', '/') + '=' * (-len(encoded[0]) % 4)).decode('utf-8')
+                    full_url += decoded
+                except Exception:
+                    continue
+            
+            if full_url and ('playlist.m3u8' in full_url or '.m3u8' in full_url):
+                return full_url
+            
+            return None
+        except Exception as e:
+            print(f"[cdnlivetv] Error fetching playlist: {e}")
+            return None
+    
+    def harvest_channel(self, channel_url: str) -> dict | None:
+        playlist_url = self.get_playlist_url(channel_url)
+        if not playlist_url:
+            return None
+        
+        channel_id = channel_url.strip('/').split('/')[-1]
+        if not channel_id or channel_id.startswith('?'):
+            channel_id = str(hash(channel_url))[-8:]
+        
+        return {
+            'id': f'cdnlivetv_{channel_id}',
+            'source': 'cdnlivetv',
+            'name': channel_url.strip('/').split('/')[-1],
+            'playlist_url': playlist_url,
+            'url': channel_url,
+        }

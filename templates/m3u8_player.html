@@ -50,7 +50,7 @@
     <div class="player-wrap">
       {% if src %}
         <div class="player-stack">
-          <video id="hls-video" controls autoplay playsinline crossorigin="anonymous" data-direct-src="{{ src|e }}"></video>
+          <video id="hls-video" controls autoplay playsinline crossorigin="anonymous" data-direct-src="{{ proxy_src|e }}"></video>
         </div>
       {% else %}
         <div class="fallback">
@@ -63,7 +63,7 @@
       <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.8"></script>
       <script>
         (function () {
-          const directSrc = "{{ src|e }}";
+          const directSrc = {{ proxy_src|tojson }};
           const video = document.getElementById("hls-video");
           if (!video || !directSrc) return;
           const minReloadGapMs = 15000;

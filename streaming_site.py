@@ -42,7 +42,13 @@ from flask import (
 import requests
 from curl_cffi import requests as curl_requests
 
-from harvest import CdpHarvester, ensure_cdp_chrome, rewrite_playlist, build_master
+from harvest import (
+    CdpHarvester,
+    ensure_cdp_chrome,
+    rewrite_playlist,
+    build_master,
+    CdnLiveTvHarvester,
+)
 
 streaming_bp = Blueprint("streaming", __name__)
 
@@ -861,7 +867,10 @@ def index():
 @streaming_bp.route("/m3u8_player")
 def m3u8_player():
     src = normalize_m3u8_src((request.args.get("src") or "").strip())
-    return render_template("m3u8_player.html", src=src)
+    proxy_src = ""
+    if src:
+        proxy_src = f"/m3u8_proxy?direct_segments=1&{urlencode({'src': src})}"
+    return render_template("m3u8_player.html", src=src, proxy_src=proxy_src)
 
 
 @streaming_bp.route("/cdp_player")
@@ -911,19 +920,51 @@ def embed_player():
 
 
 def build_embed_player_fallback_url(active_embed_url: str, all_embeds) -> str:
-    """Build an /embed_player URL that starts on active_embed_url but falls back
-    to the other candidates in all_embeds when the active stream is dead."""
-    candidates: list[str] = []
+    """Build an iframe src for a game's streams.
+
+    - When streams are already wrapped as relative player routes
+      (e.g. /m3u8_player?src=... from _build_games_from_rows), point the
+      iframe straight at the active one.
+    - When streams are embed.st family URLs, build an /embed_player URL that
+      starts on active_embed_url but falls back to the other candidates when
+      the active stream is dead.
+    - bare m3u8 playlist URLs are routed through /m3u8_player so the browser
+      plays the tokenized playlist directly.
+    """
+    player_routes: list[str] = []
+    embed_candidates: list[str] = []
+    m3u8_candidates: list[str] = []
     for u in (all_embeds or []):
-        nu = normalize_http_url(str(u or ""))
-        if nu and parse_embed_parts(nu) and nu not in candidates:
-            candidates.append(nu)
+        raw = str(u or "").strip()
+        if raw.startswith(("/m3u8_player?", "/cdp_player?", "/embed_player?")):
+            if raw not in player_routes:
+                player_routes.append(raw)
+            continue
+        nu = normalize_http_url(raw)
+        if not nu:
+            continue
+        if parse_embed_parts(nu):
+            if nu not in embed_candidates:
+                embed_candidates.append(nu)
+        elif is_m3u8_url(nu):
+            if nu not in m3u8_candidates:
+                m3u8_candidates.append(nu)
+
+    if player_routes:
+        active = active_embed_url if active_embed_url in player_routes else player_routes[0]
+        return active
+
+    candidates = embed_candidates or m3u8_candidates
+    if not candidates:
+        return ""
+
     if active_embed_url in candidates:
         idx = candidates.index(active_embed_url)
     else:
         idx = 0
-    if not candidates:
-        return ""
+
+    if m3u8_candidates and not embed_candidates:
+        return "/m3u8_player?" + urlencode({"src": candidates[idx]})
     return "/embed_player?" + urlencode({
         "src": candidates[idx],
         "srcs": json.dumps(candidates),
@@ -1029,6 +1070,13 @@ def m3u8_proxy():
     status = resp.status_code
     base_url = resp.url
 
+    direct_segments = request.args.get("direct_segments", "").strip() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    )
+
     if is_m3u8_url(base_url) or "mpegurl" in content_type.lower():
         try:
             text = resp.text
@@ -1043,16 +1091,21 @@ def m3u8_proxy():
                 rewritten.append(line)
                 continue
             absolute = urljoin(base_url, stripped)
-            rewritten.append(build_m3u8_proxy_url(absolute))
+            if direct_segments:
+                # Same-origin manifest, but segments are fetched by the browser
+                # straight from the origin (cdnlivetv) so big media never flows
+                # through this server. cdnlivetv answers with ACAO:*.
+                rewritten.append(absolute)
+            else:
+                rewritten.append(build_m3u8_proxy_url(absolute))
 
         body = "\n".join(rewritten)
         proxy_resp = make_response(body, status)
         proxy_resp.headers["Content-Type"] = "application/vnd.apple.mpegurl"
         proxy_resp.headers["Access-Control-Allow-Origin"] = "*"
-        proxy_resp.headers["Cache-Control"] = (
-            "public, max-age={max_age}, s-maxage={max_age}, "
-            "stale-while-revalidate=10"
-        ).format(max_age=M3U8_PROXY_PLAYLIST_CACHE_SECONDS)
+        # A live manifest is refreshed constantly by hls.js; never let the
+        # browser/extension serve a stale copy.
+        proxy_resp.headers["Cache-Control"] = "no-store, no-cache"
         return proxy_resp
 
     def generate():
