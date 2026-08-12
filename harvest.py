@@ -423,6 +423,30 @@ def _cdnlivetv_b64decode(value: str) -> str:
     return base64.b64decode(s).decode("utf-8")
 
 
+# cdnlivetv.tv tightens up aggressively on burst traffic (429), so serialize
+# player-page fetches and space them out; retry a few times when throttled.
+_PAGE_MUTEX = threading.Lock()
+_PAGE_LAST = 0.0
+_PAGE_MIN_INTERVAL = float(os.environ.get("CDNLIVETV_PAGE_INTERVAL", "0.4"))
+
+
+def _throttled_page_get(url: str, headers: dict, timeout: int = 15) -> requests.Response:
+    """GET a cdnlivetv player page with a global rate limit + 429 backoff."""
+    global _PAGE_LAST
+    with _PAGE_MUTEX:
+        now = time.time()
+        wait = _PAGE_LAST + _PAGE_MIN_INTERVAL - now
+        if wait > 0:
+            time.sleep(wait)
+        for attempt in range(3):
+            r = requests.get(url, headers=headers, timeout=timeout)
+            if r.status_code != 429:
+                break
+            time.sleep(2 + attempt * 2)
+        _PAGE_LAST = time.time()
+        return r
+
+
 def _extract_cdnlivetv_playlist_url(html: str) -> str | None:
     """Extract the m3u8 URL built from concatenated base64 var strings."""
     var_pattern = re.compile(r"var\s+(\w+)\s*=\s*['\"]([A-Za-z0-9\-_=]+)['\"];")
@@ -491,7 +515,7 @@ class CdnLiveTvHarvester:
         try:
             if "cdnlivetv.tv" not in channel_url:
                 channel_url = channel_url.replace("cdnlivetv.is", "cdnlivetv.tv")
-            r = requests.get(channel_url, headers=CDNLIVETV_PAGE_HEADERS, timeout=15)
+            r = _throttled_page_get(channel_url, CDNLIVETV_PAGE_HEADERS, timeout=15)
             r.raise_for_status()
             return _extract_cdnlivetv_playlist_url(r.text)
         except Exception as e:

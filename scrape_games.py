@@ -545,43 +545,63 @@ def scrape_shark() -> pd.DataFrame:
 # ---------------- CDN LIVETV SPORT INFERENCE ----------------
 
 def _infer_sport_from_name(name: str) -> str:
-    """Infer sport category from channel name."""
+    """Infer sport category from channel name.
+
+    Order matters: specific sport/league/team keywords are checked first, and
+    generic multi-sport network names (ESPN, TSN, Sky Sports Main Event...) only
+    fall through to "Sports". The cdnlivetv API carries no category field, so
+    the channel name is the only signal we have.
+    """
     name_lower = name.lower()
 
-    # TV network/MLB team keywords first (more specific)
+    sport_keywords = {
+        'Football': [
+            'premier league', 'bundesliga', 'serie a', 'ligue 1', 'champions league',
+            'europa league', 'uefa', 'fifa', 'world cup', 'football', 'soccer',
+            'laliga', 'la liga', 'real madrid', 'benfica', 'golazo', 'canal foot',
+            'fussball',
+        ],
+        'Basketball': [
+            'basketball', 'nba', 'wnba', 'euroleague', 'ncaa basketball', 'college basketball',
+        ],
+        'Baseball': [
+            'baseball', 'mlb', 'ncaa baseball',
+            # MLB team channels (the cdnlivetv lineup carries these by team name)
+            'diamondbacks', 'braves', 'orioles', 'red sox', 'cubs', 'white sox', 'reds',
+            'guardians', 'rockies', 'tigers', 'astros', 'royals', 'angels', 'dodgers',
+            'marlins', 'brewers', 'twins', 'mets', 'yankees', 'athletics', 'phillies',
+            'pirates', 'padres', 'giants', 'mariners', 'cardinals', 'nationals', 'rays',
+            'rangers', 'blue jays',
+        ],
+        'American Football': [
+            'nfl', 'college football', 'american football', 'sec network', 'acc network',
+        ],
+        'Hockey': ['hockey', 'nhl', 'ice hockey'],
+        'Tennis': ['tennis', 'atp', 'wta', 'grand slam'],
+        'MMA': ['mma', 'ufc', 'boxing', 'wrestling', 'wwe', 'combate'],
+        'Motorsports': ['f1', 'formula 1', 'motogp', 'nascar', 'indycar', 'motor'],
+        'Golf': ['golf', 'pga', 'european tour'],
+        'Cricket': ['cricket', 'ipl', 't20'],
+        'Rugby': ['rugby', 'six nations', 'super rugby'],
+        'Horse Racing': ['racing'],
+    }
+    for sport, keywords in sport_keywords.items():
+        for kw in keywords:
+            if kw in name_lower:
+                return sport
+
+    # Generic multi-sport / regional networks that carry several sports.
     network_keywords = [
         'sports', 'sport', 'espn', 'sky sport', 'bt sport', 'tnt sport', 'bein sport',
         'tsn', 'sportsnet', 'sport tv', 'sport digital', 'v sport', 'viaplay sport',
         'stan sport', 'premier sports', 'canal sport', 'c more sport', 'eurosport',
         'fox sport', 'nbc sport', 'cbs sport', 'abc sport', 'cbc sport', 'sbn',
-        'flo sports', 'benfica tv', 'chicago sports network',
-        'red sox', 'braves', 'orioles', 'diamondbacks', 'cubs', 'athletics', 'rangers',
-        'rays', 'twins', 'astros', 'angels', 'mariners', 'phillies', 'mets', 'yankees',
-        'white sox', 'blue jays', 'guardians', 'tigers', 'royals', 'pirates', 'brewers',
-        'cardinals', 'nationals', 'marlins', 'padres', 'giants', 'rockies', 'dodgers', 'reds',
+        'flo sports', 'chicago sports network', 'dazn', 'tudn', 'deporte', 'spor',
+        'match tv',
     ]
     for kw in network_keywords:
         if kw in name_lower:
             return 'Sports'
-
-    sport_keywords = {
-        'Football': ['premier', 'la liga', 'bundesliga', 'serie a', 'ligue 1', 'champions league', 'europa league', 'uefa', 'fifa', 'world cup', 'football', 'soccer'],
-        'Basketball': ['basketball', 'nba', 'wnba', 'euroleague', 'ncaa basketball', 'college basketball'],
-        'Baseball': ['baseball', 'mlb', 'ncaa baseball'],
-        'American Football': ['nfl', 'college football', 'american football'],
-        'Hockey': ['hockey', 'nhl', 'ice hockey'],
-        'Tennis': ['tennis', 'atp', 'wta', 'grand slam'],
-        'MMA': ['mma', 'ufc', 'boxing', 'wrestling'],
-        'Motorsports': ['f1', 'formula 1', 'motogp', 'nascar', 'indycar'],
-        'Golf': ['golf', 'pga', 'european tour'],
-        'Cricket': ['cricket', 'ipl', 't20'],
-        'Rugby': ['rugby', 'six nations', 'super rugby'],
-    }
-
-    for sport, keywords in sport_keywords.items():
-        for kw in keywords:
-            if kw in name_lower:
-                return sport
 
     return "Other"
 
