@@ -1203,8 +1203,10 @@ def _strmd_media_proxy_impl(media_path):
 
     if "mpegurl" in content_type.lower() or upstream.rstrip("/").endswith(".m3u8"):
         try:
-            text = resp.text
+            # With stream=True, curl_cffi leaves .text empty; read the bytes.
+            raw = b"".join(resp.iter_content(chunk_size=256 * 1024))
             resp.close()
+            text = raw.decode("utf-8", errors="replace")
         except Exception:
             return abort(502)
         # Only rewrite absolute lb*.strmd.st refs in the body into proxy URLs;
