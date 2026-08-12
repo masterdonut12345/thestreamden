@@ -1188,7 +1188,7 @@ def _strmd_media_proxy_impl(media_path):
         upstream_headers["Range"] = request.headers.get("Range")
 
     try:
-        resp = _curl_get(upstream, headers=upstream_headers, stream=False)
+        resp = _curl_get(upstream, headers=upstream_headers, stream=True)
     except Exception as e:
         return abort(502)
 
@@ -1221,8 +1221,22 @@ def _strmd_media_proxy_impl(media_path):
         proxy_resp.headers["Cache-Control"] = "no-store"
         return proxy_resp
 
-    body = resp.content
-    proxy_resp = Response(body, status=status)
+    # Media segments: relay as a streaming pass-through instead of buffering the
+    # whole segment in RAM, so the 512MB box doesn't balloon under a few viewers.
+    def generate():
+        try:
+            for chunk in resp.iter_content(chunk_size=256 * 1024):
+                if chunk:
+                    yield chunk
+        except Exception:
+            pass
+        finally:
+            try:
+                resp.close()
+            except Exception:
+                pass
+
+    proxy_resp = Response(stream_with_context(generate()), status=status)
     proxy_resp.headers["Content-Type"] = content_type
     proxy_resp.headers["Access-Control-Allow-Origin"] = "*"
     proxy_resp.headers["Cache-Control"] = "no-store"

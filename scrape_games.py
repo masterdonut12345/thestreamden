@@ -44,6 +44,7 @@ SQLITE_DB = os.environ.get("STREAM_DEN_DB", str(Path(__file__).parent / "data" /
 ENABLE_SHARK = os.environ.get("ENABLE_SHARK_SCRAPER", "0") == "1"
 ENABLE_CDNLIVETV = os.environ.get("ENABLE_CDNLIVETV_SCRAPER", "1") == "1"
 CDNLIVETV_BASE_URL = os.environ.get("CDNLIVETV_BASE_URL", "https://cdnlivetv.is")
+CDNLIVETV_MAX_CHANNELS = int(os.environ.get("CDNLIVETV_MAX_CHANNELS", "200"))
 _SESSION = None
 
 
@@ -609,7 +610,18 @@ def scrape_cdnlivetv() -> pd.DataFrame:
         rows = []
         now_utc = datetime.now(UTC)
 
-        selected = [c for c in channels[:50] if c.get('url')]
+        # The API returns duplicate channel names (same network, different codes)
+        # and lists more channels than we want to relay; dedupe by name then cap.
+        seen: set[str] = set()
+        deduped = []
+        for ch in channels:
+            name = (ch.get('name') or '').strip()
+            if not name or name in seen:
+                continue
+            seen.add(name)
+            deduped.append(ch)
+
+        selected = [c for c in deduped[:CDNLIVETV_MAX_CHANNELS] if c.get('url')]
         print(f"[scraper] Fetching playlists for {len(selected)} cdnlivetv channels (concurrent)...")
 
         def _fetch(channel: dict) -> tuple[str, str | None]:
