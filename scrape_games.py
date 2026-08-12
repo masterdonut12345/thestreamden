@@ -28,6 +28,7 @@ import hashlib
 import json
 import sqlite3
 import time
+from concurrent.futures import ThreadPoolExecutor
 
 # ---------------- CONFIG ----------------
 
@@ -545,10 +546,24 @@ def scrape_shark() -> pd.DataFrame:
 def _infer_sport_from_name(name: str) -> str:
     """Infer sport category from channel name."""
     name_lower = name.lower()
-    
-    # TV network keywords - map to sports categories
-    tv_keywords = {
-        'Sports': ['sports', 'sport', 'espn', 'sky sport', 'bt sport', 'tnt sport', 'tnt sports', 'bein sport', 'bein sports', 'sky sport', 'tsn', 'sportsnet', 'sport tv', 'sport digital', 'v sport', 'viaplay sport', 'stan sport', 'premier sports', 'canal sport', 'c more sport', 'eurosport', 'fox sport', 'nbc sport', 'cbs sport', 'abc sport', 'cbc sport', 'sbn', 'flo sports', 'canal sport', 'v sport', 'viaplay sport', 'stan sport', 'premier sports', 'eurosport', 'sky sport', 'bein sport', 'tnt sport', 'tsn', 'sportsnet', 'sport tv', 'benfica tv', 'chicago sports network', 'red sox', 'braves', 'orioles', 'diamondbacks', 'cubs', 'athletics', 'rangers', 'rays', 'twins', 'astros', 'angels', 'mariners', 'phillies', 'mets', 'yankees', 'white sox', 'blue jays', 'guardians', 'tigers', 'royals', 'pirates', 'brewers', 'cardinals', 'nationals', 'marlins', 'padres', 'giants', 'rockies', 'dodgers', 'reds', 'guardians', 'tigers', 'rays', 'astros', 'angels', 'twins', 'royals', 'white sox', 'blue jays', 'diamondbacks', 'rockies', 'padres', 'giants', 'dodgers', 'marlins', 'nationals', 'phillies', 'pirates', 'cardinals', 'brewers', 'cubs', 'reds'],
+
+    # TV network/MLB team keywords first (more specific)
+    network_keywords = [
+        'sports', 'sport', 'espn', 'sky sport', 'bt sport', 'tnt sport', 'bein sport',
+        'tsn', 'sportsnet', 'sport tv', 'sport digital', 'v sport', 'viaplay sport',
+        'stan sport', 'premier sports', 'canal sport', 'c more sport', 'eurosport',
+        'fox sport', 'nbc sport', 'cbs sport', 'abc sport', 'cbc sport', 'sbn',
+        'flo sports', 'benfica tv', 'chicago sports network',
+        'red sox', 'braves', 'orioles', 'diamondbacks', 'cubs', 'athletics', 'rangers',
+        'rays', 'twins', 'astros', 'angels', 'mariners', 'phillies', 'mets', 'yankees',
+        'white sox', 'blue jays', 'guardians', 'tigers', 'royals', 'pirates', 'brewers',
+        'cardinals', 'nationals', 'marlins', 'padres', 'giants', 'rockies', 'dodgers', 'reds',
+    ]
+    for kw in network_keywords:
+        if kw in name_lower:
+            return 'Sports'
+
+    sport_keywords = {
         'Football': ['premier', 'la liga', 'bundesliga', 'serie a', 'ligue 1', 'champions league', 'europa league', 'uefa', 'fifa', 'world cup', 'football', 'soccer'],
         'Basketball': ['basketball', 'nba', 'wnba', 'euroleague', 'ncaa basketball', 'college basketball'],
         'Baseball': ['baseball', 'mlb', 'ncaa baseball'],
@@ -557,48 +572,20 @@ def _infer_sport_from_name(name: str) -> str:
         'Tennis': ['tennis', 'atp', 'wta', 'grand slam'],
         'MMA': ['mma', 'ufc', 'boxing', 'wrestling'],
         'Motorsports': ['f1', 'formula 1', 'motogp', 'nascar', 'indycar'],
-        'Golf': ['golf', 'pga'],
-        'Cricket': ['cricket', 'ipl', 't20'],
-        'Rugby': ['rugby', 'six nations', 'super rugby'],
-        'Motorsports': ['f1', 'formula 1', 'motogp', 'nascar', 'indycar'],
-    }
-    
-    name_lower = name.lower()
-    
-    # Check TV network keywords first (more specific)
-    for sport, keywords in tv_keywords.items():
-        for kw in keywords:
-            if kw in name_lower:
-                return sport
-    
-    # Then check sport-specific keywords
-    sport_keywords = {
-        'Football': ['football', 'soccer', 'premier', 'la liga', 'bundesliga', 'serie a', 'ligue 1', 'champions league', 'europa league', 'uefa', 'fifa', 'world cup'],
-        'Basketball': ['basketball', 'nba', 'wnba', 'euroleague', 'ncaa basketball', 'college basketball'],
-        'Baseball': ['baseball', 'mlb', 'ncaa baseball'],
-        'American Football': ['nfl', 'college football'],
-        'Hockey': ['hockey', 'nhl', 'ice hockey'],
-        'Tennis': ['tennis', 'atp', 'wta', 'grand slam'],
-        'MMA': ['mma', 'ufc', 'boxing', 'wrestling'],
-        'Motorsports': ['f1', 'formula 1', 'motogp', 'nascar', 'indycar'],
         'Golf': ['golf', 'pga', 'european tour'],
         'Cricket': ['cricket', 'ipl', 't20'],
         'Rugby': ['rugby', 'six nations', 'super rugby'],
     }
-    
+
     for sport, keywords in sport_keywords.items():
         for kw in keywords:
             if kw in name_lower:
                 return sport
-    
+
     return "Other"
 
 
 # ---------------- CDN LIVETV ----------------
-
-ENABLE_CDNLIVETV = os.environ.get("ENABLE_CDNLIVETV_SCRAPER", "1") == "1"
-CDNLIVETV_BASE_URL = os.environ.get("CDNLIVETV_BASE_URL", "https://cdnlivetv.is")
-
 
 def scrape_cdnlivetv() -> pd.DataFrame:
     """
@@ -621,58 +608,56 @@ def scrape_cdnlivetv() -> pd.DataFrame:
         
         rows = []
         now_utc = datetime.now(UTC)
-        
-        for channel in channels[:50]:  # Limit to first 50 channels
+
+        selected = [c for c in channels[:50] if c.get('url')]
+        print(f"[scraper] Fetching playlists for {len(selected)} cdnlivetv channels (concurrent)...")
+
+        def _fetch(channel: dict) -> tuple[str, str | None]:
+            name = channel.get('name', 'Unknown Channel')
+            url = channel.get('url', '')
             try:
-                channel_url = channel.get('url')
-                channel_name = channel.get('name', 'Unknown Channel')
-                
-                if not channel_url:
-                    continue
-                
-                print(f"[scraper] Fetching playlist for: {channel_name}")
-                playlist_url = harvester.get_playlist_url(channel_url)
-                
-                if not playlist_url:
-                    print(f"[scraper] No playlist found for: {channel_name}")
-                    continue
-                
-                # Determine sport category from channel name
-                sport = _infer_sport_from_name(channel_name)
-                
-                streams = [{
+                print(f"[scraper] Fetching playlist for: {name}")
+                return name, harvester.get_playlist_url(url)
+            except Exception as exc:
+                print(f"[scraper] Error processing channel {name}: {exc}")
+                return name, None
+
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            results = dict(pool.map(_fetch, selected))
+
+        for channel in selected:
+            channel_name = channel.get('name', 'Unknown Channel')
+            playlist_url = results.get(channel_name)
+
+            if not playlist_url:
+                print(f"[scraper] No playlist found for: {channel_name}")
+                continue
+
+            # Determine sport category from channel name
+            sport = _infer_sport_from_name(channel_name)
+
+            rows.append({
+                "source": "cdnlivetv",
+                "date_header": datetime.now(EST).strftime("%A, %B %d, %Y"),
+                "sport": sport,
+                "time_unix": int(time.time() * 1000),
+                "time": datetime.now(EST),
+                "tournament": None,
+                "tournament_url": None,
+                "matchup": channel_name,
+                "watch_url": playlist_url,
+                "streams": [{
                     "label": "cdnlivetv",
                     "embed_url": playlist_url,
                     "watch_url": playlist_url,
                     "origin": "cdnlivetv",
-                }]
-                
-                rows.append({
-                    "source": "cdnlivetv",
-                    "date_header": datetime.now(EST).strftime("%A, %B %d, %Y"),
-                    "sport": sport,
-                    "time_unix": int(time.time() * 1000),
-                    "time": datetime.now(EST),
-                    "tournament": None,
-                    "tournament_url": None,
-                    "matchup": channel_name,
-                    "watch_url": playlist_url,
-                    "streams": [{
-                        "label": "cdnlivetv",
-                        "embed_url": playlist_url,
-                        "watch_url": playlist_url,
-                        "origin": "cdnlivetv",
-                    }],
-                    "embed_url": playlist_url,
-                    "is_live": True,
-                    "home_team": "",
-                    "away_team": "",
-                })
-                
-            except Exception as exc:
-                print(f"[scraper] Error processing channel {channel.get('name', 'unknown')}: {exc}")
-                continue
-        
+                }],
+                "embed_url": playlist_url,
+                "is_live": True,
+                "home_team": "",
+                "away_team": "",
+            })
+
         df = pd.DataFrame(rows)
         print(f"[scraper] cdnlivetv scraped {len(df)} channels")
         return df

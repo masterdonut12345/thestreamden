@@ -193,9 +193,6 @@ SLUG_NON_ALNUM = re.compile(r"[^a-z0-9]+")
 SLUG_MULTI_DASH = re.compile(r"-{2,}")
 M3U8_SUFFIX = ".m3u8"
 M3U8_PROXY_TIMEOUT = int(os.environ.get("M3U8_PROXY_TIMEOUT", "12"))
-M3U8_PROXY_PLAYLIST_CACHE_SECONDS = int(
-    os.environ.get("M3U8_PROXY_PLAYLIST_CACHE_SECONDS", "3")
-)
 M3U8_PROXY_SEGMENT_CACHE_SECONDS = int(
     os.environ.get("M3U8_PROXY_SEGMENT_CACHE_SECONDS", "60")
 )
