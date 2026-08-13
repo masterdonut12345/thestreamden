@@ -408,6 +408,10 @@
                 <input id="searchInput" type="text" name="q" placeholder="Search teams, leagues…" value="{{ search_query or '' }}" inputmode="search" autocomplete="off">
                 {% if live_only %}<input type="hidden" name="live_only" value="1">{% endif %}
             </form>
+            <a class="save-btn" href="{{ url_for('streaming.api_docs') }}">
+                <svg class="ico" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 13h6M9 17h6"/></svg>
+                <span>API Docs</span>
+            </a>
             <button class="save-btn" id="saveLinkButton" type="button">
                 <svg class="ico" viewBox="0 0 24 24"><path d="M12 3l2.9 6.3 6.9.9-5 4.8 1.2 6.9-6-3.3-6 3.3 1.2-6.9-5-4.8 6.9-.9z"/></svg>
                 <span>Save site</span>
@@ -578,6 +582,9 @@
                 </a>
                 <a class="social-link" href="https://x.com/CWILL18MVP" target="_blank" rel="noopener">
                     Main social: <span class="handle">@CWILL18MVP</span>
+                </a>
+                <a class="social-link" href="{{ url_for('streaming.api_docs') }}">
+                    <span class="handle">API Docs</span>
                 </a>
             </div>
         </div>

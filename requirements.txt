@@ -7,3 +7,5 @@ pandas>=2.2.0
 apscheduler>=3.10.0
 pytz>=2023.3
 websocket-client>=1.8.0
+pyotp>=2.9.0
+qrcode>=7.4.2

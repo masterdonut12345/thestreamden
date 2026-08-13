@@ -651,6 +651,26 @@
                     {% endif %}
                 </div>
 
+                <!-- SERVER PICKER -->
+                {% if game.streams|length > 1 %}
+                <div class="server-picker" id="server-picker" style="margin-top:12px;padding:10px;background:rgba(0,0,0,.5);border:1px solid rgba(255,255,255,.1);border-radius:8px;text-align:center;">
+                  <div style="font-size:12px;opacity:.7;margin-bottom:8px;font-weight:600;">SERVER</div>
+                  <div style="display:flex;flex-wrap:wrap;gap:6px;justify-content:center;">
+                    {% for s in game.streams %}
+                      <button type="button"
+                              class="server-btn"
+                              data-idx="{{ loop.index0 }}"
+                              style="cursor:pointer;border:1px solid rgba(64,160,255,.3);background:rgba(255,255,255,.05);color:#fff;border-radius:6px;padding:6px 14px;font-size:13px;font-weight:600;transition:all .15s;"
+                              onmouseover="this.style.borderColor='rgba(64,160,255,.9)';this.style.background='rgba(64,160,255,.2)'"
+                              onmouseout="this.style.borderColor='rgba(64,160,255,.3)';this.style.background='rgba(255,255,255,.05)'">
+                        Server {{ loop.index }}
+                      </button>
+                    {% endfor %}
+                  </div>
+                  <div id="server-picker-status" style="font-size:11px;opacity:.6;margin-top:8px;">Server 1 of {{ game.streams|length }}</div>
+                </div>
+                {% endif %}
+
                 <!-- CONTROLS -->
                 <div class="multi-view-title">
                     <span>
@@ -754,6 +774,53 @@
             } else {
                 scanAndHarden();
             }
+        })();
+    </script>
+
+    <script>
+        (function() {
+            const mainIframe = document.getElementById('game-iframe');
+            const serverPicker = document.getElementById('server-picker');
+            if (!mainIframe || !serverPicker) return;
+
+            const serverBtns = serverPicker.querySelectorAll('.server-btn');
+            const statusEl = document.getElementById('server-picker-status');
+            let currentIdx = 0;
+
+            function switchServer(targetIdx) {
+                if (targetIdx === currentIdx) return;
+                currentIdx = targetIdx;
+                
+                // Update button states
+                serverBtns.forEach((btn, i) => {
+                    if (i === targetIdx) {
+                        btn.style.borderColor = 'rgba(64,160,255,.9)';
+                        btn.style.background = 'rgba(64,160,255,.2)';
+                    } else {
+                        btn.style.borderColor = 'rgba(64,160,255,.3)';
+                        btn.style.background = 'rgba(255,255,255,.05)';
+                    }
+                });
+                
+                if (statusEl) {
+                    statusEl.textContent = 'Server ' + (targetIdx + 1) + ' of ' + serverBtns.length;
+                }
+
+                // Build new iframe src with selected index
+                const currSrc = mainIframe.src;
+                try {
+                    const url = new URL(currSrc, window.location.origin);
+                    url.searchParams.set('idx', String(targetIdx));
+                    mainIframe.src = url.toString();
+                } catch (e) {
+                    // Fallback: just replace idx param
+                    mainIframe.src = currSrc.replace(/[?&]idx=\d+/, 'idx=' + targetIdx);
+                }
+            }
+
+            serverBtns.forEach((btn, i) => {
+                btn.addEventListener('click', () => switchServer(i));
+            });
         })();
     </script>
 

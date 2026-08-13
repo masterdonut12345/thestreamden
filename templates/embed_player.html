@@ -6,19 +6,7 @@
     <title>Stream Player</title>
     <style>
       html, body { margin: 0; padding: 0; background: #000; height: 100%; width: 100%; overflow: hidden; }
-      #player-wrapper { display: flex; flex-direction: column; height: 100vh; width: 100vw; }
-      #player { flex: 1 1 auto; width: 100%; min-height: 0; }
-      #server-picker {
-        background: rgba(0,0,0,.75);
-        border: 1px solid rgba(255,255,255,.25);
-        border-radius: 8px;
-        padding: 8px 10px;
-        font-family: system-ui, sans-serif;
-        color: #fff;
-        max-width: 100%;
-        box-shadow: 0 -2px 10px rgba(0,0,0,.5);
-        margin: 8px;
-      }
+      #player { height: 100vh; width: 100vw; }
     </style>
     {% if src %}
       <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.13/dist/hls.min.js"></script>
@@ -56,24 +44,7 @@
   </head>
   <body>
     {% if src %}
-      <div id="player-wrapper">
-        <div id="player"></div>
-        <div id="server-picker">
-          <div style="font-size:11px;opacity:.7;margin-bottom:6px;font-weight:600;letter-spacing:.4px;">SERVER PICKER</div>
-          <div style="display:flex;flex-wrap:wrap;gap:6px;">
-            {% for c in candidates %}
-              <button type="button"
-                      class="server-btn"
-                      data-src="{{ c.src|e }}"
-                      data-idx="{{ loop.index0 }}"
-                      style="cursor:pointer;border:1px solid {% if loop.index0 == idx %}rgba(64,160,255,.9){% else %}rgba(255,255,255,.3){% endif %};background:{% if loop.index0 == idx %}rgba(64,160,255,.25){% else %}rgba(255,255,255,.08){% endif %};color:#fff;border-radius:6px;padding:4px 10px;font-size:12px;font-weight:600;">
-                Server {{ loop.index }}
-              </button>
-            {% endfor %}
-          </div>
-          <div id="server-picker-status" style="font-size:11px;opacity:.75;margin-top:6px;">Server {{ idx + 1 }} of {{ candidates|length }}</div>
-        </div>
-      </div>
+      <div id="player"></div>
       <script>
         (function () {
           var SRC = {{ src|tojson }};
@@ -84,17 +55,6 @@
           window.__IDX = IDX;
           window.__strmdMasterOk = false;
           window.__fallbackDone = false;
-
-          document.querySelectorAll(".server-btn").forEach(function (btn) {
-            btn.addEventListener("click", function () {
-              var target = Number(btn.getAttribute("data-idx"));
-              if (target === IDX) return;
-              var q = new URLSearchParams();
-              q.set("srcs", JSON.stringify(CANDIDATES.map(function (c) { return c.src; })));
-              q.set("idx", String(target));
-              location.href = "/embed_player?" + q.toString();
-            });
-          });
 
           function scheduleFallback(reason) {
             if (window.__fallbackDone) return;
@@ -117,26 +77,17 @@
             if (status >= 200 && status < 300) { window.__strmdMasterOk = true; return; }
             if (status >= 400 && !window.__strmdMasterOk) {
               console.log("[strmd] manifest failed", status, String(url || "").slice(0, 120));
-              var st = document.getElementById("server-picker-status");
-              if (st) st.textContent = "Server " + (IDX + 1) + " failed (" + status + ")";
               scheduleFallback("manifest " + status);
             }
           }
 
           window.__strmdRewrite = function (u) {
             var s = String(u || "");
-            // Capture the minted master URL when lock.js fetches it. The minted
-            // playlist.m3u8 itself only serves to browser TLS fingerprints (403
-            // to plain clients) so it MUST go through the /strmd/ proxy below;
-            // the proxied body then exposes absolute /m/ segment URLs which are
-            // CORS-open and fetched directly by the browser.
             var sec = /^https:\/\/(?:lb[\w.-]+\.strmd\.st)\/secure\//.exec(s);
             if (sec && !window.__mintedMaster) {
               window.__mintedMaster = s;
               console.log("[strmd] captured minted master", s.slice(0, 120));
             }
-            // /m/ segments are CORS-open on the CDN (Access-Control-Allow-Origin: *);
-            // the browser fetches them directly, never through this server.
             if (/^https:\/\/(?:lb[\w.-]+\.strmd\.st)\/m\//.test(s)) return s;
             var m = /^https:\/\/(?:lb([\w.-]+\.strmd\.st)|([\w.-]+\.forever\.st))\/(.*)$/.exec(s);
             if (!m) return u;
@@ -151,16 +102,13 @@
 
           var _srcDescriptor = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, "src");
           Object.defineProperty(HTMLMediaElement.prototype, "src", {
-            get: function () {
-              return _srcDescriptor.get.call(this);
-            },
+            get: function () { return _srcDescriptor.get.call(this); },
             set: function (v) {
               var rw = window.__strmdRewrite(v);
               console.log("[strmd] src setter ->", String(v).slice(0, 60), "=>", String(rw).slice(0, 90));
               return _srcDescriptor.set.call(this, rw);
             },
-            configurable: true,
-            enumerable: true
+            configurable: true, enumerable: true
           });
           var _setAttr = HTMLMediaElement.prototype.setAttribute;
           HTMLMediaElement.prototype.setAttribute = function (name, value) {
@@ -230,7 +178,6 @@
             var video = document.createElement("video");
             video.controls = true;
             video.autoplay = true;
-            video.muted = true;
             video.playsinline = true;
             video.style.width = "100%";
             video.style.height = "100%";

@@ -45,6 +45,21 @@
   </head>
   <body>
     <div class="page">
+      {% if show_ads %}
+      <div class="ad-banner" id="adsterra-banner">
+        <script>
+          atOptions = {
+            'key' : '{{ adsterra_banner_key|e }}',
+            'format' : '{{ adsterra_banner_format|e }}',
+            'height' : {{ adsterra_banner_height }},
+            'width' : {{ adsterra_banner_width }},
+            'params' : {}
+          };
+        </script>
+        <script src="https://www.highperformanceformat.com/{{ adsterra_banner_key|e }}/invoke.js"></script>
+      </div>
+      {% endif %}
+
       <iframe class="player-frame" src="{{ player_src|e }}" allowfullscreen allow="autoplay; encrypted-media; picture-in-picture"></iframe>
 
       <div class="meta">
@@ -64,6 +79,10 @@
           {% endfor %}
         </div>
       </div>
+
+      {% if show_ads %}
+      <script src="{{ adsterra_social_bar_src|e }}"></script>
+      {% endif %}
     </div>
   </body>
 </html>
