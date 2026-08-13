@@ -82,6 +82,14 @@ from streaming_site import (
 
 api_bp = Blueprint("api", __name__)
 
+# Admin account can be configured via env vars (for ephemeral deploys) or via
+# setup_admin.py (stored in api.db). Env vars take priority.
+ADMIN_PASSWORD_HASH = os.environ.get("ADMIN_PASSWORD_HASH", "")
+ADMIN_TOTP_SECRET = os.environ.get("ADMIN_TOTP_SECRET", "")
+
+# =============================================================================
+# DB / storage
+# =============================================================================
 API_DB_PATH = Path(os.environ.get("API_DB_PATH", Path(__file__).parent / "data" / "api.db")).expanduser()
 
 # ---- Adsterra ad units (public player only) ---------------------------------
@@ -474,6 +482,13 @@ def _json_response(data: Any, status: int = 200) -> Response:
 # =============================================================================
 # Admin auth helpers
 # =============================================================================
+def _env_admin() -> dict | None:
+    """Return admin config from env vars if both are set."""
+    if ADMIN_PASSWORD_HASH and ADMIN_TOTP_SECRET:
+        return {"password_hash": ADMIN_PASSWORD_HASH, "totp_secret": ADMIN_TOTP_SECRET}
+    return None
+
+
 def _admin_row() -> sqlite3.Row | None:
     _ensure_api_db()
     with sqlite3.connect(API_DB_PATH, check_same_thread=False) as conn:
@@ -482,7 +497,18 @@ def _admin_row() -> sqlite3.Row | None:
 
 
 def _admin_configured() -> bool:
-    return _admin_row() is not None
+    return _env_admin() is not None or _admin_row() is not None
+
+
+def _get_admin_config() -> dict:
+    """Get admin config (password_hash, totp_secret) from env or DB."""
+    env = _env_admin()
+    if env:
+        return env
+    row = _admin_row()
+    if row:
+        return {"password_hash": row["password_hash"], "totp_secret": row["totp_secret"]}
+    return {}
 
 
 def _admin_logged_in() -> bool:
@@ -578,7 +604,7 @@ def admin_login():
 
     if request.method == "POST":
         password = request.form.get("password", "")
-        admin = _admin_row()
+        admin = _get_admin_config()
         if admin and check_password_hash(admin["password_hash"], password):
             session["admin_pw_ok"] = True
             return redirect(url_for("api.admin_totp"))
@@ -598,7 +624,7 @@ def admin_totp():
 
     if request.method == "POST":
         code = re.sub(r"\s+", "", request.form.get("code", ""))
-        admin = _admin_row()
+        admin = _get_admin_config()
         if admin and pyotp.TOTP(admin["totp_secret"]).verify(code, valid_window=1):
             session.pop("admin_pw_ok", None)
             session["admin_auth"] = True
