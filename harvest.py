@@ -15,6 +15,7 @@ the current live window so viewers track the real broadcast.
 import base64
 import json
 import os
+import random
 import re
 import threading
 import time
@@ -427,7 +428,8 @@ def _cdnlivetv_b64decode(value: str) -> str:
 # player-page fetches and space them out; retry a few times when throttled.
 _PAGE_MUTEX = threading.Lock()
 _PAGE_LAST = 0.0
-_PAGE_MIN_INTERVAL = float(os.environ.get("CDNLIVETV_PAGE_INTERVAL", "0.4"))
+_PAGE_MIN_INTERVAL = float(os.environ.get("CDNLIVETV_PAGE_INTERVAL", "2.0"))
+_PAGE_JITTER = float(os.environ.get("CDNLIVETV_PAGE_JITTER", "0.5"))
 
 
 def _throttled_page_get(url: str, headers: dict, timeout: int = 15) -> requests.Response:
@@ -438,6 +440,9 @@ def _throttled_page_get(url: str, headers: dict, timeout: int = 15) -> requests.
         wait = _PAGE_LAST + _PAGE_MIN_INTERVAL - now
         if wait > 0:
             time.sleep(wait)
+        # add small random jitter
+        if _PAGE_JITTER > 0:
+            time.sleep(random.uniform(0, _PAGE_JITTER))
         for attempt in range(3):
             r = requests.get(url, headers=headers, timeout=timeout)
             if r.status_code != 429:
