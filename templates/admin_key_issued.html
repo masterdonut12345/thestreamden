@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>API Key Issued - thestreamden</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:0; background:#0b0e14; color:#e8ecf3;
+         font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+         display:flex; align-items:center; justify-content:center; min-height:100vh; }
+  .card { width: 560px; max-width: 94vw; background:#131a24; border:1px solid #233048;
+          border-radius:12px; padding:32px; }
+  h1 { font-size:20px; margin:0 0 8px; }
+  p { font-size:14px; color:#c3ccd9; line-height:1.5; }
+  .key { background:#0f1620; border:1px solid #2c3a55; border-radius:8px;
+         padding:16px; font-family: ui-monospace, "Cascadia Code", monospace;
+         font-size:13px; word-break: break-all; margin:16px 0; user-select: all; }
+  .copy { display:inline-block; margin-top:4px; padding:10px 16px; border-radius:8px;
+          background:#3b5bdb; color:#fff; border:0; font-weight:600; font-size:14px; cursor:pointer; }
+  .copy:hover { background:#4a6cd8; }
+  .btn { display:inline-block; margin-top:18px; padding:10px 16px; border-radius:8px;
+         background:#1c2637; color:#e8ecf3; text-decoration:none; font-weight:600; font-size:14px; margin-left:8px; }
+  .btn:hover { background:#26324d; }
+  .details { font-size:12px; color:#7d8794; margin-top:8px; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <h1>API key issued</h1>
+    <p>Key <strong>{{ user_name|e }}</strong>. Copy it now — it is shown only this once.</p>
+    <div class="key" id="api-key">{{ api_key }}</div>
+    <button class="copy" id="copy-btn">Copy key</button>
+    <a class="btn" href="{{ url_for('api.admin_index') }}">Back to dashboard</a>
+    <div class="details">
+      Rate limit: {{ rate_limit }}/min{% if expires_at %} &middot; expires: {{ expires_at|int }}{% endif %}
+    </div>
+  </div>
+  <script>
+    document.getElementById("copy-btn").addEventListener("click", function () {
+      var key = document.getElementById("api-key").textContent;
+      navigator.clipboard.writeText(key).then(function () {
+        var btn = document.getElementById("copy-btn");
+        btn.textContent = "Copied!";
+        setTimeout(function () { btn.textContent = "Copy key"; }, 1500);
+      });
+    });
+  </script>
+</body>
+</html>

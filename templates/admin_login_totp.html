@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Two-Factor Auth - thestreamden</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:0; background:#0b0e14; color:#e8ecf3;
+         font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+         display:flex; align-items:center; justify-content:center; min-height:100vh; }
+  .card { width: 380px; max-width: 92vw; background:#131a24; border:1px solid #233048;
+          border-radius:12px; padding:32px; }
+  h1 { font-size:20px; margin:0 0 6px; }
+  p { font-size:13px; color:#9aa4b2; margin:0 0 20px; }
+  label { display:block; font-size:13px; margin:0 0 4px; color:#c3ccd9; }
+  input { width:100%; padding:10px 12px; border-radius:8px; border:1px solid #2c3a55;
+          background:#0f1620; color:#e8ecf3; font-size:18px; letter-spacing:4px; text-align:center;
+          margin-bottom:14px; }
+  input:focus { outline:none; border-color:#4a6cd8; }
+  button { width:100%; padding:11px; border:0; border-radius:8px;
+           background:#3b5bdb; color:#fff; font-size:14px; font-weight:600; cursor:pointer; }
+  button:hover { background:#4a6cd8; }
+  .error { background:#3a1620; border:1px solid #7a2a3a; color:#ffb3c0; border-radius:8px;
+           padding:10px 12px; font-size:13px; margin-bottom:16px; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <h1>Two-Factor Auth</h1>
+    <p>Enter the 6-digit code from your authenticator app.</p>
+    {% if error %}<div class="error">{{ error }}</div>{% endif %}
+    <form method="post" autocomplete="off">
+      <label for="code">Verification code</label>
+      <input type="text" id="code" name="code" inputmode="numeric" autocomplete="one-time-code"
+             pattern="[0-9 ]*" maxlength="7" required autofocus>
+      <button type="submit">Verify</button>
+    </form>
+  </div>
+</body>
+</html>

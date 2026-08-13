@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Admin Dashboard - thestreamden</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:0; background:#0b0e14; color:#e8ecf3;
+         font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { background:#111823; border-bottom:1px solid #233048; padding:14px 22px;
+           display:flex; align-items:center; justify-content:space-between; }
+  header h1 { font-size:18px; margin:0; }
+  header a { color:#9aa4b2; font-size:13px; text-decoration:none; }
+  header a:hover { color:#fff; }
+  main { max-width: 1100px; margin: 0 auto; padding: 22px; }
+  .error { background:#3a1620; border:1px solid #7a2a3a; color:#ffb3c0; border-radius:8px;
+           padding:10px 14px; font-size:13px; margin-bottom:18px; }
+  .card { background:#131a24; border:1px solid #233048; border-radius:12px; padding:20px; margin-bottom:24px; }
+  .card h2 { font-size:15px; margin:0 0 14px; color:#c3ccd9; }
+  form.inline { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  form.inline input, form.inline select { padding:8px 10px; border-radius:8px; border:1px solid #2c3a55;
+    background:#0f1620; color:#e8ecf3; font-size:13px; }
+  form.inline input:focus { outline:none; border-color:#4a6cd8; }
+  button { padding:8px 14px; border:0; border-radius:8px; background:#3b5bdb; color:#fff;
+           font-size:13px; font-weight:600; cursor:pointer; }
+  button:hover { background:#4a6cd8; }
+  button.warn { background:#7a2a3a; }
+  button.warn:hover { background:#a2364c; }
+  button.ok { background:#1f6f43; }
+  button.ok:hover { background:#278a54; }
+  table { width:100%; border-collapse: collapse; font-size:13px; }
+  th, td { text-align:left; padding:8px 10px; border-bottom:1px solid #1c2637; vertical-align:top; }
+  th { color:#9aa4b2; font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:.4px; }
+  .pill { display:inline-block; padding:2px 8px; border-radius:999px; font-size:11px; font-weight:600; }
+  .pill.on { background:#1f6f43; color:#b6f7d0; }
+  .pill.off { background:#4a1f28; color:#ffb3c0; }
+  .pill.prefix { background:#26324d; color:#a9bffc; font-family: ui-monospace, monospace; }
+  .mono { font-family: ui-monospace, "Cascadia Code", monospace; font-size:12px; }
+  .muted { color:#7d8794; font-size:12px; }
+  .expired { color:#ffb3c0; }
+</style>
+</head>
+<body>
+  <header>
+    <h1>thestreamden &middot; API Admin</h1>
+    <a href="{{ url_for('api.admin_logout') }}">Logout</a>
+  </header>
+  <main>
+    {% if error %}<div class="error">{{ error }}</div>{% endif %}
+
+    <div class="card">
+      <h2>Create API user</h2>
+      <form class="inline" method="post" action="{{ url_for('api.admin_create_user') }}">
+        <input type="text" name="name" placeholder="User name (e.g. Acme Corp)" required>
+        <button type="submit">Add user</button>
+      </form>
+    </div>
+
+    <div class="card">
+      <h2>Users &amp; API keys</h2>
+      {% if users %}
+      <table>
+        <thead><tr><th>User</th><th>Status</th><th>Keys</th><th>Actions</th></tr></thead>
+        <tbody>
+          {% for u in users %}
+          <tr>
+            <td><strong>{{ u.name|e }}</strong><div class="muted">created {{ u.created_at|int }}</div></td>
+            <td>
+              <span class="pill {{ 'on' if u.active else 'off' }}">{{ 'Active' if u.active else 'Disabled' }}</span>
+            </td>
+            <td>
+              {% for k in keys if k.user_id == u.id %}
+              <div class="mono" style="margin-bottom:6px;">
+                <span class="pill prefix">{{ k.key_prefix }}…</span>
+                {{ k.name|e }}
+                <span class="pill {{ 'on' if k.active else 'off' }}">{{ 'Active' if k.active else 'Revoked' }}</span>
+                <span class="muted">&middot; {{ k.rate_limit_per_min }}/min</span>
+                {% if k.expires_at %}
+                  <span class="muted {{ 'expired' if k.expires_at < now else '' }}">
+                    &middot; expires {{ k.expires_at|int }}
+                  </span>
+                {% endif %}
+                <div class="muted" style="margin-top:2px;">
+                  {% if k.last_used_at %}last used {{ k.last_used_at|int }}{% else %}never used{% endif %}
+                </div>
+              </div>
+              {% else %}
+              <span class="muted">No keys</span>
+              {% endfor %}
+            </td>
+            <td>
+              <form class="inline" method="post" action="{{ url_for('api.admin_toggle_user', user_id=u.id) }}">
+                <button class="{{ 'ok' if not u.active else 'warn' }}">{{ 'Enable' if not u.active else 'Disable' }}</button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <p class="muted">No users yet. Add one above.</p>
+      {% endif %}
+    </div>
+
+    <div class="card">
+      <h2>Issue API key</h2>
+      {% if users %}
+      <form class="inline" method="post" action="{{ url_for('api.admin_create_key', user_id=0) }}" id="key-form">
+        <select name="user_id" id="key-user" required>
+          {% for u in users if u.active %}
+          <option value="{{ u.id }}">{{ u.name|e }}</option>
+          {% endfor %}
+        </select>
+        <input type="text" name="name" placeholder="Key name (e.g. prod)" value="prod">
+        <input type="number" name="rate_limit" value="{{ default_rate_limit }}" min="1" style="width:90px" title="requests per minute">
+        <input type="number" name="expires_at" placeholder="expiry unix ts (optional)" style="width:170px">
+        <button type="submit">Issue key</button>
+      </form>
+      <p class="muted">The full key is shown exactly once after issuance — copy it immediately.</p>
+      {% else %}
+      <p class="muted">Create a user first.</p>
+      {% endif %}
+    </div>
+
+    {% if keys %}
+    <div class="card">
+      <h2>Manage keys</h2>
+      <table>
+        <thead><tr><th>Prefix</th><th>Name</th><th>Owner</th><th>Limit</th><th>Status</th><th>Actions</th></tr></thead>
+        <tbody>
+          {% for k in keys %}
+          <tr>
+            <td><span class="pill prefix">{{ k.key_prefix }}…</span></td>
+            <td>{{ k.name|e }}</td>
+            <td>{{ k.user_name|e }}</td>
+            <td>
+              <form class="inline" method="post" action="{{ url_for('api.admin_set_key_rate_limit', key_id=k.id) }}">
+                <input type="number" name="rate_limit" value="{{ k.rate_limit_per_min }}" min="1" style="width:80px">
+                <button type="submit">Set</button>
+              </form>
+            </td>
+            <td><span class="pill {{ 'on' if k.active else 'off' }}">{{ 'Active' if k.active else 'Revoked' }}</span></td>
+            <td>
+              <form class="inline" method="post" action="{{ url_for('api.admin_toggle_key', key_id=k.id) }}">
+                <button class="{{ 'ok' if not k.active else 'warn' }}">{{ 'Restore' if not k.active else 'Revoke' }}</button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endif %}
+  </main>
+
+  <script>
+    document.addEventListener("submit", function (e) {
+      var form = e.target;
+      var btn = form.querySelector("button");
+      if (btn && btn.classList.contains("warn")) {
+        var label = btn.textContent.trim();
+        if (label === "Disable" || label === "Revoke") {
+          if (!confirm("Are you sure you want to " + label.toLowerCase() + " this?")) {
+            e.preventDefault();
+            return;
+          }
+        }
+      }
+    });
+  </script>
+</body>
+</html>
