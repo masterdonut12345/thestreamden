@@ -6,10 +6,22 @@
     <title>Stream Player</title>
     <style>
       html, body { margin: 0; padding: 0; background: #000; height: 100%; width: 100%; overflow: hidden; }
-      #player { height: 100vh; width: 100vw; }
+      #player-wrapper { display: flex; flex-direction: column; height: 100vh; width: 100vw; }
+      #player { flex: 1 1 auto; width: 100%; min-height: 0; }
+      #server-picker {
+        background: rgba(0,0,0,.75);
+        border: 1px solid rgba(255,255,255,.25);
+        border-radius: 8px;
+        padding: 8px 10px;
+        font-family: system-ui, sans-serif;
+        color: #fff;
+        max-width: 100%;
+        box-shadow: 0 -2px 10px rgba(0,0,0,.5);
+        margin: 8px;
+      }
     </style>
     {% if src %}
-      <script src="https://cdn.jsdelivr.net/npm/@swarmcloud/hls@latest/p2p-engine.min.js"></script>
+      <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.13/dist/hls.min.js"></script>
       <script>
         (function () {
           if (window.__hostlie_installed) return;
@@ -40,19 +52,49 @@
           WebAssembly.instantiateStreaming = function (resp, imports) { return ois.call(this, resp, wrapImports(imports)); };
         })();
       </script>
-      <script src="https://strmd.b-cdn.net/js/bundle-jw.js"></script>
     {% endif %}
   </head>
   <body>
     {% if src %}
-      <div id="player"></div>
+      <div id="player-wrapper">
+        <div id="player"></div>
+        <div id="server-picker">
+          <div style="font-size:11px;opacity:.7;margin-bottom:6px;font-weight:600;letter-spacing:.4px;">SERVER PICKER</div>
+          <div style="display:flex;flex-wrap:wrap;gap:6px;">
+            {% for c in candidates %}
+              <button type="button"
+                      class="server-btn"
+                      data-src="{{ c.src|e }}"
+                      data-idx="{{ loop.index0 }}"
+                      style="cursor:pointer;border:1px solid {% if loop.index0 == idx %}rgba(64,160,255,.9){% else %}rgba(255,255,255,.3){% endif %};background:{% if loop.index0 == idx %}rgba(64,160,255,.25){% else %}rgba(255,255,255,.08){% endif %};color:#fff;border-radius:6px;padding:4px 10px;font-size:12px;font-weight:600;">
+                Server {{ loop.index }}
+              </button>
+            {% endfor %}
+          </div>
+          <div id="server-picker-status" style="font-size:11px;opacity:.75;margin-top:6px;">Server {{ idx + 1 }} of {{ candidates|length }}</div>
+        </div>
+      </div>
       <script>
         (function () {
           var SRC = {{ src|tojson }};
           var CANDIDATES = {{ candidates|tojson }};
           var IDX = {{ idx }};
+          window.__SRC = SRC;
+          window.__CANDIDATES = CANDIDATES;
+          window.__IDX = IDX;
           window.__strmdMasterOk = false;
           window.__fallbackDone = false;
+
+          document.querySelectorAll(".server-btn").forEach(function (btn) {
+            btn.addEventListener("click", function () {
+              var target = Number(btn.getAttribute("data-idx"));
+              if (target === IDX) return;
+              var q = new URLSearchParams();
+              q.set("srcs", JSON.stringify(CANDIDATES.map(function (c) { return c.src; })));
+              q.set("idx", String(target));
+              location.href = "/embed_player?" + q.toString();
+            });
+          });
 
           function scheduleFallback(reason) {
             if (window.__fallbackDone) return;
@@ -75,14 +117,31 @@
             if (status >= 200 && status < 300) { window.__strmdMasterOk = true; return; }
             if (status >= 400 && !window.__strmdMasterOk) {
               console.log("[strmd] manifest failed", status, String(url || "").slice(0, 120));
+              var st = document.getElementById("server-picker-status");
+              if (st) st.textContent = "Server " + (IDX + 1) + " failed (" + status + ")";
               scheduleFallback("manifest " + status);
             }
           }
 
           window.__strmdRewrite = function (u) {
-            var m = /^https:\/\/lb([\w.-]+\.strmd\.st)\/(.*)$/.exec(String(u || ""));
+            var s = String(u || "");
+            // Capture the minted master URL when lock.js fetches it. The minted
+            // playlist.m3u8 itself only serves to browser TLS fingerprints (403
+            // to plain clients) so it MUST go through the /strmd/ proxy below;
+            // the proxied body then exposes absolute /m/ segment URLs which are
+            // CORS-open and fetched directly by the browser.
+            var sec = /^https:\/\/(?:lb[\w.-]+\.strmd\.st)\/secure\//.exec(s);
+            if (sec && !window.__mintedMaster) {
+              window.__mintedMaster = s;
+              console.log("[strmd] captured minted master", s.slice(0, 120));
+            }
+            // /m/ segments are CORS-open on the CDN (Access-Control-Allow-Origin: *);
+            // the browser fetches them directly, never through this server.
+            if (/^https:\/\/(?:lb[\w.-]+\.strmd\.st)\/m\//.test(s)) return s;
+            var m = /^https:\/\/(?:lb([\w.-]+\.strmd\.st)|([\w.-]+\.forever\.st))\/(.*)$/.exec(s);
             if (!m) return u;
-            var proxied = location.origin + "/strmd/lb" + m[1] + "/" + m[2];
+            var host = m[1] ? "lb" + m[1] : m[2];
+            var proxied = location.origin + "/strmd/" + host + "/" + m[3];
             if (SRC) {
               var sep = proxied.indexOf("?") === -1 ? "?" : "&";
               proxied += sep + "src=" + encodeURIComponent(SRC);
@@ -164,20 +223,79 @@
       </script>
       <script>
         var PARTS = {{ parts|tojson }};
-        (async function () {
-          try {
-            var mod = await import("{{ lock_url }}");
-            await mod.default();
-            await mod.init_wasm();
-            var r = await mod.set_stream_jw(PARTS[0], PARTS[1], PARTS[2]);
-            window.__stream = r;
-            console.log("[player] set_stream_jw ret", typeof r);
-          } catch (e) {
-            console.log("[player] mint failed", String((e && e.message) || e).slice(0, 300));
-            if (window.__fallbackDone === false) {
-              window.scheduleFallback && window.scheduleFallback("mint");
+        (function () {
+          function startPlayback(url) {
+            var host = document.getElementById("player");
+            if (!host) return;
+            var video = document.createElement("video");
+            video.controls = true;
+            video.autoplay = true;
+            video.muted = true;
+            video.playsinline = true;
+            video.style.width = "100%";
+            video.style.height = "100%";
+            host.appendChild(video);
+            window.__video = video;
+            if (window.Hls && window.Hls.isSupported()) {
+              var hls = new window.Hls();
+              window.__hls = hls;
+              hls.loadSource(url);
+              hls.attachMedia(video);
+              var started = false;
+              hls.on(window.Hls.Events.MANIFEST_PARSED, function () { started = true; });
+              hls.on(window.Hls.Events.ERROR, function (evt, data) {
+                console.log("[player] hls error", data && data.type, data && data.fatal);
+                if (data && data.fatal && window.__fallbackDone === false && !window.__hlsRecovering) {
+                  window.__hlsRecovering = true;
+                  window.scheduleFallback && window.scheduleFallback("hls " + (data.type || ""));
+                }
+              });
+            } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
+              video.src = url;
             }
-            document.title = "Start failed";
+          }
+
+          function waitForMint() {
+            if (window.__mintedMaster) {
+              console.log("[player] playing minted master", window.__mintedMaster.slice(0, 120));
+              startPlayback(window.__mintedMaster);
+              return;
+            }
+            if (window.__fallbackDone) return;
+            if (Date.now() - window.__mintStart > 20000) {
+              console.log("[player] no minted master within 20s");
+              window.scheduleFallback && window.scheduleFallback("mint timeout");
+              return;
+            }
+            setTimeout(waitForMint, 300);
+          }
+
+          var ACTIVE_KIND = {{ active_kind|tojson if active_kind is defined else ('"m3u8"' if not parts else '"embed"') }};
+          window.__activeKind = ACTIVE_KIND;
+
+          window.__mintStart = Date.now();
+          if (ACTIVE_KIND === "m3u8") {
+            console.log("[player] m3u8 candidate, playing directly");
+            startPlayback(window.__SRC);
+          } else {
+            (async function () {
+              try {
+                var mod = await import("{{ lock_url }}");
+                await mod.default();
+                await mod.init_wasm();
+                var r = await mod.set_stream_jw(PARTS[0], PARTS[1], PARTS[2]);
+                window.__stream = r;
+                console.log("[player] set_stream_jw ret", typeof r);
+                waitForMint();
+              } catch (e) {
+                console.log("[player] mint failed", String((e && e.message) || e).slice(0, 300));
+                if (!window.__mintedMaster && window.__fallbackDone === false) {
+                  window.scheduleFallback && window.scheduleFallback("mint");
+                  document.title = "Start failed";
+                }
+              }
+            })();
+            setTimeout(waitForMint, 2000);
           }
         })();
       </script>

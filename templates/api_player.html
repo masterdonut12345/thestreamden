@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% if game.get('matchup') %}{{ game['matchup']|e }} - Stream{% else %}Stream Player{% endif %}</title>
+    <style>
+      :root { color-scheme: dark; }
+      * { box-sizing: border-box; }
+      html, body {
+        margin: 0; padding: 0;
+        background: #0b0e14;
+        color: #e8ecf3;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+      .page { max-width: 960px; margin: 0 auto; padding: 12px; }
+      .ad-banner {
+        display: flex; justify-content: center; align-items: center;
+        min-height: {{ adsterra_banner_height + 12 }}px;
+        margin-bottom: 10px;
+        overflow: hidden;
+      }
+      .player-frame {
+        width: 100%;
+        aspect-ratio: 16 / 9;
+        border: 0;
+        background: #000;
+        display: block;
+      }
+      .meta { padding: 10px 2px 14px; }
+      .meta h1 { font-size: 18px; margin: 0 0 4px; line-height: 1.3; }
+      .meta .sub { color: #9aa4b2; font-size: 13px; }
+      .badge {
+        display: inline-block; padding: 2px 8px; border-radius: 999px;
+        font-size: 11px; font-weight: 600; margin-right: 6px; vertical-align: middle;
+      }
+      .badge.live { background: #c62828; color: #fff; }
+      .badge.sport { background: #26324d; color: #a9bffc; }
+      .sources { margin-top: 12px; font-size: 12px; color: #7d8794; }
+      @media (max-width: 640px) {
+        .page { padding: 8px; }
+        .meta h1 { font-size: 16px; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <iframe class="player-frame" src="{{ player_src|e }}" allowfullscreen allow="autoplay; encrypted-media; picture-in-picture"></iframe>
+
+      <div class="meta">
+        <h1>
+          {% if game.get('game_status') %}<span class="badge live">{{ game['game_status']|e }}</span>{% endif %}
+          {% if game.get('is_live') %}<span class="badge live">LIVE</span>{% endif %}
+          {{ game.get('matchup') or 'Stream' }}
+        </h1>
+        <div class="sub">
+          <span class="badge sport">{{ game.get('sport')|e }}</span>
+          {% if game.get('tournament') %}{{ game['tournament']|e }} &middot;{% endif %}
+          {% if game.get('time') %} &middot; {{ game['time']|e }}{% endif %}
+        </div>
+        <div class="sources">
+          {% for s in game.get('streams') or [] %}
+            {% if s.get('label') %}<div>{{ s['label']|e }}</div>{% endif %}
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

@@ -21,7 +21,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
-from urllib.parse import urljoin, urlencode, urlparse
+from urllib.parse import parse_qs, unquote, urljoin, urlencode, urlparse
 
 import pytz
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -102,7 +102,7 @@ ENABLE_VIEWER_TRACKING = os.environ.get("ENABLE_VIEWER_TRACKING", "1") == "1"
 # IMPORTANT: do not run scraper in the web process unless explicitly enabled
 ENABLE_SCRAPER_IN_WEB = os.environ.get("ENABLE_SCRAPER_IN_WEB", "1") == "1"
 SCRAPER_SUBPROCESS = os.environ.get("SCRAPER_SUBPROCESS", "1") == "1"
-SCRAPE_INTERVAL_MINUTES = int(os.environ.get("SCRAPE_INTERVAL_MINUTES", "30"))
+SCRAPE_INTERVAL_MINUTES = int(os.environ.get("SCRAPE_INTERVAL_MINUTES", "60"))
 STARTUP_SCRAPE_ON_BOOT = os.environ.get("STARTUP_SCRAPE_ON_BOOT", "1") == "1"
 
 
@@ -229,6 +229,16 @@ def build_m3u8_player_url(src: str) -> str:
     if not is_m3u8_url(src):
         return src
     return f"/m3u8_player?{urlencode({'src': src})}"
+
+
+def _unwrap_m3u8_player_src(raw: str) -> str:
+    """Pull the raw src out of a /m3u8_player?src=... route so it can join a
+    mixed embed+m3u8 fallback chain."""
+    try:
+        vals = parse_qs(urlparse(raw).query).get("src", [])
+    except Exception:
+        return ""
+    return vals[0] if vals else ""
 
 
 def build_m3u8_proxy_url(src: str) -> str:
@@ -861,6 +871,17 @@ def index():
     )
 
 
+@streaming_bp.route("/api-docs")
+def api_docs():
+    mark_active()
+    site_url = os.environ.get("SITE_URL", "https://thestreamden.com").rstrip("/")
+    return render_template(
+        "api_docs.html",
+        base_url=site_url,
+        discord_link="https://discord.gg/HGAkF78tz",
+    )
+
+
 @streaming_bp.route("/m3u8_player")
 def m3u8_player():
     src = normalize_m3u8_src((request.args.get("src") or "").strip())
@@ -890,12 +911,12 @@ def embed_player():
             parsed = []
         for u in parsed:
             nu = normalize_http_url(str(u or ""))
-            if nu and parse_embed_parts(nu) and nu not in candidates:
+            if nu and (parse_embed_parts(nu) or is_m3u8_url(nu)) and nu not in candidates:
                 candidates.append(nu)
-    if src and src not in candidates and parse_embed_parts(src):
+    if src and src not in candidates and (parse_embed_parts(src) or is_m3u8_url(src)):
         candidates.append(src)
     if not candidates:
-        return render_template("embed_player.html", src="", parts=[], candidates=[], idx=0, lock_url=LOCK_JS_URL)
+        return render_template("embed_player.html", src="", parts=[], candidates=[], idx=0, lock_url=LOCK_JS_URL, active_kind="embed")
 
     try:
         idx = max(0, int(request.args.get("idx", "0")))
@@ -904,15 +925,19 @@ def embed_player():
     if idx >= len(candidates):
         idx = 0
     active_src = candidates[idx]
-    parts = parse_embed_parts(active_src)
-    candidate_parts = [{"src": c, "parts": parse_embed_parts(c)} for c in candidates]
+    active_parts = parse_embed_parts(active_src)
+    candidate_parts = [
+        {"src": c, "parts": parse_embed_parts(c), "kind": "embed" if parse_embed_parts(c) else "m3u8"}
+        for c in candidates
+    ]
     return render_template(
         "embed_player.html",
         src=active_src,
-        parts=parts,
+        parts=active_parts,
         candidates=candidate_parts,
         idx=idx,
         lock_url=LOCK_JS_URL,
+        active_kind="m3u8" if not active_parts else "embed",
     )
 
 
@@ -920,21 +945,32 @@ def build_embed_player_fallback_url(active_embed_url: str, all_embeds) -> str:
     """Build an iframe src for a game's streams.
 
     - When streams are already wrapped as relative player routes
-      (e.g. /m3u8_player?src=... from _build_games_from_rows), point the
-      iframe straight at the active one.
-    - When streams are embed.st family URLs, build an /embed_player URL that
-      starts on active_embed_url but falls back to the other candidates when
-      the active stream is dead.
+      (e.g. /m3u8_player?src=... from _build_games_from_rows), unwrap the
+      m3u8 ones back to raw playlists so they can join a mixed fallback chain
+      alongside embed.st candidates (combined games carry streams from both
+      providers).
+    - /cdp_player? and /embed_player? wrapped routes that we cannot unwrap are
+      used only when no raw candidates exist.
     - bare m3u8 playlist URLs are routed through /m3u8_player so the browser
       plays the tokenized playlist directly.
+    - Otherwise build an /embed_player URL that starts on active_embed_url but
+      falls back to the other candidates when the active stream is dead.
     """
     player_routes: list[str] = []
     embed_candidates: list[str] = []
     m3u8_candidates: list[str] = []
     for u in (all_embeds or []):
         raw = str(u or "").strip()
-        if raw.startswith(("/m3u8_player?", "/cdp_player?", "/embed_player?")):
+        if raw.startswith(("/cdp_player?", "/embed_player?")):
             if raw not in player_routes:
+                player_routes.append(raw)
+            continue
+        if raw.startswith("/m3u8_player?"):
+            inner = _unwrap_m3u8_player_src(raw)
+            if inner and is_m3u8_url(inner):
+                if inner not in m3u8_candidates:
+                    m3u8_candidates.append(inner)
+            elif raw not in player_routes:
                 player_routes.append(raw)
             continue
         nu = normalize_http_url(raw)
@@ -947,12 +983,12 @@ def build_embed_player_fallback_url(active_embed_url: str, all_embeds) -> str:
             if nu not in m3u8_candidates:
                 m3u8_candidates.append(nu)
 
-    if player_routes:
-        active = active_embed_url if active_embed_url in player_routes else player_routes[0]
-        return active
+    candidates = embed_candidates + m3u8_candidates
 
-    candidates = embed_candidates or m3u8_candidates
     if not candidates:
+        if player_routes:
+            active = active_embed_url if active_embed_url in player_routes else player_routes[0]
+            return active
         return ""
 
     if active_embed_url in candidates:
@@ -960,8 +996,8 @@ def build_embed_player_fallback_url(active_embed_url: str, all_embeds) -> str:
     else:
         idx = 0
 
-    if m3u8_candidates and not embed_candidates:
-        return "/m3u8_player?" + urlencode({"src": candidates[idx]})
+    if m3u8_candidates and not embed_candidates and len(m3u8_candidates) == 1:
+        return "/m3u8_player?" + urlencode({"src": m3u8_candidates[0]})
     return "/embed_player?" + urlencode({
         "src": candidates[idx],
         "srcs": json.dumps(candidates),
@@ -1209,14 +1245,29 @@ def _strmd_media_proxy_impl(media_path):
             text = raw.decode("utf-8", errors="replace")
         except Exception:
             return abort(502)
-        # Only rewrite absolute lb*.strmd.st refs in the body into proxy URLs;
-        # bare relative refs already resolve under this same /strmd/ proxy path.
+        # Rewrite absolute CDN refs in the body into proxy URLs; bare relative
+        # refs already resolve under this same /strmd/ proxy path. Besides the
+        # lb*.strmd.st manifest host, variant playlists can point segments at
+        # other CDN hosts (e.g. together.forever.st) that also TLS-fingerprint
+        # clients, so those must be proxied too or the browser gets 403.
         proxied_base = "https://{}/strmd/".format(request.host)
         rewritten = re.sub(
-            r"https://(lb[\w.-]+\.strmd\.st/)([^\s\r\n]*)",
+            r"https://((?:lb[\w.-]+\.strmd\.st|[\w.-]+\.forever\.st)/)([^\s\r\n]*)",
             lambda m: proxied_base + m.group(1) + m.group(2),
             text,
         )
+        # Some servers (streamNo 2 style) serve segments as root-relative
+        # `/m/<tok>.ts` refs. Served through the proxy those would resolve to
+        # this server's root (/m/... -> 404). Rewrite them into absolute CDN
+        # URLs; /m/ segments are CORS-open (Access-Control-Allow-Origin: *)
+        # so the browser fetches them directly, never through this proxy.
+        if "/m/" in rewritten:
+            def _absroot(line):
+                s = line.strip()
+                if s and s.startswith("/") and not s.startswith("#") and "://" not in s:
+                    return "https://{}{}".format(host, s)
+                return line
+            rewritten = "\n".join(_absroot(line) for line in rewritten.split("\n"))
         proxy_resp = make_response(rewritten, status)
         proxy_resp.headers["Content-Type"] = "application/vnd.apple.mpegurl"
         proxy_resp.headers["Access-Control-Allow-Origin"] = "*"
@@ -1384,6 +1435,105 @@ def cdp_playback_refresh(session_id: str):
     return jsonify({"ok": True})
 
 
+CHANNEL_KEYWORDS = frozenset(
+    {
+        "tv", "network", "channel", "sport", "sports", "news", "plus", "max",
+        "arena", "action", "f1", "racing", "premier", "bundesliga", "liga",
+        "league", "euro", "match", "world", "main", "top", "select", "hd",
+        "premium", "gold", "mix", "canal", "cosmote", "sky", "espn", "bein",
+        "eleven", "bt", "fox", "nbc", "abc", "cbs", "cbn", "univision",
+        "telemundo", "tudn", "mlb", "nba", "nfl", "nhl", "nascar", "wwe",
+        "ufc", "mega", "record", "pulsar", "cdm", "mav", "motor", "tab",
+        "dazn", "star", "shine", "sportsnet", "tsn", "rcn", "win", "sport",
+    }
+)
+
+
+def _normalize_team_key(value: Any) -> str:
+    text = re.sub(r"[^a-z0-9]+", " ", (value or "").lower()).strip()
+    return text
+
+
+def _is_network_channel_name(name: str) -> bool:
+    """True when a single-team matchup looks like a TV/network channel name
+    rather than a team, so it is never merged into a matchup game."""
+    tokens = _normalize_team_key(name).split()
+    if not tokens:
+        return True
+    return any(t in CHANNEL_KEYWORDS for t in tokens)
+
+
+def _team_channel_matches(team_name: str, channel_name: str) -> bool:
+    """Unidirectional token-subset match: every channel token must appear in
+    the team name. Guards against a channel matching a *partial* team name
+    (e.g. 'Benfica TV' vs team 'Benfica')."""
+    team_tokens = _normalize_team_key(team_name).split()
+    channel_tokens = _normalize_team_key(channel_name).split()
+    if not team_tokens or not channel_tokens:
+        return False
+    if len(channel_tokens) > len(team_tokens):
+        return False
+    return set(channel_tokens).issubset(set(team_tokens))
+
+
+def _combine_team_channels(games: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Merge single-team cdnlivetv channels into the matching streamed.st
+    matchup game (same sport + date) so one game entry carries streams from
+    both providers as extra servers.
+
+    A cdnlivetv game whose matchup is a clean team name is folded into a
+    streamed.st game for the same sport/date when the channel name matches the
+    game's home or away team. Its streams are appended via merge_streams (so
+    embed URLs are preserved) and the standalone cdnlivetv game is dropped.
+    Unmatched channels and network channels stay standalone.
+    """
+    if not games:
+        return games
+
+    targets: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    channels: list[dict[str, Any]] = []
+    for g in games:
+        home = g.get("home_team")
+        away = g.get("away_team")
+        if home or away:
+            key = (
+                normalize_sport_name(g.get("sport") or "").lower(),
+                str(g.get("date_header") or "").strip().lower(),
+            )
+            targets.setdefault(key, []).append(g)
+        else:
+            channels.append(g)
+
+    consumed: set[int] = set()
+    for ch in channels:
+        channel_name = str(ch.get("matchup") or "").strip()
+        if not channel_name or _is_network_channel_name(channel_name):
+            continue
+        key = (
+            normalize_sport_name(ch.get("sport") or "").lower(),
+            str(ch.get("date_header") or "").strip().lower(),
+        )
+        for target in targets.get(key, []):
+            if _team_channel_matches(target.get("home_team") or "", channel_name) or _team_channel_matches(
+                target.get("away_team") or "", channel_name
+            ):
+                target["streams"] = merge_streams(
+                    target.get("streams") or [],
+                    ch.get("streams") or [],
+                )
+                target["is_live"] = target.get("is_live") or ch.get("is_live")
+                if not target.get("watch_url") and ch.get("watch_url"):
+                    target["watch_url"] = ch.get("watch_url")
+                if not target.get("tournament_url") and ch.get("tournament_url"):
+                    target["tournament_url"] = ch.get("tournament_url")
+                consumed.add(id(ch))
+                break
+
+    if not consumed:
+        return games
+    return [g for g in games if id(g) not in consumed]
+
+
 def _build_games_from_rows(rows: list[dict[str, Any]]):
     if not rows:
         return []
@@ -1519,6 +1669,7 @@ def _build_games_from_rows(rows: list[dict[str, Any]]):
             "id": game_id,
             "date_header": rowd.get("date_header"),
             "sport": sport,
+            "source": rowd.get("source"),
             "time_unix": rowd.get("time_unix"),
             "time": time_display,
             "tournament": rowd.get("tournament"),
@@ -1562,7 +1713,9 @@ def _build_games_from_rows(rows: list[dict[str, Any]]):
 
         dedup_map[dedup_key] = game_obj
 
-    for game_obj in dedup_map.values():
+    combined = _combine_team_channels(list(dedup_map.values()))
+
+    for game_obj in combined:
         game_obj["slug"] = game_slug(game_obj)
 
         seen: set[str] = set()
