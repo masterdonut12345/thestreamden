@@ -1534,6 +1534,91 @@ def _combine_team_channels(games: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [g for g in games if id(g) not in consumed]
 
 
+def _team_pair_matches(home1: Any, away1: Any, home2: Any, away2: Any) -> bool:
+    """Order-agnostic token-subset match of two full home/away team pairs."""
+    h1, a1 = _normalize_team_key(home1), _normalize_team_key(away1)
+    h2, a2 = _normalize_team_key(home2), _normalize_team_key(away2)
+    if not h1 or not a1 or not h2 or not a2:
+        return False
+    return (
+        (_team_channel_matches(h1, h2) and _team_channel_matches(a1, a2))
+        or (_team_channel_matches(h1, a2) and _team_channel_matches(a1, h2))
+    )
+
+
+def _matchup_game_priority(g: dict[str, Any]) -> tuple[int, int]:
+    """Lower is preferred as the surviving game. Prefer the streamed.st entry
+    (its embed/mint player is the site's primary path) then the one carrying
+    more selectable servers."""
+    src = str(g.get("source") or "").lower()
+    src_rank = 0 if src.startswith("streamed") else 1
+    return (src_rank, -len(g.get("streams") or []))
+
+
+def _combine_matchup_games(games: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Merge two full-matchup games from different providers when their home/
+    away team pairs match (order-agnostic), same sport + date.
+
+    The events-based cdnlivetv scrape produces games that *do* carry home/away
+    teams, so they are no longer folded in by _combine_team_channels. This step
+    merges such a cdnlivetv game into the matching streamed.st game so one game
+    entry carries servers from both providers.
+    """
+    if not games:
+        return games
+
+    groups: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    for g in games:
+        home = g.get("home_team")
+        away = g.get("away_team")
+        if not home or not away:
+            continue
+        key = (
+            normalize_sport_name(g.get("sport") or "").lower(),
+            str(g.get("date_header") or "").strip().lower(),
+        )
+        groups.setdefault(key, []).append(g)
+
+    consumed: set[int] = set()
+    for bucket in groups.values():
+        for i in range(len(bucket)):
+            a = bucket[i]
+            if id(a) in consumed:
+                continue
+            for j in range(i + 1, len(bucket)):
+                b = bucket[j]
+                if id(b) in consumed:
+                    continue
+                if not _team_pair_matches(
+                    a.get("home_team"), a.get("away_team"),
+                    b.get("home_team"), b.get("away_team"),
+                ):
+                    continue
+                primary, secondary = a, b
+                if _matchup_game_priority(b) < _matchup_game_priority(a):
+                    primary, secondary = b, a
+                primary["streams"] = merge_streams(primary.get("streams") or [], secondary.get("streams") or [])
+                primary["is_live"] = primary.get("is_live") or secondary.get("is_live")
+                if not primary.get("watch_url") and secondary.get("watch_url"):
+                    primary["watch_url"] = secondary["watch_url"]
+                if not primary.get("tournament") and secondary.get("tournament"):
+                    primary["tournament"] = secondary["tournament"]
+                if not primary.get("tournament_url") and secondary.get("tournament_url"):
+                    primary["tournament_url"] = secondary["tournament_url"]
+                if not primary.get("time") and secondary.get("time"):
+                    primary["time"] = secondary["time"]
+                if not primary.get("time_unix") and secondary.get("time_unix"):
+                    primary["time_unix"] = secondary["time_unix"]
+                if str(primary.get("source") or "") != str(secondary.get("source") or ""):
+                    primary["source"] = str(primary.get("source") or "") + "+" + str(secondary.get("source") or "")
+                consumed.add(id(secondary))
+                break
+
+    if not consumed:
+        return games
+    return [g for g in games if id(g) not in consumed]
+
+
 def _build_games_from_rows(rows: list[dict[str, Any]]):
     if not rows:
         return []
@@ -1713,7 +1798,7 @@ def _build_games_from_rows(rows: list[dict[str, Any]]):
 
         dedup_map[dedup_key] = game_obj
 
-    combined = _combine_team_channels(list(dedup_map.values()))
+    combined = _combine_matchup_games(_combine_team_channels(list(dedup_map.values())))
 
     for game_obj in combined:
         game_obj["slug"] = game_slug(game_obj)

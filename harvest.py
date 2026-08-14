@@ -516,7 +516,11 @@ class CdnLiveTvHarvester:
             return []
 
     def get_playlist_url(self, channel_url: str) -> str | None:
-        """Fetch the channel player page and extract its tokenized playlist URL."""
+        """Fetch the channel player page and extract its tokenized playlist URL.
+
+        Rate-limit (429) errors are re-raised so callers can run a circuit
+        breaker; any other failure is logged and returns None (no playlist).
+        """
         try:
             if "cdnlivetv.tv" not in channel_url:
                 channel_url = channel_url.replace("cdnlivetv.is", "cdnlivetv.tv")
@@ -524,5 +528,51 @@ class CdnLiveTvHarvester:
             r.raise_for_status()
             return _extract_cdnlivetv_playlist_url(r.text)
         except Exception as e:
+            err_str = str(e).lower()
+            if "429" in err_str or "too many requests" in err_str:
+                raise
             print(f"[cdnlivetv] Error fetching playlist: {e}")
             return None
+
+    def get_events(self) -> list[dict]:
+        """Fetch the cdnlivetv events API (sports -> games -> channels).
+
+        Each event carries the real matchup (homeTeam/awayTeam), tournament,
+        live status, start/end times, and the player URLs for the channels that
+        broadcast it. Events without any attached channel are dropped (nothing
+        playable to relay).
+        """
+        try:
+            r = requests.get(
+                "https://cdnlivetv.is/api/v1/events/sports/",
+                headers=CDNLIVETV_JSON_HEADERS,
+                timeout=20,
+            )
+            r.raise_for_status()
+            data = r.json().get("cdn-live-tv", {}) if isinstance(r.json(), dict) else {}
+            events: list[dict] = []
+            for sport, payload in data.items():
+                if not isinstance(payload, list):
+                    continue
+                for game in payload:
+                    if not isinstance(game, dict):
+                        continue
+                    channels = [c for c in (game.get("channels") or []) if isinstance(c, dict) and c.get("url")]
+                    if not channels:
+                        continue
+                    events.append({
+                        "sport": sport,
+                        "event": game.get("event") or "",
+                        "home_team": game.get("homeTeam") or "",
+                        "away_team": game.get("awayTeam") or "",
+                        "tournament": game.get("tournament") or "",
+                        "status": game.get("status") or "",
+                        "start": game.get("start") or "",
+                        "end": game.get("end") or "",
+                        "country": game.get("country") or "",
+                        "channels": channels,
+                    })
+            return events
+        except Exception as e:
+            print(f"[cdnlivetv] Error fetching events: {e}")
+            return []

@@ -28,6 +28,7 @@ import hashlib
 import json
 import sqlite3
 import time
+import threading
 from concurrent.futures import ThreadPoolExecutor
 
 # ---------------- CONFIG ----------------
@@ -608,92 +609,258 @@ def _infer_sport_from_name(name: str) -> str:
 
 # ---------------- CDN LIVETV ----------------
 
+# Event-category keys returned by the cdnlivetv events API mapped to the same
+# sport labels the streamed.st API uses, so games from both providers group and
+# combine under one sport. Unknown categories (cycling, volleyball, ...) pass
+# through as their own new categories.
+CDNLIVETV_EVENT_SPORT_MAP = {
+    "Soccer": "Football",
+    "Football": "Football",
+    "NFL": "American Football",
+    "NBA": "Basketball",
+    "Basketball": "Basketball",
+    "NHL": "Hockey",
+    "Hockey": "Hockey",
+    "MLB": "Baseball",
+    "Tennis": "Tennis",
+    "Golf": "Golf",
+    "Motorsport": "Motor Sports",
+    "F1": "Motor Sports",
+    "UFC": "Fight (UFC, Boxing)",
+    "MMA": "Fight (UFC, Boxing)",
+    "WWE": "Fight (UFC, Boxing)",
+    "Boxing": "Fight (UFC, Boxing)",
+    "Cricket": "Cricket",
+    "Cycling": "Cycling",
+    "Volleyball": "Volleyball",
+    "Badminton": "Badminton",
+    "Handball": "Handball",
+    "Darts": "Darts",
+    "Futsal": "Futsal",
+    "Horse Racing": "Horse Racing",
+    "Winter Sports": "Winter Sports",
+    "Rugby": "Rugby",
+    "NCAA": "NCAA",
+    "NCAAW": "NCAA",
+}
+
+# statuses that mean "this game is currently being broadcast"
+CDNLIVETV_LIVE_STATUSES = {"1H", "2H", "3H", "HT", "ET", "Q1", "Q2", "Q3", "Q4", "OT", "IN", "IN1", "IN5", "LIVE"}
+
+
+def _parse_cdn_event_start(value: str) -> datetime | None:
+    """Parse an events-API 'start' timestamp (naive UTC, 'YYYY-MM-DD HH:MM')."""
+    if not isinstance(value, str) or not value.strip():
+        return None
+    try:
+        naive = datetime.strptime(value.strip(), "%Y-%m-%d %H:%M")
+    except ValueError:
+        return None
+    return naive.replace(tzinfo=UTC)
+
+
 def scrape_cdnlivetv() -> pd.DataFrame:
     """
-    Scrape channels from cdnlivetv.is using the simple HTTP harvester.
+    Scrape cdnlivetv games from the events API using the simple HTTP harvester.
+
+    Each event with playable channels becomes one game carrying the real
+    matchup, home/away teams, tournament, live status and start time; every
+    event channel becomes a selectable server (m3u8). Channels from the flat
+    lineup that are NOT already represented by an event (standalone networks)
+    are appended as their own games so the general channel list is preserved.
     """
     if not ENABLE_CDNLIVETV:
         print("[scraper] cdnlivetv disabled (ENABLE_CDNLIVETV_SCRAPER=0), skipping")
         return pd.DataFrame()
-    
+
     try:
         from harvest import CdnLiveTvHarvester
         harvester = CdnLiveTvHarvester(CDNLIVETV_BASE_URL)
-        
-        print("[scraper] Fetching cdnlivetv channels...")
-        channels = harvester.get_channels()
-        
-        if not channels:
-            print("[scraper] cdnlivetv: no channels found")
-            return pd.DataFrame()
-        
+
+        print("[scraper] Fetching cdnlivetv events...")
+        events = harvester.get_events()
+        print(f"[scraper] cdnlivetv: {len(events)} events with channels")
+
         rows = []
         now_utc = datetime.now(UTC)
+        now_est = datetime.now(EST)
 
-        # The API returns duplicate channel names (same network, different codes)
-        # and lists more channels than we want to relay; dedupe by name then cap.
-        seen: set[str] = set()
-        deduped = []
-        for ch in channels:
-            name = (ch.get('name') or '').strip()
-            if not name or name in seen:
-                continue
-            seen.add(name)
-            deduped.append(ch)
+        # -------- circuit breaker --------
+        rate_limit_errors = 0
+        rate_limit_lock = threading.Lock()
+        MAX_RATE_LIMIT_ERRORS = 5
 
-        selected = [c for c in deduped[:CDNLIVETV_MAX_CHANNELS] if c.get('url')]
-        print(f"[scraper] Fetching playlists for {len(selected)} cdnlivetv channels (concurrent)...")
+        def _count_rate_limit() -> bool:
+            """Return True (and trip the breaker) when 429s exceed the cap."""
+            nonlocal rate_limit_errors
+            with rate_limit_lock:
+                rate_limit_errors += 1
+                return rate_limit_errors > MAX_RATE_LIMIT_ERRORS
 
-        def _fetch(channel: dict) -> tuple[str, str | None]:
-            name = channel.get('name', 'Unknown Channel')
-            url = channel.get('url', '')
+        # Collect the distinct channel player URLs we need to resolve. Event
+        # channels repeat heavily across games, so dedupe by URL before
+        # fetching (977 events -> ~149 distinct channels).
+        needed_urls: list[str] = []
+        seen_urls: set[str] = set()
+        for ev in events:
+            for ch in ev.get("channels") or []:
+                url = (ch.get("url") or "").strip()
+                if url and url not in seen_urls:
+                    seen_urls.add(url)
+                    needed_urls.append(url)
+
+        def _fetch(channel_url: str) -> tuple[str, str | None]:
             try:
-                print(f"[scraper] Fetching playlist for: {name}")
-                return name, harvester.get_playlist_url(url)
+                return channel_url, harvester.get_playlist_url(channel_url)
             except Exception as exc:
-                print(f"[scraper] Error processing channel {name}: {exc}")
-                return name, None
+                err_str = str(exc).lower()
+                if "429" in err_str or "too many requests" in err_str:
+                    if _count_rate_limit():
+                        print(f"[scraper] Circuit breaker: {rate_limit_errors} rate-limit errors, aborting cdnlivetv scrape")
+                        raise RuntimeError("Circuit breaker: too many rate-limit errors")
+                print(f"[scraper] Error fetching playlist for {channel_url}: {exc}")
+                return channel_url, None
 
-        with ThreadPoolExecutor(max_workers=8) as pool:
-            results = dict(pool.map(_fetch, selected))
+        playlist_by_url: dict[str, str] = {}
+        if needed_urls:
+            print(f"[scraper] Fetching playlists for {len(needed_urls)} distinct cdnlivetv channels (concurrent)...")
+            with ThreadPoolExecutor(max_workers=8) as pool:
+                try:
+                    results = dict(pool.map(_fetch, needed_urls))
+                except RuntimeError as e:
+                    if "Circuit breaker" in str(e):
+                        print("[scraper] Circuit breaker triggered, aborting cdnlivetv scrape")
+                        return pd.DataFrame()
+                    raise
+            playlist_by_url = {u: p for u, p in results.items() if p}
 
-        for channel in selected:
-            channel_name = channel.get('name', 'Unknown Channel')
-            playlist_url = results.get(channel_name)
-
-            if not playlist_url:
-                print(f"[scraper] No playlist found for: {channel_name}")
+        # -------- events -> games --------
+        for ev in events:
+            streams = []
+            for ch in ev.get("channels") or []:
+                url = (ch.get("url") or "").strip()
+                playlist = playlist_by_url.get(url)
+                if not playlist:
+                    continue
+                streams.append({
+                    "label": (ch.get("channel_name") or "cdnlivetv").strip(),
+                    "embed_url": playlist,
+                    "watch_url": playlist,
+                    "origin": "cdnlivetv",
+                })
+            if not streams:
                 continue
 
-            # Determine sport category from channel name
-            sport = _infer_sport_from_name(channel_name)
+            status = (ev.get("status") or "").strip().upper()
+            if status == "CANC":
+                continue
+            start_dt = _parse_cdn_event_start(ev.get("start") or "")
+            start_est = start_dt.astimezone(EST) if start_dt else now_est
+            is_live = status in CDNLIVETV_LIVE_STATUSES or (
+                start_dt is not None and (start_dt - timedelta(minutes=15)) <= now_utc <= (start_dt + timedelta(hours=5))
+            )
+
+            sport = CDNLIVETV_EVENT_SPORT_MAP.get(ev.get("sport") or "", (ev.get("sport") or "").strip() or "Other")
+            matchup = (ev.get("event") or "").strip()
+            if not matchup:
+                home = (ev.get("home_team") or "").strip()
+                away = (ev.get("away_team") or "").strip()
+                matchup = f"{home} vs {away}".strip(" vs ") or "Unknown match"
 
             rows.append({
                 "source": "cdnlivetv",
-                "date_header": datetime.now(EST).strftime("%A, %B %d, %Y"),
+                "date_header": start_est.strftime("%A, %B %d, %Y"),
                 "sport": sport,
-                "time_unix": int(time.time() * 1000),
-                "time": datetime.now(EST),
-                "tournament": None,
+                "time_unix": int(start_dt.timestamp() * 1000) if start_dt else int(time.time() * 1000),
+                "time": start_est,
+                "tournament": (ev.get("tournament") or "").strip() or None,
                 "tournament_url": None,
-                "matchup": channel_name,
-                "watch_url": playlist_url,
-                "streams": [{
-                    "label": "cdnlivetv",
-                    "embed_url": playlist_url,
-                    "watch_url": playlist_url,
-                    "origin": "cdnlivetv",
-                }],
-                "embed_url": playlist_url,
-                "is_live": True,
-                "home_team": "",
-                "away_team": "",
+                "matchup": matchup,
+                "watch_url": streams[0]["watch_url"],
+                "streams": streams,
+                "embed_url": streams[0]["embed_url"],
+                "is_live": is_live,
+                "home_team": (ev.get("home_team") or "").strip(),
+                "away_team": (ev.get("away_team") or "").strip(),
             })
 
+        # -------- standalone network channels not covered by events --------
+        # Teams + channels appearing in any event (used to drop duplicate
+        # team channels and any event channel name like "NFL Network HD DE"
+        # that would otherwise show up twice).
+        event_team_keys: set[str] = set()
+        event_channel_keys: set[str] = set()
+        for ev in events:
+            for team in (ev.get("home_team"), ev.get("away_team")):
+                key = re.sub(r"[^a-z0-9]+", " ", (team or "").lower()).strip()
+                if key:
+                    event_team_keys.add(key)
+            for ch in ev.get("channels") or []:
+                name = (ch.get("channel_name") or "").strip()
+                if not name:
+                    continue
+                key = re.sub(r"[^a-z0-9]+", " ", name.lower()).strip()
+                if key:
+                    event_channel_keys.add(key)
+
+        channels = harvester.get_channels()
+        seen_names: set[str] = set()
+        standalone = []
+        for ch in channels:
+            name = (ch.get("name") or "").strip()
+            if not name or name in seen_names or not ch.get("url"):
+                continue
+            seen_names.add(name)
+            key = re.sub(r"[^a-z0-9]+", " ", name.lower()).strip()
+            # skip pure team-name channels already covered by an event game
+            if key and (key in event_team_keys or key in event_channel_keys):
+                continue
+            standalone.append(ch)
+
+        standalone = standalone[:CDNLIVETV_MAX_CHANNELS]
+        if standalone:
+            print(f"[scraper] Fetching playlists for {len(standalone)} standalone cdnlivetv channels (concurrent)...")
+            try:
+                with ThreadPoolExecutor(max_workers=8) as pool:
+                    results = dict(pool.map(_fetch, [c["url"] for c in standalone]))
+            except RuntimeError as e:
+                if "Circuit breaker" in str(e):
+                    print("[scraper] Circuit breaker: standalone channel scrape aborted; keeping event games")
+                    results = {}
+                else:
+                    raise
+
+            for channel in standalone:
+                playlist_url = results.get(channel.get("url"))
+                if not playlist_url:
+                    continue
+                name = channel.get("name", "Unknown Channel")
+                rows.append({
+                    "source": "cdnlivetv",
+                    "date_header": now_est.strftime("%A, %B %d, %Y"),
+                    "sport": _infer_sport_from_name(name),
+                    "time_unix": int(time.time() * 1000),
+                    "time": now_est,
+                    "tournament": None,
+                    "tournament_url": None,
+                    "matchup": name,
+                    "watch_url": playlist_url,
+                    "streams": [{
+                        "label": name,
+                        "embed_url": playlist_url,
+                        "watch_url": playlist_url,
+                        "origin": "cdnlivetv",
+                    }],
+                    "embed_url": playlist_url,
+                    "is_live": True,
+                    "home_team": "",
+                    "away_team": "",
+                })
+
         df = pd.DataFrame(rows)
-        print(f"[scraper] cdnlivetv scraped {len(df)} channels")
+        print(f"[scraper] cdnlivetv scraped {len(df)} games ({len(rows) - len(df)} dropped empty)")
         return df
-        
+
     except Exception as exc:
         print(f"[scraper][ERROR] cdnlivetv scrape failed: {exc}")
         return pd.DataFrame()
